@@ -1,18 +1,37 @@
 # Chat Agent Harness (CAH)
 
-**Harness AI with Git.**
+**Turn chat sessions into schedulable agent workers.**
 
-Chat Agent Harness is a Git-native control plane for turning replaceable AI chat sessions into durable, schedulable workers backed by real local and self-hosted execution.
+Chat Agent Harness is an API-optional agent runtime for AI systems that may expose little more than a normal chat interface.
 
-CAH is being built around a simple separation of responsibilities:
+CAH wraps chat-native AI sessions with external coordination, lifecycle management, scheduling, durable task state, and real execution tools. The AI provider does not need to expose its own agent runtime for a chat session to participate as a Worker.
 
-- **Git holds durable task state, handoffs, results, and evidence.**
-- **AI chat sessions provide replaceable semantic compute rather than owning task identity.**
-- **The Harness schedules work, coordinates continuations, and fences stale execution.**
-- **Self-hosted runners and deterministic executors perform real work in local tools and workspaces.**
+A minimal CAH-compatible endpoint only needs a usable interaction surface:
+
+- send a message;
+- observe when a response starts and ends;
+- identify or rebind a session;
+- report basic transport/lifecycle health.
+
+The underlying endpoint may be a browser chat, desktop app, CLI, API-backed model, or another interactive AI surface.
+
+## Architecture direction
+
+CAH separates semantic compute from the machinery around it:
+
+- **AI chat sessions provide replaceable semantic compute.**
+- **The Harness owns task identity, scheduling, continuation, recovery, and stale-worker fencing.**
+- **Durable external state keeps work alive when a conversation, browser, device, or Worker is replaced.**
+- **Runners and deterministic executors perform real work in local tools and workspaces.**
 - **Single- and multi-worker execution share the same durable task model.**
 
-The project is designed for long-running engineering work that should survive conversation rollover, browser/runtime failure, worker replacement, and execution across different machines or tool environments.
+Git is especially convenient for the current implementation because it already provides durable state, versioned evidence, collaboration, and a path to self-hosted execution. It is an implementation substrate, not a requirement that the AI itself understand or directly access Git.
+
+A pure chat endpoint can therefore participate through an adapter that reads external task state, delivers the required semantic context through the chat interface, observes the result, and returns it to the Harness.
+
+**APIs are supported, but they are not a prerequisite.**
+
+The project is intended for long-running engineering work that should survive conversation rollover, browser/runtime failure, Worker replacement, and execution across different machines or tool environments.
 
 ## Status
 
