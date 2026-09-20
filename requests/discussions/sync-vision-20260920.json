@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "kind": "sync_vision_discussions",
+  "category": "Ideas",
+  "source": "docs/vision",
+  "mode": "create_or_update",
+  "idempotent_by": "exact_title",
+  "persist_public_evidence": true,
+  "requested_files": [
+    "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
+    "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
+    "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
+    "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
+    "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
+    "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md"
+  ]
+}
