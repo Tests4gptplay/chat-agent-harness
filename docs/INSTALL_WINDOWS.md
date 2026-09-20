@@ -1,4 +1,10 @@
-# Windows installation
+# Windows reference installation
+
+This is the currently validated **reference host path**, not a statement that CAH's architecture requires Windows.
+
+The CAH control/runtime model is built around Git, Python, a Chromium-class browser extension, localhost services and an official GitHub self-hosted runner. On Linux or macOS, an installer Agent may adapt host-specific glue — for example `run.cmd` vs `run.sh`, launcher scripts, browser executable discovery, desktop/service startup integration and path conventions — while preserving the same CAH task/state/privacy contracts.
+
+Do not claim an untested platform is already validated merely because the adaptation is straightforward. The Windows path below is the one currently demonstrated end to end; other platforms should be adapted and then verified with the same installation/readback/smoke criteria.
 
 This guide is for the experimental CAH 1.0.4 source distribution. The installer **must not hard-code** the maintainer's username, drives, runner roots or ChatGPT Project URLs. This release ships disabled example bindings and empty task state.
 
