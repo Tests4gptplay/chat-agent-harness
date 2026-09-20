@@ -2,6 +2,82 @@
 
 This guide is for the experimental CAH 1.0.4 source distribution. The installer **must not hard-code** the maintainer's username, drives, runner roots or ChatGPT Project URLs. This release ships disabled example bindings and empty task state.
 
+## Recommended installation mode: AI-guided, human-authorized
+
+CAH is intended to be installed **with an AI Agent driving the setup** rather than by requiring the user to manually interpret every repository, runner, browser and configuration step.
+
+A good installation session should feel like:
+
+```text
+Human
+  |
+  | "Install CAH from this repository"
+  v
+AI installer / Agent
+  |
+  +--> read public AGENTS.md + this guide
+  +--> inspect current host prerequisites
+  +--> prepare private-repository migration
+  +--> generate configuration
+  +--> build / validate / smoke-test
+  |
+  +--> pause only when human authority is required
+            |
+            +--> create/confirm private repo
+            +--> install/approve required software
+            +--> grant GitHub/ChatGPT permissions
+            +--> create ChatGPT Projects
+            +--> approve runner registration
+            +--> load/approve browser extension
+  |
+  v
+verified private CAH installation
+```
+
+The AI should keep the user on the shortest safe path and explain one concrete human action at a time when manual involvement is required. It should not dump the whole guide back at the user as a checklist unless the user explicitly asks for a manual installation.
+
+### What the AI should do
+
+The installer Agent should normally:
+
+- read the public `AGENTS.md` bootstrap gate before performing live setup;
+- verify that the eventual operational repository is PRIVATE;
+- inspect Git, Python, PowerShell, browser and optional executor availability;
+- distinguish already-installed prerequisites from missing ones;
+- prepare the public-to-private repository transition;
+- wire the operational `origin` to the private repository;
+- run `tools/configure_install.py` with user-approved values;
+- build the extension;
+- validate generated topology/bindings;
+- run available source/configuration smoke checks;
+- diagnose failures and continue after the user satisfies a missing prerequisite;
+- keep credentials, temporary tokens, cookies and private Project identifiers out of public logs and public Git.
+
+### What still requires the human
+
+The human remains the authority for actions that affect accounts, permissions, physical hardware or private resources. Depending on the environment, this may include:
+
+- creating or selecting the private GitHub repository;
+- confirming repository visibility;
+- installing required desktop applications or accepting their installers;
+- approving GitHub App / ChatGPT connector access;
+- creating the CAH Task Cell and Worker Projects;
+- sharing the exact Project root URLs with the installer;
+- obtaining and using a temporary GitHub runner registration token;
+- approving browser extension installation/loading;
+- responding to OS/browser security prompts;
+- deciding which optional executors and local applications the Agent may use.
+
+The Agent should guide these steps, verify their result, and then resume automatically where possible.
+
+### Suggested prompt for an installer Agent
+
+A user should be able to begin with something close to:
+
+> Install CAH from this public repository. Follow its public AGENTS.md and Windows installation guide. Keep the live instance in a verified private repository. Inspect what is already installed, do the mechanical setup yourself where possible, and ask me only for hardware preparation, account authorization, private-repository creation, ChatGPT Project creation, or other steps that require my direct approval.
+
+This AI-guided flow is the recommended experience. The numbered sections below remain the authoritative detailed procedure and can also be followed manually.
+
 ## 1. Make your own private running repository
 
 Create an **empty private GitHub repository** for your CAH instance. Copy this distribution into it; do not use a public fork as your live state store. With Git installed, these commands use examples that you must replace:
