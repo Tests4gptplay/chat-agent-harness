@@ -1,0 +1,195 @@
+name: Stage 0 single-thread CL runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "actions/stage0/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage0-single-thread
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve action
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'actions/stage0/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one Stage 0 action in triggering commit, found $($changed.Count)" }
+          $actionPath = $changed[0]
+          $action = Get-Content $actionPath -Raw | ConvertFrom-Json
+          "ACTION_PATH=$actionPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "FG_CL=$($action.foreground_cl)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BG_CL=$($action.backend_cl)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RESULT_PATH=results/$($action.task_id).json" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LANE_ID=$($action.lane_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WORKER_PROJECT_KEY=$($action.worker_project_key)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure git
+        shell: pwsh
+        run: |
+          git config user.name "gah-self-hosted-runner"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Claim task
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\harness\single_thread.py claim --action $env:ACTION_PATH
+          git add -- $env:FG_CL $env:BG_CL
+          git commit -m "Stage 0 CL: claim task [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+      - name: Execute task with Harness timeout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\harness\single_thread.py execute --action $env:ACTION_PATH --result $env:RESULT_PATH
+          $result = Get-Content $env:RESULT_PATH -Raw | ConvertFrom-Json
+          git add -- $env:FG_CL $env:BG_CL $env:RESULT_PATH
+          foreach ($artifact in @($result.artifacts)) {
+            if ([string]::IsNullOrWhiteSpace($artifact)) { continue }
+            if ([IO.Path]::IsPathRooted($artifact) -or $artifact -match '(^|[\\/])\.\.([\\/]|$)') {
+              throw "Unsafe artifact path: $artifact"
+            }
+            if (-not (Test-Path $artifact)) {
+              throw "Declared artifact missing before commit: $artifact"
+            }
+            git add -- $artifact
+          }
+          git commit -m "Stage 0 CL: record executor result and artifacts [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+      - name: Verify durable result
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\harness\single_thread.py verify --action $env:ACTION_PATH --result $env:RESULT_PATH
+          git add -- $env:FG_CL $env:BG_CL
+          git commit -m "Stage 0 CL: verify result [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+      - name: Prepare visual review asset
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "VISUAL_ATTACHMENT_REF=" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not (Test-Path $env:RESULT_PATH)) {
+            Write-Host "No durable result file yet; skip visual review asset."
+            exit 0
+          }
+          $action = Get-Content $env:ACTION_PATH -Raw | ConvertFrom-Json
+          $result = Get-Content $env:RESULT_PATH -Raw | ConvertFrom-Json
+          if ($action.executor -ne 'blender_case' -or $action.operation -ne 'run_iteration' -or $result.status -ne 'PASS') {
+            Write-Host "Action/result does not require a Blender visual review attachment."
+            exit 0
+          }
+          $iteration = [int]$action.payload.iteration
+          $raw = & .\harness\prepare_blender_review_asset.ps1 -TaskId $action.task_id -Iteration $iteration
+          $review = $raw | ConvertFrom-Json
+          if (-not $review.ok -or [string]::IsNullOrWhiteSpace([string]$review.attachment_ref)) {
+            throw "Review asset helper did not return a valid attachment_ref"
+          }
+          if (-not (Test-Path $review.output_dir)) {
+            throw "Review asset output directory is missing: $($review.output_dir)"
+          }
+          git add -- $review.output_dir
+          git commit -m "Stage 0 CL: prepare visual review asset [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+          "VISUAL_ATTACHMENT_REF=$($review.attachment_ref)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Schedule semantic Worker continuation
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $action = Get-Content $env:ACTION_PATH -Raw | ConvertFrom-Json
+          "RESOURCE_WAIT=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not $action.worker_continuation) {
+            "CONTINUATION_SCHEDULED=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            exit 0
+          }
+
+          $bg = Get-Content $env:BG_CL -Raw | ConvertFrom-Json
+          if ($bg.dispatch -and [string]$bg.dispatch.state -eq 'WAIT_RESOURCE') {
+            Write-Host "Backend is WAIT_RESOURCE; semantic continuation is intentionally not scheduled."
+            "CONTINUATION_SCHEDULED=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "RESOURCE_WAIT=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            exit 0
+          }
+
+          $nextRaw = py .\harness\dispatch.py continue --backend-cl $env:BG_CL --action $env:ACTION_PATH --result $env:RESULT_PATH
+          $next = $nextRaw | ConvertFrom-Json
+          if (-not $next.scheduled) { throw "Worker continuation was not scheduled" }
+
+          "CONTINUATION_SCHEDULED=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DISPATCH_ID=$($next.dispatch_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DISPATCH_GENERATION=$($next.dispatch_generation)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DISPATCH_FENCE=$($next.fence_token)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DISPATCH_WAKE_ID=$($next.wake_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TASK_ID=$($next.task_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          git add -- $env:BG_CL
+          git commit -m "Stage 0 CL: schedule Worker continuation [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+      - name: Wake managed Worker after durable result
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:LANE_ID) -or [string]::IsNullOrWhiteSpace($env:WORKER_PROJECT_KEY)) {
+            Write-Host "Action has no lane routing; skip managed Worker result wake."
+            exit 0
+          }
+
+          if ($env:RESOURCE_WAIT -eq 'true') {
+            Write-Host "Backend is WAIT_RESOURCE; leave Worker released until host configuration resolves."
+            exit 0
+          }
+
+          if ($env:CONTINUATION_SCHEDULED -eq 'true') {
+            $emitArgs = @(
+              '.\local_bridge\emit_wake.py',
+              '--project-id', 'git-agent-harness',
+              '--state', 'NEED_AGENT',
+              '--wake-id', $env:DISPATCH_WAKE_ID,
+              '--repo', 'example-owner/cah-private',
+              '--run-id', $env:GITHUB_RUN_ID,
+              '--result-ref', $env:RESULT_PATH,
+              '--lane-id', $env:LANE_ID,
+              '--worker-project-key', $env:WORKER_PROJECT_KEY,
+              '--kind', 'executor_result',
+              '--task-id', $env:TASK_ID,
+              '--backend-cl', $env:BG_CL,
+              '--dispatch-id', $env:DISPATCH_ID,
+              '--dispatch-generation', $env:DISPATCH_GENERATION,
+              '--fence-token', $env:DISPATCH_FENCE
+            )
+            if (-not [string]::IsNullOrWhiteSpace($env:VISUAL_ATTACHMENT_REF)) {
+              $emitArgs += @('--attachment-ref', $env:VISUAL_ATTACHMENT_REF)
+            }
+            py @emitArgs
+          } else {
+            py .\local_bridge\emit_wake.py --project-id git-agent-harness --state NEED_AGENT --repo example-owner/cah-private --run-id $env:GITHUB_RUN_ID --result-ref $env:RESULT_PATH --lane-id $env:LANE_ID --worker-project-key $env:WORKER_PROJECT_KEY --kind executor_result
+          }

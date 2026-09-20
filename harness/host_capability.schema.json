@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHHostCapabilityProjection",
+  "type": "object",
+  "required": [
+    "v",
+    "capability_id",
+    "state",
+    "available",
+    "version",
+    "source",
+    "validation",
+    "observed_at",
+    "prompt",
+    "reason"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "capability_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "state": {
+      "enum": [
+        "AVAILABLE",
+        "NEED_HOST_CONFIG",
+        "UNAVAILABLE"
+      ]
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 160
+    },
+    "source": {
+      "enum": [
+        "local_cache",
+        "user_config",
+        "env",
+        "launcher",
+        "registry",
+        "path",
+        "filesystem",
+        "runtime",
+        "missing"
+      ]
+    },
+    "validation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "observed_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1000
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    }
+  },
+  "additionalProperties": false
+}

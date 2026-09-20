@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHBackendLaneTopology",
+  "type": "object",
+  "required": [
+    "v",
+    "topology_version",
+    "updated_at",
+    "registered_count",
+    "enabled_count",
+    "lanes"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "topology_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_request_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "registered_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "enabled_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "lane_id",
+          "display_name",
+          "project_key",
+          "project_root_url",
+          "enabled",
+          "status"
+        ],
+        "properties": {
+          "lane_id": {
+            "type": "string",
+            "pattern": "^lane-[0-9]{2,}$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "project_key": {
+            "type": "string",
+            "pattern": "^g-p-[A-Za-z0-9]+$"
+          },
+          "project_root_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "IDLE",
+              "RUNNING",
+              "BLOCKED",
+              "DISABLED",
+              "REMOVING"
+            ]
+          },
+          "last_pool_takeover_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "worker_rollover_request": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

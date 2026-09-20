@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+cah.local.json
+Start_CAH.log
+extension/dist/
+camera-output/
+*.blend1
+*.log
+.DS_Store
+imports/codex-skills/sources/

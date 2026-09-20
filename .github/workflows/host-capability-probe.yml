@@ -1,0 +1,80 @@
+name: CAH host capability probe and resume
+
+on:
+  push:
+    paths:
+      - "requests/host-capability-probe/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gah-host-capability
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve capability
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/host-capability-probe/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one host capability request, found $($changed.Count)" }
+          $requestPath = $changed[0]
+          $req = Get-Content $requestPath -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$req.request_id)) { throw 'request_id required' }
+          if ([string]::IsNullOrWhiteSpace([string]$req.capability_id)) { throw 'capability_id required' }
+
+          $projection = "evidence/host-capabilities/$($req.request_id).json"
+          py .\host\capabilities.py $req.capability_id --projection-out $projection
+          if ($LASTEXITCODE -ne 0) { throw 'host capability resolver failed' }
+          $cap = Get-Content $projection -Raw | ConvertFrom-Json
+
+          "CAPABILITY_PROJECTION=$projection" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CAPABILITY_STATE=$($cap.state)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $resumeScheduled = $false
+          "RESUME_SCHEDULED=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          if ([string]$cap.state -eq 'AVAILABLE' -and -not [string]::IsNullOrWhiteSpace([string]$req.backend_cl)) {
+            if ([string]::IsNullOrWhiteSpace([string]$req.lane_id) -or [string]::IsNullOrWhiteSpace([string]$req.worker_project_key)) {
+              throw 'lane_id and worker_project_key are required for resource resume'
+            }
+            $resumeRaw = py .\harness\resource_wait.py resume --backend-cl $req.backend_cl --projection $projection
+            if ($LASTEXITCODE -ne 0) { throw 'resource wait resume failed' }
+            $resume = $resumeRaw | ConvertFrom-Json
+            if ($resume.scheduled) {
+              $resumeScheduled = $true
+              "RESUME_SCHEDULED=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_TASK_ID=$($resume.task_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_BACKEND_CL=$($req.backend_cl)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_LANE_ID=$($req.lane_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_PROJECT_KEY=$($req.worker_project_key)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_DISPATCH_ID=$($resume.dispatch_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_GENERATION=$($resume.dispatch_generation)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_FENCE=$($resume.fence_token)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              "RESUME_WAKE_ID=$($resume.wake_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+          git config user.name "gah-self-hosted-runner"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- $projection
+          if ($resumeScheduled) { git add -- $req.backend_cl }
+          git commit -m "Record host capability $($req.capability_id) [skip ci]"
+          py .\harness\git_publish.py --branch $env:GITHUB_REF_NAME --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+      - name: Wake resumed Worker
+        if: env.RESUME_SCHEDULED == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\local_bridge\emit_wake.py --project-id git-agent-harness --state NEED_AGENT --wake-id $env:RESUME_WAKE_ID --repo example-owner/cah-private --run-id $env:GITHUB_RUN_ID --result-ref $env:CAPABILITY_PROJECTION --lane-id $env:RESUME_LANE_ID --worker-project-key $env:RESUME_PROJECT_KEY --kind host_capability_ready --task-id $env:RESUME_TASK_ID --backend-cl $env:RESUME_BACKEND_CL --dispatch-id $env:RESUME_DISPATCH_ID --dispatch-generation $env:RESUME_GENERATION --fence-token $env:RESUME_FENCE

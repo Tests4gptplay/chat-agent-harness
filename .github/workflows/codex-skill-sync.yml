@@ -1,0 +1,58 @@
+name: Codex Skill reconcile
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage0-single-thread
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: pwsh
+        run: |
+          git config user.name "gah-self-hosted-runner"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Reconcile local Codex Skills
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import json
+          import os
+          from pathlib import Path
+          from executors.codex_skill_import import discover_source, import_skills
+
+          source = discover_source()
+          print(json.dumps(import_skills(source), ensure_ascii=False))
+          '@
+          $raw = $script | py -
+          Write-Host $raw
+          py .\harness\skills.py rebuild-index | Write-Host
+
+          git add -- imports/codex-skills skills/candidates skills/index.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Codex Skill source unchanged; no Git writeback needed."
+            exit 0
+          }
+
+          git commit -m "Sync local Codex user Skills [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }

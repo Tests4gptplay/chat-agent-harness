@@ -1,0 +1,50 @@
+name: Blender public case finalizer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cases/**/final_result.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: blender-public-case-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve final artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^cases/.*/final_result\.json$' || true)
+          if [ "${#changed[@]}" -ne 1 ]; then echo "Expected exactly one Blender final_result.json, found ${#changed[@]}"; exit 1; fi
+          echo "FINAL_RESULT=${changed[0]}" >> "$GITHUB_ENV"
+
+      - name: Rebase onto canonical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'gah-blender-case-finalizer'
+          git config user.email 'actions@users.noreply.github.com'
+          python harness/git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace --sync-only
+
+      - name: Validate and finalize
+        shell: bash
+        run: |
+          set -euo pipefail
+          python harness/blender_case_finalize.py --final-result "$FINAL_RESULT"
+          task_id=$(python -c 'import json,os; print(json.load(open(os.environ["FINAL_RESULT"],encoding="utf-8"))["task_id"])')
+          git add -- "state/chatgpt.json" "cl/${task_id}.backend.json" "cl/${task_id}.foreground.json"
+          git commit -m "Finalize Blender public case ${task_id} [skip ci]"
+          python harness/git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
