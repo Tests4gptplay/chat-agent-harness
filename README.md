@@ -6,7 +6,7 @@
 
 Turn a chat-driven task into work that can run on your own machine, preserve its progress in Git, and survive replacement of the conversation doing the reasoning.
 
-[中文说明](README.zh-CN.md) · [Windows setup](docs/INSTALL_WINDOWS.md) · [Camera showcase](showcases/camera/README.md) · [Self-update showcase](showcases/self-update/README.md)
+[中文说明](README.zh-CN.md) · [Installation](docs/INSTALL_WINDOWS.md) · [Camera showcase](showcases/camera/README.md) · [Self-update showcase](showcases/self-update/README.md)
 
 ## What it does
 
@@ -46,9 +46,11 @@ These are **sanitized case reports**, not a dump of the maintainer's private cha
 
 **Recommended: let an AI Agent guide the installation instead of treating this as a manual sysadmin tutorial.**
 
-CAH's core runtime is not intended to be Windows-only. The currently recorded end-to-end deployment and one-click host tooling were validated on Windows, so the maintained reference guide uses Windows examples. On another desktop OS, the installer Agent should preserve the same contracts while adapting host-specific launchers, runner entry points, browser paths and service/startup integration to the platform instead of treating Windows filenames as architectural requirements.
+CAH's core runtime is not intended to be Windows-only. **Windows is the currently validated reference host**, not an architectural requirement. The installer Agent should first identify the host OS and available tools, then preserve the same CAH contracts while adapting host-specific glue such as runner launchers, shell scripts, browser discovery, paths and startup/service integration.
 
-Give an AI Agent access to this repository and ask it to install CAH from the public distribution into your own **private operational repository**. The Agent should read `AGENTS.md` and [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md), inspect what is already available on the host, prepare the repository/configuration, run build and smoke checks, and guide you through only the steps that require human authority.
+Give an AI Agent access to this repository and ask it to install CAH from the public distribution into your own **private operational repository**. The Agent should read `AGENTS.md` and the current [installation reference](docs/INSTALL_WINDOWS.md), inspect the host, map any Windows-specific reference steps to native equivalents when necessary, prepare the repository/configuration, run build and smoke checks, and guide you through only the steps that require human authority.
+
+Do not copy a Windows command literally onto another platform merely because it appears in the reference guide. Preserve the intent and invariant instead. For example, an official GitHub runner may expose `run.cmd` on Windows or `run.sh` on another host; a launcher may be `.bat/.ps1`, shell, app or service integration depending on the platform.
 
 The human should normally handle the trust-boundary actions that an Agent should not silently perform on its own, such as:
 
@@ -67,7 +69,7 @@ The Agent should handle the mechanical setup around those approvals: environment
 
 **Do not attach your computer's runner or live CAH state to this public distribution.** A real CAH instance runs from a verified private operational repository.
 
-After the one-time setup, double-click `Start_CAH.bat`. Your paths and bindings are configured by you, not inherited from the maintainer. The source package builds Chromium and Firefox extension variants; the recorded live deployment used Chrome on Windows.
+After the one-time setup, start CAH through the launcher appropriate to the host. On the validated Windows reference installation that is `Start_CAH.bat`; on another OS the installer Agent should create or select an equivalent native launch path and verify the same bridge/runner/topology health conditions. Your paths and bindings are configured for your host, not inherited from the maintainer. The source package builds Chromium and Firefox extension variants; the recorded live deployment used Chrome on Windows.
 
 ## Status and limits
 
