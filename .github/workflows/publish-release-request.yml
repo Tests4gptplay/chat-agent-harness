@@ -1,0 +1,89 @@
+name: Publish validated CAH release request
+on:
+  push:
+    branches: [main]
+    paths: [requests/releases/v1.0.4.json]
+permissions:
+  contents: write
+concurrency:
+  group: cah-release-1.0.4
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read the authorized release request
+        run: |
+          cp tools/package_release.py "$RUNNER_TEMP/package_release.py"
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          r = json.loads(Path('requests/releases/v1.0.4.json').read_text())
+          assert r['publish'] is True and r['tag'] == 'v1.0.4'
+          assert re.fullmatch('[0-9a-f]{40}', r['source_commit'])
+          assert re.fullmatch('[0-9a-f]{64}', r['expected_manifest_sha256'])
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('SOURCE_COMMIT=' + r['source_commit'] + '\n')
+              f.write('EXPECTED_MANIFEST=' + r['expected_manifest_sha256'] + '\n')
+              f.write('TAG=' + r['tag'] + '\n')
+          PY
+      - name: Prepare the exact reviewed source and preserve existing licenses
+        run: |
+          git checkout --detach "$SOURCE_COMMIT"
+          python "$RUNNER_TEMP/package_release.py"
+          echo "$EXPECTED_MANIFEST  PUBLIC_MANIFEST.json" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cah-release"
+      - name: Test the actual distribution
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py' 2>&1 | tee "$RUNNER_TEMP/cah-release/python-tests.log"
+          node --test tests/*.cjs tests/test_control_transport.js tests/test_content_wake_probe.js tests/test_history_rate_limit_modal.js | tee "$RUNNER_TEMP/cah-release/node-tests.log"
+          python harness/skills.py validate-all
+          python extension/build.py chromium
+          python extension/build.py firefox
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          m = json.loads(Path('PUBLIC_MANIFEST.json').read_text())
+          for name, digest in m['files'].items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == digest, name
+          assert json.loads(Path('state/lanes.json').read_text())['lanes'] == []
+          assert json.loads(Path('state/chatgpt.json').read_text())['active_task'] is None
+          print('PASS: packaged source hashes and empty live bindings')
+          PY
+      - name: Make a release-only snapshot without importing development history
+        run: |
+          git add -u
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME='CAH release'
+          export GIT_COMMITTER_NAME='CAH release'
+          export GIT_AUTHOR_EMAIL='contributors@users.noreply.github.com'
+          export GIT_COMMITTER_EMAIL='contributors@users.noreply.github.com'
+          export GIT_AUTHOR_DATE=$(git show -s --format=%cI "$SOURCE_COMMIT")
+          export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+          snapshot=$(printf '%s\n' 'CAH 1.0.4 public runtime and showcases' | git commit-tree "$tree")
+          echo "RELEASE_COMMIT=$snapshot" >> "$GITHUB_ENV"
+          git archive --format=zip -o "$RUNNER_TEMP/cah-release/CAH-1.0.4.zip" "$snapshot"
+          cp showcases/camera/final.blend "$RUNNER_TEMP/cah-release/camera-final.blend"
+          cp showcases/camera/final.png "$RUNNER_TEMP/cah-release/camera-final.png"
+          cp PUBLIC_MANIFEST.json "$RUNNER_TEMP/cah-release/PUBLIC_MANIFEST.json"
+          printf '%s\n' "$snapshot" > "$RUNNER_TEMP/cah-release/release-commit.txt"
+          cd "$RUNNER_TEMP/cah-release"
+          sha256sum CAH-1.0.4.zip camera-final.blend camera-final.png > SHA256SUMS
+      - name: Publish tag and Release in this job
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin "$RELEASE_COMMIT:refs/tags/$TAG"
+          gh release create "$TAG" "$RUNNER_TEMP/cah-release/CAH-1.0.4.zip" "$RUNNER_TEMP/cah-release/camera-final.blend" "$RUNNER_TEMP/cah-release/camera-final.png" "$RUNNER_TEMP/cah-release/SHA256SUMS" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title 'CAH 1.0.4 — first public experimental release' --notes-file RELEASE_NOTES.md
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/cah-release/release.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cah-release-1.0.4-verification
+          path: ${{ runner.temp }}/cah-release/
+          retention-days: 7
+          if-no-files-found: warn
