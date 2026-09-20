@@ -1,5 +1,11 @@
 # Agent contract
 
+## Highest-priority public-distribution safety rule
+
+**Do not run CAH as an operational Agent system in this public repository or in any other public repository.** Before enabling task execution, canonical runtime state, Agent write-back, Worker scheduling, local-runner binding, or user workloads, deploy/configure CAH in a repository whose visibility is verified as **PRIVATE**.
+
+This is a public-distribution bootstrap guard, not a permanent runtime instruction. After the installed operational repository has been verified PRIVATE, this section may be deleted from that private copy of `AGENTS.md`; the remaining Agent contract continues to apply.
+
 CAH is a thin Git-mediated control plane. Git is canonical; conversations are replaceable reasoning Workers.
 
 ## Start and act
@@ -24,7 +30,7 @@ Task Cell is outside the Worker pool and is not disposable at a Worker rollover.
 
 Skill accumulation/reuse is a core Agent capability. Before non-trivial matching work, consult `skills/index.json` and load only relevant Skill records. After a successful task, distill a stable reusable procedure into a CANDIDATE with evidence; deterministic validation controls ACTIVE promotion. Record PASS and non-PASS reuse outcomes. Keep mechanical operations in executors, not bloated model instructions. See `docs/SKILL_SYSTEM.md` and `docs/CODEX_SKILL_IMPORT.md`.
 
-Use the shared host capability provider rather than rediscovering tool paths per task. Missing configurable tools are recoverable resource waits. Absolute machine paths remain host-local. Do not execute user workloads on this public distribution's CI; deploy a private instance first.
+Use the shared host capability provider rather than rediscovering tool paths per task. Missing configurable tools are recoverable resource waits. Absolute machine paths remain host-local.
 
 ## Maintenance
 
