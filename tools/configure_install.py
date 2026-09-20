@@ -26,7 +26,9 @@ def main():
     try:cell=project(a.task_cell);lanes=[project(x) for x in a.lane]
     except ValueError as e:p.error(str(e))
     if len({cell[0],*[x[0] for x in lanes]})!=3:p.error('Task Cell and lanes must be different Projects')
-    if not (a.runner_root/'run.cmd').is_file():p.error('register the official Windows runner first; run.cmd not found')
+    runner_launchers=[a.runner_root/'run.cmd',a.runner_root/'run.sh']
+    if not any(x.is_file() for x in runner_launchers):
+        p.error('register the official GitHub self-hosted runner first; expected run.cmd or run.sh in --runner-root')
     config=ROOT/'cah.local.json'
     if config.exists():p.error('already configured; edit the existing private configuration deliberately rather than resetting live state')
     origin=subprocess.check_output(['git','-C',str(ROOT),'remote','get-url','origin'],text=True).strip().removesuffix('.git')
