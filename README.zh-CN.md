@@ -18,6 +18,15 @@ CAH 连接前台对话、Git 任务状态、本地 Bridge、浏览器扩展和�
 
 **这是实验性版本。请先建立自己的私人运行库，再按安装说明部署，不要将个人电脑 runner 注册到这个公共发布库。** 没有能可靠终止所有子进程的一键紧急制动；通用自适应调度和自动模型选择尚未完成。首次第三方机器的完整部署还未经过独立实地验证。
 
+
+### 并行测试：Blender 资产转 UE／Cook ＋ Viewer 编写
+
+两条工作线在 Task Cell 协调下完成资产准备与查看器编写，最终汇合为可交互、可静默截图的原生 UE 结果。
+
+[![Native UE camera result](showcases/ue-parallel-viewer/images/perspective.png)](showcases/ue-parallel-viewer/README.zh-CN.md)
+
+[查看完整案例](showcases/ue-parallel-viewer/README.zh-CN.md) · [AI 操作说明](showcases/ue-parallel-viewer/AGENT_VIEWER.md)
+
 ## 支持 CAH
 
 如果 CAH 帮你节省了时间、API 成本，或者只是让你已经购买的 ChatGPT 订阅更有用，可以通过给仓库点 Star、提交可复现的问题/真实使用案例，或在 GitHub Sponsors 上赞助项目来支持后续开发。
