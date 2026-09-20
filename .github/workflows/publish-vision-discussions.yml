@@ -45,6 +45,12 @@ jobs:
               "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
           ]
 
+          request_files = sorted(pathlib.Path("requests/discussions").glob("*.json"))
+          latest_request = {}
+          if request_files:
+              latest_request = json.loads(request_files[-1].read_text(encoding="utf-8"))
+          replace_titles = set(latest_request.get("replace_titles") or [])
+
           def gql(query, variables):
               payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
               req = urllib.request.Request(
@@ -112,6 +118,14 @@ jobs:
           }
           """
 
+          delete_mutation = """
+          mutation($id:ID!) {
+            deleteDiscussion(input:{id:$id}) {
+              clientMutationId
+            }
+          }
+          """
+
           drafts = []
           seen_titles = set()
 
@@ -139,6 +153,11 @@ jobs:
               if len(matches) > 1:
                   raise RuntimeError(f"duplicate existing discussions for title: {title}")
 
+              if title in replace_titles and matches:
+                  gql(delete_mutation, {"id": matches[0]["id"]})
+                  matches = []
+                  existing_by_title[title] = []
+
               if matches:
                   discussion = matches[0]
                   action = "VERIFIED_EXISTING"
@@ -152,7 +171,7 @@ jobs:
                           "body": body,
                       },
                   )["createDiscussion"]["discussion"]
-                  action = "CREATED"
+                  action = "RECREATED" if title in replace_titles else "CREATED"
 
               drafts.append({
                   "title": title,
