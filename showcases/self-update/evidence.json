@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "task_id": "self-update-showcase",
+  "status": "PASS",
+  "evidence_type": "sanitized_summary_of_observed_private_run",
+  "version": "1.0.4",
+  "host_update_seconds": 43.303,
+  "native_reload": "PASS",
+  "chrome_restart_requested": false,
+  "managed_tabs_ready": 2,
+  "managed_tabs_failed": 0,
+  "observed_mailbox_interval_seconds": 30,
+  "discovery_fixture": {
+    "completed": 200,
+    "pending": 1,
+    "iterations": 3,
+    "git_processes": [605, 5],
+    "request_bodies": [201, 1],
+    "windows_median_ms": [17957.227, 156.727],
+    "excludes": ["remote fetch", "Actions queue", "model inference", "executor work"]
+  },
+  "hot_state_bytes": [45803, 5897],
+  "one_lane_task": {
+    "worker_reused": true,
+    "second_lane_dispatched": false,
+    "extra_task_cell_approval": false,
+    "wake_to_result_commit_seconds": 98,
+    "wake_to_backend_finalization_seconds": 125
+  },
+  "limitations": [
+    "Sanitized summary, not raw public logs",
+    "One post-update task is not an end-to-end before/after benchmark",
+    "An obsolete unrelated request required explicit retirement"
+  ]
+}

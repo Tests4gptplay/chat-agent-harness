@@ -1,0 +1,143 @@
+name: Prepare compact review assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/review-assets/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gah-review-assets
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build contact sheet and chunked base64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/review-assets/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected one review-assets request, found $($changed.Count)" }
+          $req = Get-Content $changed[0] -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($req.request_id)) { throw 'request_id required' }
+          if ([string]::IsNullOrWhiteSpace($req.task_id)) { throw 'task_id required' }
+          if ([int]$req.iteration -lt 1) { throw 'iteration must be positive' }
+          if ($null -eq $req.sources -or @($req.sources).Count -lt 3) { throw 'at least three sources required' }
+
+          function Assert-SafeRepoPath([string]$p) {
+            if ([string]::IsNullOrWhiteSpace($p)) { throw 'empty repository path' }
+            if ([IO.Path]::IsPathRooted($p) -or $p -match '(^|[\\/])\.\.([\\/]|$)') { throw "unsafe repository path: $p" }
+            $full = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE $p))
+            $root = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+            if (-not $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw "path escapes repository: $p" }
+            return $full
+          }
+
+          Add-Type -AssemblyName System.Drawing
+          $iter = [int]$req.iteration
+          $iterName = ('iter_{0:d2}' -f $iter)
+          $outDirRel = "cases/$($req.task_id)/camera/review_assets/$iterName"
+          $outDir = Assert-SafeRepoPath $outDirRel
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $chunkDir = Join-Path $outDir 'chunks'
+          New-Item -ItemType Directory -Force -Path $chunkDir | Out-Null
+
+          $tileW = 256
+          $tileH = 256
+          $labelH = 28
+          $count = @($req.sources).Count
+          $sheet = New-Object System.Drawing.Bitmap($($tileW * $count), $($tileH + $labelH))
+          $g = [System.Drawing.Graphics]::FromImage($sheet)
+          $g.Clear([System.Drawing.Color]::FromArgb(232,232,232))
+          $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+          $font = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
+          $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(35,35,35))
+          $sourceRecords = @()
+
+          try {
+            for ($i = 0; $i -lt $count; $i++) {
+              $src = $req.sources[$i]
+              $srcPath = Assert-SafeRepoPath ([string]$src.ref)
+              if (-not (Test-Path $srcPath)) { throw "source missing: $($src.ref)" }
+              $img = [System.Drawing.Image]::FromFile($srcPath)
+              try {
+                $scale = [Math]::Min($tileW / [double]$img.Width, $tileH / [double]$img.Height)
+                $w = [Math]::Max(1, [int][Math]::Round($img.Width * $scale))
+                $h = [Math]::Max(1, [int][Math]::Round($img.Height * $scale))
+                $x = ($i * $tileW) + [int](($tileW - $w) / 2)
+                $y = $labelH + [int](($tileH - $h) / 2)
+                $g.DrawImage($img, $x, $y, $w, $h)
+                $g.DrawString([string]$src.label, $font, $brush, ($i * $tileW + 6), 5)
+                $hash = (Get-FileHash -Algorithm SHA256 $srcPath).Hash.ToLowerInvariant()
+                $sourceRecords += [ordered]@{ ref=[string]$src.ref; label=[string]$src.label; sha256=$hash; width=$img.Width; height=$img.Height }
+              } finally { $img.Dispose() }
+            }
+          } finally {
+            $g.Dispose()
+            $font.Dispose()
+            $brush.Dispose()
+          }
+
+          $jpgRel = "$outDirRel/contact_sheet.jpg"
+          $jpg = Assert-SafeRepoPath $jpgRel
+          $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+          if ($null -eq $codec) { throw 'JPEG encoder unavailable' }
+          $enc = New-Object System.Drawing.Imaging.EncoderParameters(1)
+          $enc.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]84)
+          try { $sheet.Save($jpg, $codec, $enc) } finally { $sheet.Dispose(); $enc.Dispose() }
+
+          $bytes = [IO.File]::ReadAllBytes($jpg)
+          $b64 = [Convert]::ToBase64String($bytes)
+          $chunkSize = 32000
+          $chunkRefs = @()
+          for ($offset = 0; $offset -lt $b64.Length; $offset += $chunkSize) {
+            $len = [Math]::Min($chunkSize, $b64.Length - $offset)
+            $idx = [int]($offset / $chunkSize)
+            $name = ('chunk_{0:d3}.txt' -f $idx)
+            $rel = "$outDirRel/chunks/$name"
+            $path = Assert-SafeRepoPath $rel
+            [IO.File]::WriteAllText($path, $b64.Substring($offset, $len), [Text.Encoding]::ASCII)
+            $chunkRefs += $rel
+          }
+
+          $packetRel = "$outDirRel/review_packet.json"
+          $packetPath = Assert-SafeRepoPath $packetRel
+          $packet = [ordered]@{
+            v = 1
+            task_id = [string]$req.task_id
+            iteration = $iter
+            created_at = (Get-Date).ToUniversalTime().ToString('o')
+            purpose = 'Compact visual transport for managed Worker review; original PNGs remain canonical visual evidence.'
+            contact_sheet = [ordered]@{
+              ref = $jpgRel
+              sha256 = (Get-FileHash -Algorithm SHA256 $jpg).Hash.ToLowerInvariant()
+              size_bytes = (Get-Item $jpg).Length
+              width = $tileW * $count
+              height = $tileH + $labelH
+              jpeg_quality = 84
+              base64_encoding = 'concatenate chunks in listed order, base64-decode to JPEG'
+              chunks = $chunkRefs
+            }
+            sources = $sourceRecords
+          }
+          $packet | ConvertTo-Json -Depth 8 | Set-Content $packetPath -Encoding utf8
+
+          git config user.name 'gah-self-hosted-runner'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- $outDirRel
+          git commit -m "Prepare compact visual review assets $($req.task_id) $iterName [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }

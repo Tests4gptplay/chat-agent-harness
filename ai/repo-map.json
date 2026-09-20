@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "purpose": "On-demand routing; do not read this map on every normal wake.",
+  "authority": {"canonical_state": "state/chatgpt.json", "agent_contract": "AGENTS.md", "human_entrypoint": "README.md"},
+  "read_sets": {
+    "normal_task": {"primary": ["docs/NORMAL_TASK_PATH.md"]},
+    "continuity": {"primary": ["docs/CONTINUITY.md", "harness/state.schema.json"]},
+    "scheduling": {"primary": ["docs/SCHEDULER_MODEL.md", "harness/dispatch.py", "harness/parallel.py"]},
+    "worker_lifecycle": {"primary": ["docs/CONVERSATION_POOL.md", "docs/LIFECYCLE_MAINTENANCE.md"]},
+    "skills": {"primary": ["skills/index.json", "docs/SKILL_SYSTEM.md"]},
+    "installation": {"primary": ["docs/INSTALL_WINDOWS.md"]},
+    "host_capability": {"primary": ["docs/HOST_CAPABILITIES.md", "host/capabilities.py"]},
+    "maintenance": {"primary": ["docs/WAKE_BRIDGE.md", "host/host_update.ps1"]}
+  },
+  "modules": {"skills": {"owns": ["skills/", "harness/skills.py"], "contracts": ["harness/skill.schema.json"]}}
+}

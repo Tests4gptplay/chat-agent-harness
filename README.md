@@ -1,47 +1,60 @@
+<p align="center"><img src="assets/brand/cah-mark.png" width="190" alt="CAH"></p>
+
 # Chat Agent Harness (CAH)
 
-**Turn chat sessions into schedulable agent workers.**
+**Harness AI with Git.**
 
-Chat Agent Harness is an API-optional agent runtime for AI systems that may expose little more than a normal chat interface.
+Turn a chat-driven task into work that can run on your own machine, preserve its progress in Git, and survive replacement of the conversation doing the reasoning.
 
-CAH wraps chat-native AI sessions with external coordination, lifecycle management, scheduling, durable task state, and real execution tools. The AI provider does not need to expose its own agent runtime for a chat session to participate as a Worker.
+[中文说明](README.zh-CN.md) · [Windows setup](docs/INSTALL_WINDOWS.md) · [Camera showcase](showcases/camera/README.md) · [Self-update showcase](showcases/self-update/README.md)
 
-A minimal CAH-compatible endpoint only needs a usable interaction surface:
+## What it does
 
-- send a message;
-- observe when a response starts and ends;
-- identify or rebind a session;
-- report basic transport/lifecycle health.
+CAH connects a human-facing conversation, a Git-backed task record, a local bridge, a browser extension and a self-hosted runner. The conversation reasons; the runner executes; Git records what actually happened.
 
-The underlying endpoint may be a browser chat, desktop app, CLI, API-backed model, or another interactive AI surface.
+```text
+User → Foreground → task contract / Task Cell when useful
+                         ↓
+                   Git task + result state
+                         ↕
+             local bridge + browser extension
+                         ↕
+              replaceable execution Workers
+                         ↓
+               runner → local tools → artifacts
+```
 
-## Architecture direction
+Task Cell carries task-level planning and supervision; it is not part of the disposable Worker pool. Worker lanes can hand over with durable checkpoints. Small tasks do not need artificial fan-out or a round of approvals: use the shortest sufficient route.
 
-CAH separates semantic compute from the machinery around it:
+The distribution includes canonical state and condition ledgers, dispatch/continuation handling, independent Worker lanes and 5+1 conversation lifecycle, deterministic executors, host capability discovery, an evidence-backed Skill Registry, and the host/extension self-update path. Skills can be accumulated, retrieved, promoted and reused; personal imported Skill libraries are not shipped.
 
-- **AI chat sessions provide replaceable semantic compute.**
-- **The Harness owns task identity, scheduling, continuation, recovery, and stale-worker fencing.**
-- **Durable external state keeps work alive when a conversation, browser, device, or Worker is replaced.**
-- **Runners and deterministic executors perform real work in local tools and workspaces.**
-- **Single- and multi-worker execution share the same durable task model.**
+## Two recorded showcases
 
-Git is especially convenient for the current implementation because it already provides durable state, versioned evidence, collaboration, and a path to self-hosted execution. It is an implementation substrate, not a requirement that the AI itself understand or directly access Git.
+### A camera built through an actual reasoning–execution–review loop
 
-A pure chat endpoint can therefore participate through an adapter that reads external task state, delivers the required semantic context through the chat interface, observes the result, and returns it to the Harness.
+[![Final procedural retro camera](showcases/camera/final.png)](showcases/camera/README.md)
 
-**APIs are supported, but they are not a prerequisite.**
+Five Blender iterations, rendered visual review, executor repairs and a selected final asset. Browse the iteration images, download the cleaned `.blend`, and inspect the procedural scripts. The camera's **GAH 77** badge is its original historical artwork, produced before the project was renamed CAH; the images are not rebranded reconstructions.
 
-The project is intended for long-running engineering work that should survive conversation rollover, browser/runtime failure, Worker replacement, and execution across different machines or tool environments.
+### CAH updating its own installed runtime
 
-## Status
+[The self-update case](showcases/self-update/README.md) follows a tested source change through Git, the existing Windows runner, extension build, bridge restart, native extension reload and fresh runtime readback. The recorded update reached version **1.0.4** without restarting Chrome and retained both Worker bindings. A subsequent one-lane task produced a usable result.
 
-**Coming soon — Developer Preview.**
+These are **sanitized case reports**, not a dump of the maintainer's private chats, machine configuration or repository history. Reported failures and the limits of the measurements remain visible.
 
-This repository is currently a public placeholder while the first release is prepared and validated. The initial public version is expected to include the core scheduler/runtime, managed chat-worker transport, self-hosted runner integration, durable handoff/recovery mechanics, and reproducible showcase cases.
+## Install on Windows
 
-The current focus is correctness and evidence: implemented, CI-proven, live-proven, and experimental capabilities will be identified separately rather than presented as equivalent.
+**Use a private repository for your running CAH instance. Do not attach your computer's runner to this public distribution.** Start with [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md): create your own private copy, register the official GitHub runner, supply your own ChatGPT Project URLs, generate installation configuration, then load the extension.
 
-No production-ready release is published here yet.
+After the one-time setup, double-click `Start_CAH.bat`. Your paths and bindings are configured by you, not inherited from the maintainer. The source package builds Chromium and Firefox extension variants; the recorded live deployment used Chrome on Windows.
+
+## Status and limits
+
+**Experimental 1.0.4 release.** This is a working engineering project, not a production service or an official OpenAI/GitHub product. Browser UI changes, Git/network latency and model availability can interrupt work. The public package is sanitized and tested, but a fresh third-party installation has not yet been independently field-tested.
+
+The normal-path benchmark reduced local request discovery from 605 Git processes to 5 for 200 completed requests plus one pending request. That is not a whole-task speed claim: the recorded post-update delegated task took **98 seconds from wake commit to result commit**, and **125 seconds to backend finalization**. Details and scope are in the self-update report.
+
+General adaptive scheduling and automatic model/effort selection are still unfinished; the repository does not present those development branches as shipped features. There is **no single-button emergency stop that reliably kills every already-running child process**. Stopping a runner prevents new jobs; inspect and stop active tools separately when necessary. Read [OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Future architecture
 
@@ -49,11 +62,8 @@ CAH's current two-lane work is the smallest live proof of a broader multi-lane s
 
 These are explicitly separated from implemented and live-proven capabilities. See [Future Architecture discussion drafts](docs/vision/README.md).
 
-## License
+## License and contribution
 
-CAH is available under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. See [LICENSE](LICENSE).
+[GNU AGPL v3](LICENSE) applies under the version choice stated in [NOTICE](NOTICE). An alternative commercial license is available by agreement with the copyright holder: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md). Commercial activity is not automatically forbidden by the AGPL route. Third-party applications and dependencies retain their own licenses.
 
-Commercial use is permitted under the AGPL when its terms are followed. For users who need different terms — for example proprietary distribution, embedding, hosting, or service operation without the applicable AGPL obligations — a separate commercial license may be available from the copyright holder. See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
-
-Contributions are subject to the inbound licensing terms in [CONTRIBUTING.md](CONTRIBUTING.md) so that the project can preserve both the AGPL public edition and separate commercial licensing.
-
+See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting code. Use public issues for reproducible bugs or licensing inquiries; do not post credentials, session cookies, private Project URLs or raw personal execution logs.

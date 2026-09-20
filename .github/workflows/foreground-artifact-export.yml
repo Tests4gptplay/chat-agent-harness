@@ -1,0 +1,42 @@
+name: Foreground artifact export
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/foreground-artifact-export/*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Resolve request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          req=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^requests/foreground-artifact-export/.*\.json$')
+          test "$(printf '%s\n' "$req" | wc -l)" -eq 1
+          path=$(python -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(d["artifact_ref"])' "$req")
+          case "$path" in
+            cases/*/camera/*.png|cases/*/camera/*/*.png|cases/*/camera/*/*/*.png|\
+            cases/*/camera/*.jpg|cases/*/camera/*/*.jpg|cases/*/camera/*/*/*.jpg|\
+            cases/*/camera/*.blend|cases/*/camera/*.py|cases/*/camera/*.json) ;;
+            *) echo "unsafe artifact path: $path" >&2; exit 2;;
+          esac
+          test -f "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: foreground-artifact
+          path: ${{ steps.req.outputs.path }}
+          if-no-files-found: error
+          compression-level: 0

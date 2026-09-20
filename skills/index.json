@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "updated_at": "2026-09-20T06:37:40+00:00",
+  "skill_count": 1,
+  "active_count": 1,
+  "skills": [
+    {
+      "skill_id": "iterative-blender-visual-refinement-v1",
+      "title": "Iterative Blender procedural asset generation with visual review",
+      "status": "ACTIVE",
+      "ref": "skills/active/iterative-blender-visual-refinement-v1.json",
+      "summary": "Build a Blender asset through bounded bpy iterations, emit durable standardized review renders, use semantic visual review to localize the next delta, rerun only the needed iteration, and promote one verified final render/script/blend set.",
+      "tags": [
+        "blender",
+        "bpy",
+        "procedural-asset",
+        "visual-review",
+        "iterative-refinement"
+      ],
+      "intents": [
+        "create a Blender asset procedurally",
+        "refine a Blender model through rendered visual review",
+        "run a bounded AI-authored bpy generation loop"
+      ],
+      "required_capabilities": [
+        "blender",
+        "python"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-09-19T00:00:00+00:00"
+    }
+  ]
+}

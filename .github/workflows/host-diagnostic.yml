@@ -1,0 +1,138 @@
+name: CAH host diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/host-diagnostic/*.json"
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Run bridge/git diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/host-diagnostic/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected one diagnostic request" }
+          $req = Get-Content $changed[0] -Raw | ConvertFrom-Json
+          $delay = [int]($req.delay_seconds ?? 0)
+          if ($delay -lt 0 -or $delay -gt 120) { throw "delay_seconds must be 0..120" }
+          if ($delay -gt 0) { Start-Sleep -Seconds $delay }
+          $out = [ordered]@{
+            v = 1
+            request_id = $req.request_id
+            at = (Get-Date).ToUniversalTime().ToString('o')
+            bridge_health = $null
+            bridge_runtime = $null
+            bridge_process = $null
+            bridge_stdout_tail = $null
+            bridge_stderr_tail = $null
+            extension_events_tail = $null
+            extension_latest = $null
+            extension_runtime_status = $null
+            git_head = $null
+            git_fetch = $null
+            git_show_state = $null
+            control_status = $null
+            desktop_path = $null
+            desktop_shortcuts = @()
+            errors = @()
+          }
+          try {
+            $out.bridge_health = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/health' -Method Get -TimeoutSec 3
+          } catch { $out.errors += ('health: ' + $_.Exception.Message) }
+
+          try {
+            $runtimePath = 'C:\CAH\runtime\runtime\bridge.json'
+            if (Test-Path $runtimePath) {
+              $rt = Get-Content $runtimePath -Raw | ConvertFrom-Json
+              $out.bridge_runtime = $rt
+              try {
+                $p = Get-Process -Id ([int]$rt.pid) -ErrorAction Stop
+                $out.bridge_process = @{ alive = $true; id = $p.Id; name = $p.ProcessName; start_time = $p.StartTime.ToUniversalTime().ToString('o') }
+              } catch {
+                $out.bridge_process = @{ alive = $false; id = [int]$rt.pid }
+              }
+            }
+          } catch { $out.errors += ('bridge_runtime: ' + $_.Exception.Message) }
+
+          try {
+            $stdout = 'C:\CAH\runtime\logs\bridge-supervised.stdout.log'
+            if (Test-Path $stdout) { $out.bridge_stdout_tail = @((Get-Content $stdout -Tail 80)) }
+          } catch { $out.errors += ('bridge_stdout: ' + $_.Exception.Message) }
+
+          try {
+            $stderr = 'C:\CAH\runtime\logs\bridge-supervised.stderr.log'
+            if (Test-Path $stderr) { $out.bridge_stderr_tail = @((Get-Content $stderr -Tail 80)) }
+          } catch { $out.errors += ('bridge_stderr: ' + $_.Exception.Message) }
+
+          try {
+            $events = 'C:\CAH\runtime\extension-events\events.jsonl'
+            if (Test-Path $events) { $out.extension_events_tail = @((Get-Content $events -Tail 80)) }
+            $latest = 'C:\CAH\runtime\extension-events\latest.json'
+            if (Test-Path $latest) { $out.extension_latest = Get-Content $latest -Raw | ConvertFrom-Json }
+          } catch { $out.errors += ('extension_events: ' + $_.Exception.Message) }
+
+          try {
+            $extBody = @{ op='extension_runtime_status'; client_id='diagnostic-client-001'; project_id='git-agent-harness' } | ConvertTo-Json
+            $out.extension_runtime_status = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api' -Method Post -Headers @{ 'X-GAH-Bridge'='1' } -ContentType 'application/json' -Body $extBody -TimeoutSec 5
+          } catch { $out.errors += ('extension_runtime_status: ' + $_.Exception.Message) }
+          try {
+            $out.git_head = (& git -C C:\CAH\checkout rev-parse HEAD).Trim()
+          } catch { $out.errors += ('git_head: ' + $_.Exception.Message) }
+          try {
+            & git -C C:\CAH\checkout fetch --quiet --no-tags origin main
+            if ($LASTEXITCODE -ne 0) { throw 'git fetch exit ' + $LASTEXITCODE }
+            $out.git_fetch = 'PASS'
+          } catch { $out.git_fetch = 'FAIL'; $out.errors += ('git_fetch: ' + $_.Exception.Message) }
+          try {
+            $raw = & git -C C:\CAH\checkout show FETCH_HEAD:state/chatgpt.json
+            if ($LASTEXITCODE -ne 0) { throw 'git show exit ' + $LASTEXITCODE }
+            $state = ($raw -join "`n") | ConvertFrom-Json
+            $out.git_show_state = @{ ok = $true; phase = $state.phase; updated = $state.updated }
+          } catch { $out.git_show_state = @{ ok = $false }; $out.errors += ('git_show_state: ' + $_.Exception.Message) }
+          try {
+            $body = @{ op='control_status'; client_id='diagnostic-client-001'; project_id='git-agent-harness' } | ConvertTo-Json
+            $out.control_status = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api' -Method Post -Headers @{ 'X-GAH-Bridge'='1' } -ContentType 'application/json' -Body $body -TimeoutSec 10
+          } catch { $out.errors += ('control_status: ' + $_.Exception.Message) }
+          try {
+            $desktop = [Environment]::GetFolderPath('Desktop')
+            $out.desktop_path = $desktop
+            if ($desktop -and (Test-Path $desktop)) {
+              $shell = New-Object -ComObject WScript.Shell
+              foreach ($lnk in @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk' -File -ErrorAction SilentlyContinue | Sort-Object Name)) {
+                $s = $shell.CreateShortcut($lnk.FullName)
+                $out.desktop_shortcuts += @{
+                  name = $lnk.Name
+                  full_name = $lnk.FullName
+                  target_path = [string]$s.TargetPath
+                  arguments = [string]$s.Arguments
+                  working_directory = [string]$s.WorkingDirectory
+                  icon_location = [string]$s.IconLocation
+                  target_exists = $(if ($s.TargetPath) { Test-Path -LiteralPath $s.TargetPath } else { $false })
+                  icon_file = $(if ($s.IconLocation) { ([string]$s.IconLocation -split ',')[0] } else { '' })
+                  icon_file_exists = $(if ($s.IconLocation) { Test-Path -LiteralPath (([string]$s.IconLocation -split ',')[0]) } else { $false })
+                }
+              }
+            }
+          } catch { $out.errors += ('desktop_shortcuts: ' + $_.Exception.Message) }
+          $path = "evidence/host-diagnostic/$($req.request_id).json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+          $out | ConvertTo-Json -Depth 8 | Set-Content $path -Encoding utf8
+          git config user.name 'gah-self-hosted-runner'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- $path
+          git commit -m "Record host diagnostic $($req.request_id) [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }

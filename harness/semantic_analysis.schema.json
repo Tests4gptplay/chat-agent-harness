@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHSemanticAnalysisResult",
+  "type": "object",
+  "required": [
+    "v",
+    "task_id",
+    "status",
+    "dispatch",
+    "summary",
+    "participants",
+    "groups",
+    "tasks",
+    "evaluation_dimensions",
+    "quality_findings",
+    "timing_findings",
+    "deepseek_basis",
+    "methodology_limitations",
+    "evidence_refs"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "ERROR",
+        "BLOCKED"
+      ]
+    },
+    "dispatch": {
+      "type": "object",
+      "required": [
+        "dispatch_id",
+        "generation",
+        "fence_token"
+      ],
+      "properties": {
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 8
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fence_token": {
+          "type": "string",
+          "minLength": 8
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "groups": {
+      "type": "object"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evaluation_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "quality_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "claim",
+          "provenance",
+          "evidence_refs"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provenance": {
+            "enum": [
+              "author_claim",
+              "evidence_fact",
+              "worker_inference"
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "timing_findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "deepseek_basis": {
+      "type": "object"
+    },
+    "methodology_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

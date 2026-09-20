@@ -1,0 +1,78 @@
+{
+  "v": 1,
+  "purpose": "Minimum architecture/capability surface that must survive any sanitized public CAH export.",
+  "policy": "Private data/content may be replaced; listed core capability paths must remain present and functional.",
+  "required_paths": [
+    "AGENTS.md",
+    "README.md",
+    "ai/repo-map.json",
+    "docs/CONTINUITY.md",
+    "docs/SCHEDULER_MODEL.md",
+    "docs/SKILL_SYSTEM.md",
+    "docs/CODEX_SKILL_IMPORT.md",
+    "docs/PUBLIC_EXPORT_CONTRACT.md",
+    "harness/cl.schema.json",
+    "harness/dispatch.py",
+    "harness/parallel.py",
+    "harness/parallel_task.schema.json",
+    "harness/skill.schema.json",
+    "harness/skills.py",
+    "harness/public_export_required.json",
+    "skills/README.md",
+    "skills/index.json",
+    "tests/test_skill_registry.py",
+    "tests/test_public_export_contract.py",
+    "docs/INSTALL_WINDOWS.md",
+    "docs/LIFECYCLE_MAINTENANCE.md",
+    "docs/CONTEXT_ECONOMY.md",
+    "Start_CAH.bat",
+    "extension/README.md",
+    "extension/build.py",
+    "extension/manifest.chromium.json",
+    "docs/HOST_CAPABILITIES.md",
+    "harness/host_capability.schema.json",
+    "harness/resource_wait.py",
+    "host/capabilities.py",
+    "executors/host_capability.py",
+    "tests/test_host_capabilities.py"
+  ],
+  "required_skill_capabilities": [
+    "candidate_active_deprecated_lifecycle",
+    "evidence_gated_promotion",
+    "capability_aware_retrieval",
+    "post_task_distillation",
+    "pass_and_nonpass_history",
+    "external_import_contract"
+  ],
+  "required_install_capabilities": [
+    "windows_one_click_launcher",
+    "chromium_extension_build_and_load",
+    "self_hosted_runner_setup",
+    "localhost_bridge_health_check",
+    "user_owned_lane_project_onboarding",
+    "first_run_topology_verification",
+    "maintainer_specific_config_sanitization"
+  ],
+  "required_runtime_maintenance_capabilities": [
+    "lane_scoped_conversation_reset",
+    "preserve_project_and_topology",
+    "preserve_canonical_git_state",
+    "durable_done_result_with_deleted_and_remaining_counts",
+    "fail_closed_project_identity_scope"
+  ],
+  "required_context_economy_capabilities": [
+    "minimal_hot_path_contracts",
+    "routed_focused_docs",
+    "selective_skill_retrieval",
+    "case_evidence_separation",
+    "single_canonical_explanation_with_pointers"
+  ],
+  "required_host_capability_runtime_capabilities": [
+    "machine_local_path_cache",
+    "sanitized_git_projection",
+    "provider_based_discovery",
+    "validated_version_not_directory_name",
+    "recoverable_wait_resource_need_host_config",
+    "fresh_generation_fence_resume"
+  ]
+}

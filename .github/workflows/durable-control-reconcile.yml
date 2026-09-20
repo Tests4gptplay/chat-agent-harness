@@ -1,0 +1,27 @@
+name: Durable control request backstop
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: gah-durable-control-backstop
+  cancel-in-progress: false
+  queue: max
+jobs:
+  reconcile:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Scan durable control requests independently of push delivery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\harness\request_drain.py --kind worker_wake --kind semantic_finalize --kind parallel_finalize --max-requests 100 --max-seconds 240
+          if ($LASTEXITCODE -ne 0) { throw "Unresolved control requests or published failure outcomes; see structured drain result." }

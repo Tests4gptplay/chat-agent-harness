@@ -1,0 +1,27 @@
+name: Managed Worker wake
+on:
+  push:
+    branches: [main]
+    paths: ["requests/worker-wake/*.json"]
+permissions:
+  contents: write
+concurrency:
+  group: managed-worker-wake
+  cancel-in-progress: false
+  queue: max
+jobs:
+  wake:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Reconcile all current fenced Worker wakes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          py .\harness\request_drain.py --kind worker_wake --max-requests 100 --max-seconds 240
+          if ($LASTEXITCODE -ne 0) { throw "Some control requests require reconciliation; healthy neighbors were still processed." }

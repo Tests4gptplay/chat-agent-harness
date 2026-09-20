@@ -1,0 +1,102 @@
+{
+  "v": 1,
+  "skill_id": "iterative-blender-visual-refinement-v1",
+  "title": "Iterative Blender procedural asset generation with visual review",
+  "status": "ACTIVE",
+  "summary": "Build a Blender asset through bounded bpy iterations, emit durable standardized review renders, use semantic visual review to localize the next delta, rerun only the needed iteration, and promote one verified final render/script/blend set.",
+  "tags": [
+    "blender",
+    "bpy",
+    "procedural-asset",
+    "visual-review",
+    "iterative-refinement"
+  ],
+  "applicability": {
+    "intents": [
+      "create a Blender asset procedurally",
+      "refine a Blender model through rendered visual review",
+      "run a bounded AI-authored bpy generation loop"
+    ],
+    "required_capabilities": [
+      "blender",
+      "python"
+    ],
+    "constraints": [
+      "The asset can be generated or materially edited through bpy or an equivalent deterministic Blender executor.",
+      "Each iteration can emit durable render evidence that a semantic Worker can inspect.",
+      "The loop must have an explicit iteration bound or acceptance gate; do not refine indefinitely."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "acceptance",
+      "instruction": "Translate the task into explicit visual/structural acceptance criteria and a bounded maximum number of quality iterations.",
+      "deterministic": false,
+      "implementation_refs": [
+        "showcases/camera/README.md"
+      ]
+    },
+    {
+      "step_id": "author",
+      "instruction": "Author the next bpy iteration as a durable script/checkpoint rather than relying on ephemeral Blender UI state.",
+      "deterministic": false,
+      "implementation_refs": [
+        "showcases/camera/README.md"
+      ]
+    },
+    {
+      "step_id": "execute",
+      "instruction": "Run the script through the bounded Blender executor and persist render/manifests/hashes before asking the Worker to judge quality.",
+      "deterministic": true,
+      "implementation_refs": [
+        "executors/blender_case.py"
+      ]
+    },
+    {
+      "step_id": "review",
+      "instruction": "Inspect the compact review packet/contact sheet plus canonical render evidence, identify the highest-value visual delta, and avoid rewriting unrelated geometry/materials.",
+      "deterministic": false,
+      "implementation_refs": [
+        "showcases/camera/README.md"
+      ]
+    },
+    {
+      "step_id": "iterate",
+      "instruction": "Repeat author -> execute -> review only while the acceptance gate materially improves and the iteration budget remains.",
+      "deterministic": false,
+      "implementation_refs": [
+        "showcases/camera/README.md"
+      ]
+    },
+    {
+      "step_id": "promote",
+      "instruction": "Select one executed iteration, deterministically promote its render/script/blend/manifest, and preserve the evidence chain proving which iteration became final.",
+      "deterministic": true,
+      "implementation_refs": [
+        "executors/blender_case.py"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "camera-showcase",
+      "result_ref": "showcases/camera/evidence.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-18T00:00:00Z"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-09-19T00:00:00+00:00",
+    "updated_at": "2026-09-19T00:00:00+00:00",
+    "source_kind": "public_case_distillation",
+    "source_refs": [
+      "showcases/camera/README.md",
+      "showcases/camera/evidence.json"
+    ]
+  }
+}

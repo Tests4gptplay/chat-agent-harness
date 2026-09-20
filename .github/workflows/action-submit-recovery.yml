@@ -1,0 +1,99 @@
+name: CAH action-submit recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/action-submit-recovery/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gah-action-submit-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve and re-deliver durable action
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/action-submit-recovery/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one action-submit recovery request, found $($changed.Count)" }
+          $requestPath = $changed[0]
+          $req = Get-Content $requestPath -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($req.request_id)) { throw 'request_id required' }
+          if ([string]::IsNullOrWhiteSpace($req.backend_cl)) { throw 'backend_cl required' }
+          if ([string]::IsNullOrWhiteSpace($req.foreground_cl)) { throw 'foreground_cl required' }
+          if ([string]::IsNullOrWhiteSpace($req.checkpoint_ref)) { throw 'checkpoint_ref required' }
+          if ($null -eq $req.action) { throw 'action required' }
+
+          git fetch --quiet --no-tags origin main
+          $bgRaw = (& git show "FETCH_HEAD:$($req.backend_cl)") -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw 'failed to read canonical backend CL' }
+          $bg = $bgRaw | ConvertFrom-Json
+          $cpRaw = (& git show "FETCH_HEAD:$($req.checkpoint_ref)") -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw 'failed to read durable checkpoint' }
+          $cp = $cpRaw | ConvertFrom-Json
+
+          if ($bg.task_id -ne $req.task_id) { throw 'task_id mismatch' }
+          if ($bg.dispatch.dispatch_id -ne $req.dispatch_id) { throw 'dispatch_id mismatch' }
+          if ([int]$bg.dispatch.generation -ne [int]$req.dispatch_generation) { throw 'dispatch generation mismatch' }
+          if ($bg.dispatch.fence_token -ne $req.fence_token) { throw 'fence mismatch' }
+          if ($bg.dispatch.state -notin @('ACKED','RUNNING','WAIT_RESULT')) { throw ('invalid dispatch state ' + $bg.dispatch.state) }
+          if ([string]::IsNullOrWhiteSpace($bg.dispatch.acked_by_worker_ref)) { throw 'acked worker ref missing' }
+          if ($cp.task_id -ne $req.task_id) { throw 'checkpoint task mismatch' }
+          if ($cp.dispatch.dispatch_id -ne $req.dispatch_id) { throw 'checkpoint dispatch mismatch' }
+          if ([int]$cp.dispatch.generation -ne [int]$req.dispatch_generation) { throw 'checkpoint generation mismatch' }
+          if ($cp.dispatch.fence_token -ne $req.fence_token) { throw 'checkpoint fence mismatch' }
+          if ($cp.next_action.action_id -ne $req.action.action_id) { throw 'checkpoint/action id mismatch' }
+
+          $body = [ordered]@{
+            op = 'action_submit'
+            client_id = 'gah-recovery'
+            project_id = 'git-agent-harness'
+            task_id = $req.task_id
+            backend_cl = $req.backend_cl
+            foreground_cl = $req.foreground_cl
+            dispatch_id = $req.dispatch_id
+            dispatch_generation = [int]$req.dispatch_generation
+            fence_token = $req.fence_token
+            worker_ref = $bg.dispatch.acked_by_worker_ref
+            lane_id = $req.lane_id
+            worker_project_key = $req.worker_project_key
+            action = $req.action
+          }
+          $response = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api' -Method Post -Headers @{ 'X-GAH-Bridge'='1' } -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 12) -TimeoutSec 60
+          if (-not $response.ok) { throw ('action_submit recovery failed: ' + ($response | ConvertTo-Json -Compress)) }
+
+          $evidencePath = "evidence/action-submit-recovery/$($req.request_id).json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $evidencePath) | Out-Null
+          [ordered]@{
+            v = 1
+            request_id = $req.request_id
+            task_id = $req.task_id
+            checkpoint_ref = $req.checkpoint_ref
+            dispatch_id = $req.dispatch_id
+            dispatch_generation = [int]$req.dispatch_generation
+            action_id = $req.action.action_id
+            worker_ref = $bg.dispatch.acked_by_worker_ref
+            bridge_response = $response
+            recovered_at = (Get-Date).ToUniversalTime().ToString('o')
+          } | ConvertTo-Json -Depth 12 | Set-Content $evidencePath -Encoding utf8
+
+          git config user.name 'gah-self-hosted-runner'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- $evidencePath
+          git commit -m "Record action-submit recovery $($req.request_id) [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
