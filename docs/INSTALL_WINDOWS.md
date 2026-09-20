@@ -1,5 +1,7 @@
 # Windows reference installation
 
+> **ChatGPT / GPT users — recommended before you start:** connect the **GitHub plugin/connector** in ChatGPT and grant it read access to this public repository. Ask the installer AI to read the current repository through that integration, beginning with `AGENTS.md` and this guide. This is preferred to copying repository files into chat and helps the AI work from the current source. Your eventual live CAH state still belongs in a separate private operational repository, which should be authorized separately.
+
 This is the currently validated **reference host path**, not a statement that CAH's architecture requires Windows.
 
 The CAH control/runtime model is built around Git, Python, a Chromium-class browser extension, localhost services and an official GitHub self-hosted runner. On Linux or macOS, an installer Agent may adapt host-specific glue — for example `run.cmd` vs `run.sh`, launcher scripts, browser executable discovery, desktop/service startup integration and path conventions — while preserving the same CAH task/state/privacy contracts.
