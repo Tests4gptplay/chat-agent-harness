@@ -42,3 +42,12 @@ This repository is currently a public placeholder while the first release is pre
 The current focus is correctness and evidence: implemented, CI-proven, live-proven, and experimental capabilities will be identified separately rather than presented as equivalent.
 
 No production-ready release is published here yet.
+
+## License
+
+CAH is available under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. See [LICENSE](LICENSE).
+
+Commercial use is permitted under the AGPL when its terms are followed. For users who need different terms — for example proprietary distribution, embedding, hosting, or service operation without the applicable AGPL obligations — a separate commercial license may be available from the copyright holder. See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
+
+Contributions are subject to the inbound licensing terms in [CONTRIBUTING.md](CONTRIBUTING.md) so that the project can preserve both the AGPL public edition and separate commercial licensing.
+
