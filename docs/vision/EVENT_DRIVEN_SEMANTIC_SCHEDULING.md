@@ -150,3 +150,14 @@ The objective is not maximum Worker occupancy for its own sake. It is lower end-
 - When should warm affinity be preferred over the first compatible idle Worker?
 - How much continuation state is sufficient for reliable migration?
 - When should a WAIT condition time out into BLOCKED, FAILURE or human escalation?
+
+## Publication and provenance
+
+This document is published as a **time-stamped public record of CAH's exploratory design direction** and to invite technical discussion. It is intended to preserve the project's design chronology and provenance.
+
+Publication does **not** claim exclusive rights over the underlying ideas, methods, algorithms or system concepts, and it does not imply that every element described here is implemented or committed to the roadmap.
+
+Unless otherwise noted, original CAH text, diagrams and other project-authored material in this repository and its project-authored Issues/Discussions are made available under **AGPL-3.0-only** as stated in [NOTICE](../../NOTICE). That license governs copyrightable CAH expression; independent implementations of underlying ideas may exist.
+
+Implementation-specific know-how, security-sensitive details, credentials, private runtime data and unpublished research may remain outside the public materials.
+
