@@ -22,7 +22,7 @@ CAH 连接前台对话、Git 任务状态、本地 Bridge、浏览器扩展和�
 
 如果 CAH 帮你节省了时间、API 成本，或者只是让你已经购买的 ChatGPT 订阅更有用，可以通过给仓库点 Star、提交可复现的问题/真实使用案例，或在 GitHub Sponsors 上赞助项目来支持后续开发。
 
-**[❤️ 在 GitHub Sponsors 上支持 CAH](https://github.com/sponsors/Tests4gptplay)**
+**[❤️ 在 GitHub Sponsors 上支持 CAH](https://github.com/sponsors/Tests4gptplay)** · **[☕ 在 Ko-fi 请作者喝杯咖啡](https://ko-fi.com/kou392350)**
 
 赞助主要用于持续测试、工具和后续开发，不代表购买优先修复或私人技术支持；商业授权和定制集成仍然单独处理。
 
