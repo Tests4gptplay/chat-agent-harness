@@ -87,6 +87,14 @@ CAH's current two-lane work is the smallest live proof of a broader multi-lane s
 
 These are explicitly separated from implemented and live-proven capabilities. See [Future Architecture discussion drafts](docs/vision/README.md).
 
+## Support CAH
+
+If CAH saves you time, API cost, or simply makes your existing ChatGPT subscription more useful, you can support continued development by starring the repository, reporting reproducible bugs and real-world cases, or sponsoring the project on GitHub.
+
+**[❤️ Sponsor CAH on GitHub](https://github.com/sponsors/Tests4gptplay)** · **[☕ Buy me a coffee on Ko-fi](https://ko-fi.com/kou392350)**
+
+Sponsorship helps cover testing, tools and continued development. It does not buy priority fixes or private support; commercial licensing and commissioned integration remain separate.
+
 ## License and contribution
 
 [GNU AGPL v3](LICENSE) applies under the version choice stated in [NOTICE](NOTICE). An alternative commercial license is available by agreement with the copyright holder: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md). Commercial activity is not automatically forbidden by the AGPL route. Third-party applications and dependencies retain their own licenses.
