@@ -2,64 +2,159 @@
 
 **Status:** long-range exploratory research direction. Not implemented. Not a roadmap commitment. No token or blockchain dependency is implied by current CAH.
 
-## Question
+## Relationship to the trusted distributed fabric
 
-If CAH can eventually schedule durable tasks across mutually trusted heterogeneous nodes, could the same abstraction extend to mutually untrusted public nodes?
+The trusted distributed-agent model assumes Workers/nodes belong to a known administrative or trust domain.
 
-A possible future model is:
+A permissionless design asks a harder question:
+
+> Can the same durable task, dynamic READY scheduling, capability placement, continuation migration and evidence model operate when available compute is supplied by mutually untrusted public nodes?
 
 ```text
-task contract
-     |
-public capability market
-     |
-leased execution
-     |
+durable task / READY contract
+          |
+public capability offers
+          |
+eligibility + lease/fencing
+          |
+bounded task packet
+          |
+untrusted execution
+          |
 result + evidence commitment
-     |
+          |
 verification / challenge / dispute
-     |
+          |
 optional settlement
 ```
 
-## Consensus is not work verification
+The permissionless layer should extend the existing scheduler model rather than replace it.
 
-A ledger or consensus mechanism can establish agreement about task ownership, leases, result commitments and settlement state.
+## Public work stealing is a market claim, not blind trust
 
-It does **not** by itself prove that an AI or hardware node performed useful work correctly.
+A public node may claim an eligible READY task only if:
 
-The harder research problem is verification of useful agent work.
+- capability requirements are satisfied;
+- the task is allowed to leave its trust/privacy domain;
+- required resources are available;
+- a fresh lease/fencing epoch is established;
+- the node accepts the verification/settlement terms.
 
-Possible mechanisms may differ by workload:
+The node receives a bounded task packet, not the entire project memory.
+
+## Proof of useful agent work
+
+Traditional proof-of-work only proves expenditure of a defined computation. It does not establish that an arbitrary AI/agent result is correct or useful.
+
+The harder problem is **verification of useful agent work**.
+
+Different workloads need different verification mechanisms:
 
 - deterministic work: tests, hashes, replay or independent validators;
-- expensive computation: redundant execution, sampled challenges or dispute protocols;
+- expensive deterministic/near-deterministic compute: redundant execution or sampled challenges;
 - artifact-producing work: reproducible metadata, content hashes and independent inspection;
-- semantic work: multiple independent judges, explicit acceptance criteria, reputation or human acceptance.
+- semantic work: independent judges, explicit acceptance criteria, reputation and/or human acceptance;
+- long-running work: optimistic acceptance with a challenge window where appropriate.
 
-## Possible public-network primitives
+No single proof mechanism should be assumed to verify every semantic task.
 
-A permissionless design might eventually need:
+## Consensus and blockchain are optional settlement primitives
 
-- node identity;
-- capability advertisement;
-- staking or other Sybil-resistance mechanisms;
-- task leases and fencing epochs;
-- result/evidence commitments;
-- challenge windows;
-- dispute/referee mechanisms;
+A blockchain/consensus layer can establish shared agreement about compact public state such as:
+
+- node identity or stake;
+- task/result commitments;
+- lease/fencing epochs;
+- evidence hashes;
+- challenge/dispute state;
+- reputation updates;
+- payments/rewards/penalties.
+
+Consensus **does not** by itself prove that useful semantic work was performed correctly.
+
+The core CAH scheduler, semantic memory and artifact system should not depend on blockchain merely to appear decentralized.
+
+## What stays off-chain
+
+Complete task state, full semantic memory, raw prompts, private constraints, logs and large artifacts should remain off-chain.
+
+```text
+on-chain / settlement layer
+  identities / stake
+  task commitments
+  lease/fence commitments
+  result/evidence hashes
+  disputes
+  payment/reputation
+          |
+          | content refs / hashes
+          v
+off-chain CAH state
+  task DAG / READY state
+  continuation checkpoints
+  semantic memory
+  evidence records
+  source/logs
+  artifacts
+```
+
+Git, object storage, content-addressed storage or other explicit durable backends may carry the off-chain state.
+
+## Privacy and bounded disclosure
+
+Permissionless scheduling creates a strict disclosure boundary.
+
+A public node should receive only:
+
+- the task contract needed for its assigned work;
+- explicitly allowed inputs;
+- minimum required memory/evidence refs;
+- verification requirements;
+- output/commitment contract.
+
+Tasks containing credentials, sensitive data or private semantic memory may be ineligible for public placement.
+
+## Sybil resistance and incentives
+
+A permissionless network may need some combination of:
+
+- stake;
 - reputation;
-- rewards and penalties;
-- optional tokenized or conventional settlement.
+- rate/cost mechanisms;
+- hardware/capability attestation;
+- identity history;
+- slashing or reward reduction after proven faults.
 
-These mechanisms should remain separate from the core scheduler unless public untrusted execution creates a demonstrated need.
+The exact mechanism is an open design choice. A token is not a prerequisite.
 
-## Storage split
+## Dispute and referee model
 
-Large artifacts and working data should remain off the settlement layer.
+When deterministic verification is unavailable, disagreement may trigger:
 
-A future settlement/consensus layer, if used at all, should contain compact commitments such as identities, leases, hashes, disputes and payments. Git, object stores, content-addressed storage or node-local managed storage can hold the actual source, logs and artifacts.
+- independent re-execution;
+- additional semantic judges;
+- a referee set;
+- human acceptance;
+- challenge windows;
+- evidence comparison.
+
+Dispute resolution should operate on durable commitments and evidence refs rather than private Worker chat histories.
+
+## Relationship to durable semantic memory
+
+Verified results from public nodes may become candidates for shared semantic memory only after the required verification/reducer gate.
+
+Untrusted outputs must not directly poison the canonical memory pool.
 
 ## Research principle
 
-The goal would be a public market for verifiable AI-addressable capability, not “blockchain for its own sake.”
+The goal would be a market for **verifiable AI-addressable capability**, not "blockchain for its own sake."
+
+## Open questions
+
+- How can semantic work be verified without making verification more expensive than the work?
+- Which tasks are safe to disclose to public nodes?
+- What should be committed on-chain versus merely content-addressed off-chain?
+- How should node capability claims be attested?
+- How should disputes affect reputation and settlement?
+- Can privacy-preserving verification be introduced without making the system impractical?
