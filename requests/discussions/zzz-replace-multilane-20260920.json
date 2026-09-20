@@ -1,0 +1,12 @@
+{
+  "v": 3,
+  "kind": "replace_vision_discussion_from_canonical_draft",
+  "category": "Ideas",
+  "replace_titles": [
+    "Multi-Lane Semantic Runtime: From Two-Lane Proof to Dynamic Worker Scheduling"
+  ],
+  "source": "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
+  "reason": "sync expanded shared-memory and dynamic work-stealing architecture explanation",
+  "require_bot_author": true,
+  "persist_public_evidence": true
+}
