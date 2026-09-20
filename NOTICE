@@ -1,13 +1,11 @@
 Chat Agent Harness (CAH)
 Copyright (C) 2026 Tests4gptplay
 
-Unless otherwise noted, original CAH material in this repository, including project-authored documentation, Issues, and Discussions, is made available under the GNU Affero General Public License version 3 only (AGPL-3.0-only).
+Unless otherwise noted, original CAH material in this repository is made available under the GNU Affero General Public License version 3 only (AGPL-3.0-only).
 
 The CAH copyright holder may also offer the same original material under a separate commercial license. A commercial license is an alternative set of permissions granted by a separate written agreement; it is not automatically granted by this repository.
 
 Third-party material remains subject to its own copyright notices and license terms.
-
-Publication of architectural ideas, methods, algorithms, or system concepts does not by itself claim exclusive implementation rights over those ideas. Public architecture documents and Discussions are also intended to preserve a time-stamped record of CAH's design evolution and provenance.
 
 SPDX identifier for the public CAH license:
 AGPL-3.0-only
