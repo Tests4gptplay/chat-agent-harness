@@ -1,0 +1,119 @@
+name: Publish CAH vision discussions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/discussions/*.json"
+
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish vision drafts as Ideas discussions
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          import json
+          import os
+          import pathlib
+          import urllib.request
+
+          repo = os.environ["GH_REPOSITORY"]
+          owner, name = repo.split("/", 1)
+          token = os.environ["GH_TOKEN"]
+          endpoint = "https://api.github.com/graphql"
+
+          def gql(query, variables):
+              payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+              req = urllib.request.Request(
+                  endpoint,
+                  data=payload,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                      "User-Agent": "CAH-vision-discussion-publisher",
+                  },
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  data = json.load(r)
+              if data.get("errors"):
+                  raise RuntimeError(json.dumps(data["errors"], ensure_ascii=False))
+              return data["data"]
+
+          meta = gql(
+              """
+              query($owner:String!, $name:String!) {
+                repository(owner:$owner, name:$name) {
+                  id
+                  discussionCategories(first:50) { nodes { id name } }
+                  discussions(first:100) { nodes { title url } }
+                }
+              }
+              """,
+              {"owner": owner, "name": name},
+          )["repository"]
+
+          categories = {x["name"].lower(): x for x in meta["discussionCategories"]["nodes"]}
+          category = categories.get("ideas")
+          if not category:
+              raise RuntimeError("Ideas discussion category not found")
+
+          existing = {x["title"]: x["url"] for x in meta["discussions"]["nodes"]}
+
+          paths = [
+              "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
+              "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
+              "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
+              "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
+              "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
+              "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
+          ]
+
+          mutation = """
+          mutation($repo:ID!, $category:ID!, $title:String!, $body:String!) {
+            createDiscussion(input:{
+              repositoryId:$repo,
+              categoryId:$category,
+              title:$title,
+              body:$body
+            }) {
+              discussion { title url }
+            }
+          }
+          """
+
+          results = []
+          for p in paths:
+              text = pathlib.Path(p).read_text(encoding="utf-8").strip()
+              first = text.splitlines()[0].strip()
+              if not first.startswith("# "):
+                  raise RuntimeError(f"{p}: first line must be H1")
+              title = first[2:].strip()
+
+              if title in existing:
+                  results.append({"title": title, "status": "SKIPPED_EXISTS", "url": existing[title]})
+                  continue
+
+              created = gql(
+                  mutation,
+                  {
+                      "repo": meta["id"],
+                      "category": category["id"],
+                      "title": title,
+                      "body": text,
+                  },
+              )["createDiscussion"]["discussion"]
+              results.append({"title": title, "status": "CREATED", "url": created["url"]})
+
+          print(json.dumps(results, ensure_ascii=False, indent=2))
