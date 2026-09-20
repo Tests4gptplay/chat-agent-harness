@@ -8,8 +8,6 @@ The current two-lane design is the minimum useful proof that CAH can execute mor
 
 The long-term model is **not** "one lane permanently owns one branch." Tasks belong to the durable DAG; lanes/Workers are temporary execution capacity that may be released, reused, migrated or reassigned as dependencies and resources change.
 
-A closer target abstraction is:
-
 ```text
                          Planner / runtime coordinator
                                    |
@@ -23,8 +21,7 @@ A closer target abstraction is:
                  Worker A     Worker B     Worker N
                  hot cache    hot cache    hot cache
                       \           |           /
-                       \          |          /
-                        +---- publish / checkpoint ----+
+                       +---- publish / checkpoint ----+
                                       |
                                       v
                     durable semantic memory / evidence pool
@@ -37,13 +34,23 @@ A closer target abstraction is:
              any compatible Worker             canonical promotion
 ```
 
-Workers can finish, block, or discover new work without remaining bound to their original branch.
+Workers can finish, block, discover new work or lose their execution environment without remaining the durable owner of the task.
+
+## Task ownership and execution capacity
+
+The central invariant is:
+
+> **Tasks belong to the DAG. Workers are temporary compatible compute capacity.**
+
+A logical task therefore has a durable identity independent of the Worker that last executed it. A Worker claim is temporary and must be protected by explicit lease/generation/fencing state so that a stale or revived Worker cannot overwrite current ownership.
+
+Physical lane count may grow or shrink without changing task identity.
 
 ## Shared durable memory and lane-local cache
 
 Each Worker may keep a short-lived hot working set for efficient reasoning, but correctness must not depend on that cache surviving.
 
-Useful state should be promoted into shared durable memory/evidence when it becomes reusable or required for continuation, for example:
+Useful state should be promoted into shared durable memory/evidence when it becomes reusable or required for continuation:
 
 - verified intermediate conclusions;
 - failed hypotheses that should not be repeated;
@@ -53,9 +60,7 @@ Useful state should be promoted into shared durable memory/evidence when it beco
 - discovered capability or resource requirements;
 - reusable task-local summaries.
 
-This pool is not raw shared chat history. It is structured, durable semantic state that other Workers can retrieve selectively.
-
-The intended hierarchy is:
+This pool is **not raw shared chat history**. It is structured, evidence-referenced semantic state that another Worker can retrieve selectively.
 
 ```text
 lane-local hot context
@@ -69,31 +74,27 @@ project-level reusable knowledge / procedures
 cold archive / large artifacts
 ```
 
-Workers should load the minimum context required for the node they claim rather than inheriting another Worker's full conversation.
-
 ## Dynamic scheduling and work stealing
 
-A lane that completes its assigned work should not become idle merely because its original branch ended.
-
-After publishing its useful result and releasing old ownership/resources, it may claim another eligible READY node:
+A Worker that finishes its current node should not become idle merely because its original branch ended.
 
 ```text
 Worker B finishes node B
  -> publish result / verified memory / evidence refs
  -> release B ownership and resources
- -> scheduler observes another READY decomposable node
+ -> scheduler observes another eligible READY node
  -> Worker B claims it with a fresh lease/fence
- -> restore only required context from durable memory
- -> continue in parallel
+ -> restore only required context
+ -> continue
 ```
 
 This is closer to **help-join / work stealing** than fixed one-lane-per-task execution.
 
-The scheduler may therefore execute independent DAG nodes out of historical order whenever dependencies allow it.
+Independent READY nodes may therefore execute out of historical order whenever dependency, capability and resource constraints permit it.
 
 ## Suspended tasks release Worker capacity
 
-A Worker should also be released when its logical task cannot make semantic progress.
+A logical task that cannot make progress should checkpoint and release its Worker.
 
 ```text
 Task A on Worker 0
@@ -113,11 +114,9 @@ Task A on Worker 0
 
 The original Worker may be preferred for warm-context locality, but affinity is an optimization, never identity.
 
-## Barriers and reducers are dependency mechanisms, not a global funnel
+## Barriers and reducers are local dependency mechanisms
 
 Not every lane must finish and then flow into one universal reduction stage.
-
-Barriers, joins and reducers exist only where the task graph requires synchronization or authoritative merge:
 
 ```text
 A ----+
@@ -127,25 +126,31 @@ B ----+
 C -----------------------> E
 ```
 
-Independent work may continue while other branches wait or reduce.
+Barriers, joins and reducers exist only where the task graph requires synchronization, verification or authoritative merge.
+
+## Dynamic DAG expansion
+
+Workers may discover new subproblems while executing a node. The Planner/runtime coordinator may then expand or revise the DAG rather than forcing a one-shot plan to completion.
+
+Newly discovered work should enter the same dependency/READY machinery and should not be coupled to the Worker that discovered it.
 
 ## Scaling invariants
 
-An N-lane implementation should preserve the properties already required by the small two-lane proof:
+An N-lane implementation should preserve:
 
-- a lane is logical execution capacity, not a permanent business role;
-- a conversation/process is a Worker incarnation, not durable identity;
-- tasks belong to the DAG rather than to the lane that last executed them;
-- ownership is explicit and protected by lease/generation/fencing;
+- lane = execution capacity, not permanent semantic role;
+- conversation/process = Worker incarnation, not durable identity;
+- task identity and state live outside the Worker;
+- ownership uses leases/generation/fencing;
 - stale Workers cannot mutate current scheduler state;
-- blocked work releases Worker capacity instead of pinning it;
+- blocked work releases Worker capacity;
 - completed Workers may help other eligible READY nodes;
 - reusable semantic state is promoted to shared durable memory/evidence;
 - inter-lane transfer uses compact contracts and refs, not raw conversation splicing;
 - non-mergeable resources require explicit ownership or serialization;
 - out-of-order execution is allowed when dependencies permit it;
-- barrier/reducer semantics are introduced only at real synchronization points;
-- parallelism is justified by reduced critical-path time, not by Worker count.
+- reducers exist only at real synchronization points;
+- parallelism is justified by reduced critical-path time, not Worker count.
 
 ## Performance model
 
@@ -155,13 +160,19 @@ The useful mental model is work/span rather than a fixed-thread pipeline.
 T_P >= max(W / P, S)
 ```
 
-where:
-
-- `W` is total useful work;
-- `P` is compatible Worker capacity;
-- `S` is the dependency span / critical path.
+where `W` is total useful work, `P` is compatible Worker capacity and `S` is the dependency span / critical path.
 
 The scheduler should reduce idle capacity, hide dependency/tool wait time, avoid duplicated reasoning and reuse verified semantic memory where it shortens future work.
+
+## Relationship to the other future-architecture ideas
+
+This document defines the core execution model.
+
+- **Event-Driven Semantic Scheduling** defines how WAIT/READY transitions release and reacquire Worker capacity.
+- **Shared-Nothing Distributed Agent Fabric** extends the same model across machines, networks and failure domains.
+- **Capability-Centric Scheduling** decides which compatible Worker/node should claim a READY node.
+- **Durable Semantic Memory** defines the shared semantic substrate used for continuation, work stealing and reuse.
+- **Permissionless Public Agent Network** explores extending the same model from trusted nodes to mutually untrusted public capacity.
 
 ## Open questions
 
