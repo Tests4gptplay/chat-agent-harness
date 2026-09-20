@@ -44,7 +44,22 @@ These are **sanitized case reports**, not a dump of the maintainer's private cha
 
 ## Install on Windows
 
-**Use a private repository for your running CAH instance. Do not attach your computer's runner to this public distribution.** Start with [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md): create your own private copy, register the official GitHub runner, supply your own ChatGPT Project URLs, generate installation configuration, then load the extension.
+**Recommended: let an AI Agent guide the installation instead of treating this as a manual sysadmin tutorial.**
+
+Give an AI Agent access to this repository and ask it to install CAH from the public distribution into your own **private operational repository**. The Agent should read `AGENTS.md` and [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md), inspect what is already available on the host, prepare the repository/configuration, run build and smoke checks, and guide you through only the steps that require human authority.
+
+The human should normally handle the trust-boundary actions that an Agent should not silently perform on its own, such as:
+
+- preparing or approving the machine and required applications;
+- creating/confirming the private GitHub repository;
+- granting GitHub/ChatGPT permissions;
+- creating the required ChatGPT Projects and sharing their Project URLs with the installer;
+- approving runner registration and other account-level authorization;
+- loading/approving the browser extension when the browser requires user confirmation.
+
+The Agent should handle the mechanical setup around those approvals: environment checks, repository wiring, configuration generation, builds, topology checks and first smoke validation. If a prerequisite is missing, it should tell the user exactly what to install or authorize, then continue after that step is satisfied.
+
+**Do not attach your computer's runner or live CAH state to this public distribution.** A real CAH instance runs from a verified private operational repository.
 
 After the one-time setup, double-click `Start_CAH.bat`. Your paths and bindings are configured by you, not inherited from the maintainer. The source package builds Chromium and Firefox extension variants; the recorded live deployment used Chrome on Windows.
 
