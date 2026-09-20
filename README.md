@@ -91,7 +91,7 @@ These are explicitly separated from implemented and live-proven capabilities. Se
 
 If CAH saves you time, API cost, or simply makes your existing ChatGPT subscription more useful, you can support continued development by starring the repository, reporting reproducible bugs and real-world cases, or sponsoring the project on GitHub.
 
-**[❤️ Sponsor CAH on GitHub](https://github.com/sponsors/Tests4gptplay)**
+**[❤️ Sponsor CAH on GitHub](https://github.com/sponsors/Tests4gptplay)** · **[☕ Buy me a coffee on Ko-fi](https://ko-fi.com/kou392350)**
 
 Sponsorship helps cover testing, tools and continued development. It does not buy priority fixes or private support; commercial licensing and commissioned integration remain separate.
 
