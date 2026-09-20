@@ -70,6 +70,89 @@ The human remains the authority for actions that affect accounts, permissions, p
 
 The Agent should guide these steps, verify their result, and then resume automatically where possible.
 
+### Interactive guidance contract
+
+When a human action is required, the installer Agent should behave like an interactive setup assistant rather than handing the user a static checklist.
+
+For each manual step, it should:
+
+1. explain **why** the action is required;
+2. tell the user **where to go** (site/application and settings path);
+3. give **one concrete action at a time**;
+4. name the control/button/menu to look for;
+5. describe the expected screen/result after the action;
+6. ask for a short confirmation before proceeding;
+7. continue from the same installation state instead of restarting the guide.
+
+Example:
+
+```text
+AI:
+Open your private GitHub repository.
+Go to Settings -> Actions -> Runners.
+Click "New self-hosted runner" and choose Windows x64.
+Stop when GitHub shows the runner setup commands.
+
+Human:
+I'm there.
+
+AI:
+Run only the download/setup commands GitHub shows on your machine.
+Do not paste the registration token into chat.
+Tell me when the runner reports that it is connected.
+```
+
+### Screenshot-assisted installation
+
+If the user cannot find a setting, button, permission page, Project URL, extension control, or other installation UI, explicitly invite them to **upload a screenshot of the current screen**.
+
+The Agent should inspect the screenshot and tell the user the next visible action as precisely as possible, for example:
+
+```text
+"I can see the repository Settings page. In the left sidebar, click Actions,
+then Runners. Send another screenshot if the Runners page looks different."
+```
+
+Do not force the user to translate changing web UIs into technical terminology.
+
+If the screenshot does not contain enough context, ask for a wider screenshot or a second screenshot rather than inventing an interface path.
+
+### Secret-handling boundary for screenshots and chat
+
+Screenshots and chat messages used for installation help must not expose credentials.
+
+The Agent must never ask the user to upload or paste:
+
+- passwords;
+- browser/session cookies;
+- GitHub personal access tokens;
+- GitHub runner registration tokens;
+- OAuth authorization codes;
+- recovery codes;
+- private keys;
+- API secrets;
+- other temporary or long-lived credentials.
+
+If such a value is visible on a page the user wants to screenshot, instruct the user to crop, blur, cover, or otherwise remove the secret before uploading the image.
+
+The Agent may explain **where** the secret should be entered locally and how to confirm that the operation succeeded, but the secret itself should remain between the user and the relevant local/site UI.
+
+Private repository names, local paths, and ChatGPT Project URLs should also be handled minimally: use them only when needed for the user's private installation and never copy them into the public CAH repository, public Issues/Discussions, or public logs.
+
+### UI drift rule
+
+GitHub, ChatGPT, Chrome and Windows interfaces may change.
+
+If the documented menu path no longer matches the user's current UI:
+
+- do not insist that the old path must exist;
+- do not invent a new button name from memory;
+- ask the user for a screenshot of the current page;
+- use the visible UI to guide the next action;
+- once the step succeeds, continue the installation from the canonical setup state.
+
+The installation guide defines the required outcome; the AI is responsible for adapting the click-path to the user's current interface.
+
 ### Suggested prompt for an installer Agent
 
 A user should be able to begin with something close to:
