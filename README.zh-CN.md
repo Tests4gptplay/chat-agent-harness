@@ -4,6 +4,8 @@
 
 [English](README.md) · [Windows 安装](docs/INSTALL_WINDOWS.md) · [相机案例](showcases/camera/README.md) · [自更新案例](showcases/self-update/README.md)
 
+> **ChatGPT / GPT 用户安装前建议：**先在 ChatGPT 中连接 **GitHub 插件/连接器**，并授予它读取本公共仓库的权限；然后让安装 AI 直接通过 GitHub 集成读取 `AGENTS.md` 和安装说明，而不是把仓库文件逐段复制进聊天。后续建立实际 CAH 实例时，再单独授权你自己的私人运行仓库。
+
 CAH 连接前台对话、Git 任务状态、本地 Bridge、浏览器扩展和自托管 runner。模型负责判断和编写操作，runner 调用本地工具，Git 保存任务、检查点、执行证据和最终成果。Task Cell 承担任务级规划和监督；Worker 是可替换的执行容量，二者不是同一个生命周期。
 
 简单任务能直接做就直接做，需要执行则优先复用一个 Worker；真正有独立工作值得并行时再使用多线程。Skill Registry、技能检索、基于证据的晋升与积累机制随代码发布，但不包含作者的私人技能库。
