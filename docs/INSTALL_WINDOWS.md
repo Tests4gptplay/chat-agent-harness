@@ -77,6 +77,55 @@ verified private CAH installation
 
 The AI should keep the user on the shortest safe path and explain one concrete human action at a time when manual involvement is required. It should not dump the whole guide back at the user as a checklist unless the user explicitly asks for a manual installation.
 
+### Critical human-in-the-loop: create the three ChatGPT Projects
+
+Creating the ChatGPT Projects is a **mandatory installation handoff**. The installer AI cannot silently create these account-level Projects on the user's behalf and must not invent their Project IDs or URLs.
+
+The required loop is:
+
+```text
+AI installer
+  -> asks the human to create CAH Task Cell
+Human
+  -> creates it in ChatGPT
+  -> opens the Project root
+  -> returns the full Project root URL ending in /project
+AI installer
+  -> validates and retains that binding
+
+AI installer
+  -> asks the human to create CAH Sandbox0
+Human
+  -> creates it and returns its /project URL
+AI installer
+  -> validates and retains that binding
+
+AI installer
+  -> asks the human to create CAH Sandbox1
+Human
+  -> creates it and returns its /project URL
+AI installer
+  -> validates and retains that binding
+
+Only after all three exact Project roots are available:
+AI installer
+  -> runs configuration
+  -> builds the extension
+  -> verifies topology
+```
+
+The three onboarding Projects are:
+
+- **CAH Task Cell**
+- **CAH Sandbox0**
+- **CAH Sandbox1**
+
+The Agent should guide the user through the ChatGPT UI, wait for the user's returned Project link(s), and continue from the same installation state. If the user cannot find the Project URL or the current UI differs, ask for a screenshot and guide from what is actually visible.
+
+A returned URL must be the **Project root URL**, normally ending in `/project`, not a conversation URL inside that Project. Validate each link before writing it into configuration. If a link is missing or malformed, stop at this handoff and ask the user to correct it; do not guess a Project key.
+
+Project URLs are private installation identifiers. They may be supplied to the installer AI for this private setup, but must not be copied into the public CAH repository, public Issues/Discussions, or public logs.
+
 ### What the AI should do
 
 The installer Agent should normally:
@@ -225,9 +274,19 @@ Never register your computer's runner on the public CAH distribution. Runtime wo
 
 ## 3. Create your own ChatGPT Projects and configure once
 
-Create three Projects: **CAH Task Cell**, **CAH Sandbox0**, and **CAH Sandbox1**. This release retains the tested two-lane onboarding topology; that is capacity, not a requirement to use two Workers for every task. Copy each Project's actual root URL ending in `/project`.
+At this point the installer AI must **pause for a human handoff**. It should guide the user to manually create these three ChatGPT Projects:
 
-Run the following from your private checkout with **your own values**:
+1. **CAH Task Cell**
+2. **CAH Sandbox0**
+3. **CAH Sandbox1**
+
+This release retains the tested two-lane onboarding topology; that is capacity, not a requirement to use two Workers for every task.
+
+For each Project, the human must open its Project root and return the actual URL ending in `/project` to the installer AI. The AI should validate each returned URL and keep the three bindings distinct. It must not continue to generated configuration until all three valid Project roots have been received.
+
+This is an intentional human-in-the-loop boundary: account-level Project creation and retrieval of the user's private Project URLs require the user's ChatGPT session and authority. The AI owns the guidance and validation around that manual step; the human owns the actual clicks and returns the resulting links.
+
+Run the following from your private checkout with **your own values** only after that three-link handoff is complete:
 
 ```powershell
 py tools/configure_install.py `
