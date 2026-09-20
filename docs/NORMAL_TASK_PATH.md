@@ -13,7 +13,6 @@ Optimize for useful work and delivery, not the number of roles, checks or window
 
 Foreground confirms intent once. Planner does not reinterpret an already confirmed contract. Planner coordinates; Watchdog reports actual symptoms; Helper is consulted only when useful. These are responsibilities, not a requirement to run three model conversations for each task.
 
-A permitted fallback model should continue the role's work; do not stall merely to obtain the preferred model. Unknown binding is reported honestly. This policy does not claim the unfinished model-selection branch is deployed.
 
 ## Keep the usual path cheap
 
@@ -30,5 +29,3 @@ Keep the few deterministic boundaries that prevent a wrong task, duplicate side 
 Track input/context bytes, request-discovery Git process count, dispatch delivery, useful response start and result delivery. Report source tests, local timings and real end-to-end observations separately.
 
 `tools/benchmark_normal_path.py` compares one pending request behind completed history in a temporary Git repository. It deliberately excludes remote fetch, Actions scheduling, model inference and execution. A large speedup there must not be advertised as the same speedup for an entire task.
-
-This is a default operating policy, not a new lifecycle subsystem. #50's unmerged scheduling/model changes remain separate; #69 addresses the first measured normal-path costs.

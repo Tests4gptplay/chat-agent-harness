@@ -1,6 +1,6 @@
 # Public export feature contract
 
-A future public/clean-room edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
+A public edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
 
 The public export is therefore not a trimmed demo fork. It is a sanitized distribution of the same architecture.
 

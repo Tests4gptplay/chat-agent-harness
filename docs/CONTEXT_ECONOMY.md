@@ -61,7 +61,6 @@ HISTORY / PROOF
       what happened, why a capability is believed, reproducible proof
 
 COLD
-  design references / future memos
       architecture ideas that should never be normal startup context
 ```
 

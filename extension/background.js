@@ -1493,7 +1493,8 @@ async function reschedule() {
 }
 
 const maintenanceGate = transportApi.laneGate();
-function runMaintenanceTick() {
+async function runMaintenanceTick() {
+  if (!(await config()).enabled) return;
   // Recovery is not a global prerequisite for useful work. Each lane's send
   // path retains its own admission reconciliation and exact dispatch checks.
   pollEnabledLanes().catch(() => null);

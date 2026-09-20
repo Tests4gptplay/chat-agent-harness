@@ -61,29 +61,3 @@ The smoke requires this sequence:
 5. Reducer completion moves the graph to `DONE`.
 6. A stale fence test fails closed.
 7. A one-lane topology still executes the same graph sequentially.
-
-## Next gate
-
-After this deterministic smoke is accepted, the next step is a live two-lane transport proof using the reserved Sandbox1 Project, lane-addressed wakes, and durable evidence. That future step is the point at which CAH may claim actual parallel browser Worker execution.
-
-
-## Live deployment gate
-
-The next transport milestone is tracked as `gah-dual-lane-self-bootstrap-001`.
-
-Extension 0.7.0 moves the reserved Sandbox1 Project into runtime epoch 3, automatically reconciles desired topology through the canonical Git control path, and bootstraps independent managed Workers for lane-00 and lane-01.
-
-Deployment is not considered complete merely because `state/lanes.json` lists two entries. The self-hosted verifier requires:
-
-- extension runtime 0.7.0;
-- desired topology exactly two enabled lanes;
-- canonical topology exactly two enabled lanes;
-- both local Worker rings have takeover-verified current Workers;
-- lane-01 has durable canonical takeover identity;
-- parallel bootstrap reaches DONE;
-- lane-01 receives one real fenced semantic dispatch;
-- Sandbox1 writes an exact-dispatch readback artifact after reading canonical two-lane topology.
-
-The deployment record is `evidence/dual-lane-deploy/dual-lane-deploy-001.json`.
-
-A real concurrent application workload remains a later proof.
