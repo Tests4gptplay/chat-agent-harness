@@ -1,49 +1,68 @@
 {
-  "v": 1,
+  "v": 2,
   "kind": "public_vision_discussions",
   "category": "Ideas",
   "status": "PASS",
   "source": "docs/vision",
-  "synced_at": "2026-09-20T06:48:19.296601+00:00",
-  "workflow_run_id": "35495175991",
-  "source_commit": "9c55a8a8579ee654da38e68b0681a05ff0951a46",
+  "synced_at": "2026-09-20T06:55:41.571520+00:00",
+  "workflow_run_id": "35495496420",
+  "source_commit": "84f2fd44dfda9395ebd320f87c7d598d3d0e6413",
   "discussion_count": 6,
+  "bot_authored_count": 6,
   "discussions": [
     {
       "title": "Multi-Lane Semantic Runtime: From Two-Lane Proof to Dynamic Worker Scheduling",
       "source": "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/8"
+      "action": "CREATED",
+      "number": 11,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/11",
+      "category": "Ideas",
+      "author": "github-actions"
     },
     {
       "title": "Event-Driven Semantic Scheduling: Tasks Should Not Pin Workers",
       "source": "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/9"
+      "action": "CREATED",
+      "number": 12,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/12",
+      "category": "Ideas",
+      "author": "github-actions"
     },
     {
       "title": "Shared-Nothing Distributed Agent Fabric",
       "source": "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/4"
+      "action": "CREATED",
+      "number": 13,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/13",
+      "category": "Ideas",
+      "author": "github-actions"
     },
     {
       "title": "Capability-Centric Scheduling Across Models, Hardware and Regions",
       "source": "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/10"
+      "action": "CREATED",
+      "number": 14,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/14",
+      "category": "Ideas",
+      "author": "github-actions"
     },
     {
       "title": "Durable Semantic Memory as a Compute Asset",
       "source": "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/6"
+      "action": "CREATED",
+      "number": 15,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/15",
+      "category": "Ideas",
+      "author": "github-actions"
     },
     {
       "title": "Toward a Permissionless Public Agent Network",
       "source": "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
-      "action": "VERIFIED_EXISTING",
-      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/7"
+      "action": "CREATED",
+      "number": 16,
+      "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/16",
+      "category": "Ideas",
+      "author": "github-actions"
     }
   ]
 }
