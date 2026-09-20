@@ -1,0 +1,10 @@
+{
+  "v": 2,
+  "kind": "publish_vision_discussions",
+  "category": "Ideas",
+  "source": "docs/vision",
+  "mode": "create_missing_verify_final_state",
+  "expected_count": 6,
+  "require_bot_author": true,
+  "persist_public_evidence": true
+}
