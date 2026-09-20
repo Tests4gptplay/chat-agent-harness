@@ -68,3 +68,34 @@ The public project should continue to distinguish:
 - exploratory architecture.
 
 A discussion may later become an RFC, design document, roadmap item or implementation issue only after its requirements become concrete.
+
+## Maintenance and publication rule
+
+The files under `docs/vision/` are the **canonical public source** for CAH future-architecture ideas.
+
+The intended flow is:
+
+```text
+private discussion / design memo
+        |
+        | distill + sanitize
+        v
+public docs/vision/*.md
+        |
+        | canonical public draft
+        v
+CAH publisher / GitHub Actions
+        |
+        v
+GitHub Discussions / Ideas
+```
+
+Maintenance rules:
+
+- update the relevant `docs/vision/*.md` file first when a public architecture idea changes;
+- keep private runtime details, credentials, machine-specific identifiers, private evidence and unsanitized internal notes out of the public vision documents;
+- use GitHub Discussions as the public discussion and timestamped presentation surface, not as the sole source of truth;
+- publish or rebuild the corresponding Bot-authored Discussion from the canonical public draft after a substantive change;
+- preserve Git history in `docs/vision/` so the design evolution remains reviewable even if a Discussion is replaced;
+- private memos may inform the public drafts, but should be distilled rather than copied verbatim.
+
