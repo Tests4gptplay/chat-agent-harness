@@ -42,9 +42,11 @@ Five Blender iterations, rendered visual review, executor repairs and a selected
 
 These are **sanitized case reports**, not a dump of the maintainer's private chats, machine configuration or repository history. Reported failures and the limits of the measurements remain visible.
 
-## Install on Windows
+## Installation
 
 **Recommended: let an AI Agent guide the installation instead of treating this as a manual sysadmin tutorial.**
+
+CAH's core runtime is not intended to be Windows-only. The currently recorded end-to-end deployment and one-click host tooling were validated on Windows, so the maintained reference guide uses Windows examples. On another desktop OS, the installer Agent should preserve the same contracts while adapting host-specific launchers, runner entry points, browser paths and service/startup integration to the platform instead of treating Windows filenames as architectural requirements.
 
 Give an AI Agent access to this repository and ask it to install CAH from the public distribution into your own **private operational repository**. The Agent should read `AGENTS.md` and [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md), inspect what is already available on the host, prepare the repository/configuration, run build and smoke checks, and guide you through only the steps that require human authority.
 
