@@ -57,7 +57,78 @@ If visibility cannot be verified, treat the repository as **not safe for operati
 
 Do not guess. Do not continue "just for now." Do not write real runtime state first and plan to move it later.
 
-### 3. Actions forbidden until PRIVATE is verified
+### 3. Operational routing and ambiguity resolution
+
+A user instruction such as:
+
+- "use CAH";
+- "run this through CAH";
+- "let CAH do it";
+- "send this to CAH";
+- "continue with CAH";
+- or equivalent wording
+
+normally refers to the user's **configured operational CAH instance**, not to this public source distribution.
+
+If the current Agent context happens to be reading or modifying the public CAH repository when such a request arrives, do **not** interpret the current repository merely as the execution target because it is already open.
+
+Instead, resolve the operational target before doing any live CAH work.
+
+Preferred resolution order:
+
+1. use an explicit operational repository named by the user in the current request, if it is verified PRIVATE;
+2. otherwise use the installed/private CAH repository recorded by authoritative installation configuration, canonical state, configured operational `origin`, or another exact installation binding;
+3. verify that the resolved repository is PRIVATE;
+4. switch subsequent CAH task/state/dispatch/evidence operations to that private operational repository;
+5. treat the public CAH repository only as source/upstream unless the user explicitly asked to maintain the public distribution itself.
+
+If exactly one configured private operational CAH repository can be resolved and verified, **route there automatically**. Do not make the user repeat the repository name merely because the Agent was initially looking at the public repository.
+
+Conceptually:
+
+```text
+user: "use CAH for this"
+        |
+        v
+current context happens to be public CAH repo
+        |
+        v
+resolve configured operational CAH target
+        |
+        +-- exactly one verified PRIVATE target
+        |        |
+        |        v
+        |   switch/reroute to private operational repo
+        |        |
+        |        v
+        |   perform normal CAH flow there
+        |
+        +-- no target / ambiguous targets / privacy not verifiable
+                 |
+                 v
+              STOP
+                 |
+                 v
+       ask for the missing target/verification
+```
+
+Do not:
+
+- create real task state in the public repository "temporarily";
+- begin a dispatch in public and migrate it later;
+- choose a repository by similar name alone;
+- choose whichever CAH repository was most recently opened;
+- infer the operational repository from a display label when an exact repository binding exists;
+- silently fall back to the public distribution after a private-target lookup fails.
+
+This rule also prevents a common maintenance ambiguity:
+
+> **"Modify CAH's public source/docs" is a public-repository maintenance task.  
+> "Use CAH to perform a task" is an operational-private-repository task.**
+
+When the user's request contains both, keep the planes separate. Public source changes may be made in the public repository, while any live CAH execution, private task state, Worker coordination, or user-derived evidence must remain in the verified private operational repository.
+
+### 4. Actions forbidden until PRIVATE is verified
 
 Until the target operational repository is verified PRIVATE, do **not**:
 
@@ -79,7 +150,7 @@ Until the target operational repository is verified PRIVATE, do **not**:
 
 If a requested action would cross this boundary, stop before the first operational write and route the user through private deployment.
 
-### 4. Actions allowed in the public distribution
+### 5. Actions allowed in the public distribution
 
 The public repository may still be used for non-operational work such as:
 
@@ -100,7 +171,7 @@ The distinction is:
 
 > **Public source/testing is allowed; live CAH operational state and user workloads are not.**
 
-### 5. Required migration path before first real operation
+### 6. Required migration path before first real operation
 
 Before starting a real CAH instance, use a private operational repository.
 
@@ -138,7 +209,7 @@ The installer/Agent should ensure, in this order:
 
 Follow `docs/INSTALL_WINDOWS.md` for the maintained installation procedure.
 
-### 6. Fail closed when the privacy boundary is uncertain
+### 7. Fail closed when the privacy boundary is uncertain
 
 If the Agent or installer cannot verify that the operational repository is private:
 
@@ -151,7 +222,7 @@ Instead, clearly report the missing precondition and help the user create, selec
 
 This gate is deliberately stricter than ordinary task routing because a mistaken public write can be irreversible even if the repository is made private later.
 
-### 7. This prose gate may be deleted after private installation is verified
+### 8. This prose gate may be deleted after private installation is verified
 
 This section is intentionally verbose because it belongs to the **public distribution bootstrap path**, not the normal Worker hot path.
 
@@ -171,7 +242,7 @@ Do **not** delete this section from the public CAH distribution.
 
 If a future upstream merge reintroduces this public-only section into an already verified private installation, the private installation may remove it again after re-checking the private-repository boundary.
 
-### 8. Deleting this prose does not authorize removal of runtime safety mechanisms
+### 9. Deleting this prose does not authorize removal of runtime safety mechanisms
 
 Only this public-distribution prose gate is disposable after private deployment.
 
