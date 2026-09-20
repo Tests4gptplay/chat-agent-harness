@@ -44,6 +44,8 @@ These are **sanitized case reports**, not a dump of the maintainer's private cha
 
 ## Installation
 
+> **ChatGPT / GPT users:** before installation, connect the **GitHub plugin/connector** in ChatGPT and grant it read access to this public repository. Then ask the installer AI to read CAH through the GitHub integration (starting with `AGENTS.md` and the installation guide) instead of manually pasting repository files into chat. When the live instance is created later, authorize the private operational repository separately.
+
 **Recommended: let an AI Agent guide the installation instead of treating this as a manual sysadmin tutorial.**
 
 CAH's core runtime is not intended to be Windows-only. **Windows is the currently validated reference host**, not an architectural requirement. The installer Agent should first identify the host OS and available tools, then preserve the same CAH contracts while adapting host-specific glue such as runner launchers, shell scripts, browser discovery, paths and startup/service integration.
