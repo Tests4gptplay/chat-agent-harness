@@ -4,19 +4,27 @@
 
 ## Available now
 
-- [Agent API client — Python source](viewer_client.py): control a running Viewer, change presets/modes and retrieve a completed PNG. This is a separate HTTP client, **not the Viewer executable**.
-- [Native perspective screenshot](images/perspective.png), [low-angle screenshot](images/below.png), [bottom screenshot](images/bottom.png).
-- [Structured evidence and timeline](evidence.json).
-- [Original Blender camera case and source asset](../camera/README.md).
+| Item | Contents |
+|---|---|
+| [Agent API client](viewer_client.py) | Python client for a running Viewer: camera presets, display modes and completed PNG retrieval. **Not the Viewer itself.** |
+| [Perspective](images/perspective.png) · [Below](images/below.png) · [Bottom](images/bottom.png) | Original native viewport images from the accepted run. |
+| [Evidence and timeline](evidence.json) | Sanitized roles, execution intervals, results and content hashes. |
+| [Blender camera](../camera/README.md) | Original camera case, procedural scripts and asset download. |
 
-## Viewer package
+## Viewer package status
 
-The Viewer has been built and used locally, but **its full public download is pending a module-specific licensing decision**. No placeholder download is presented as an available binary. The intended package is a separately built Viewer/source distribution with launch helpers and this agent guide; it is not the entire private CAH workspace.
+**The full Viewer download is not yet published.** The local implementation has been built and tested; public distribution of its directly UE-linked module still needs the copyright holder's module-specific licensing decision. The HTTP client above must not be mistaken for a runnable Viewer download.
 
-The current local version requires a matching **Unreal Engine 5.6.1** installation and Windows x64. A source build also needs the compatible C++ build tools. It is Editor-hosted `-game / DX11 / SM5`, not a portable standalone executable. Unreal Engine, Editor binaries, private browser profiles and host logs are not part of the planned public download.
+CAH's existing AGPL/commercial license files are unchanged. No separate Viewer license is granted by this page. See [Epic's Unreal Engine EULA, sections 5 and 6(c–d)](https://www.unrealengine.com/eula/unreal) for the engine-code, tool-distribution and license-compatibility provisions.
 
-CAH's existing AGPL/commercial licensing files remain unchanged. Because the Viewer module links directly against Unreal, its permissions need to be settled separately before releasing it as a usable engine-linked package. See [Epic's EULA, sections 5 and 6(c–d)](https://www.unrealengine.com/eula/unreal) for the underlying distribution and compatibility restrictions. This is a release-status notice, not a replacement license.
+## Unreal Engine: install separately
+
+**Unreal Engine is not bundled or mirrored here.** Use [Epic's official installation guide](https://dev.epicgames.com/documentation/unreal-engine/install-unreal-engine) to install the engine through the Epic Games Launcher. Select the matching **5.6 line with the 5.6.1 hotfix** used by this case; later engine versions have not been validated for this Viewer build.
+
+The tested host is Windows x64. The current Viewer uses the installed Editor runtime with `-game / DX11 / SM5`; it is not a self-contained executable. Building its source also requires the matching C++ toolchain. The [Agent guide](AGENT_VIEWER.md) explains silent launch, camera presets, screenshots and session/process shutdown without imposing an asset-production workflow.
 
 ## 中文
 
-当前可下载 AI 接口客户端、原生截图、结构化证据，以及前一案例的 Blender 相机资产。**客户端不是 Viewer 本体。**本地 Viewer 已验证可用，完整公开下载仍待其独立授权确认；不附带 UE 本体，也不改变 CAH 的既有许可证。避免提供一个看似可下载、实际不可用或许可不明的包。
+案例、截图、AI 操作说明与 Python 接口客户端已公开；**Viewer 本体下载尚未发布，客户端不能替代它**。本地已验证的 Viewer 直接依赖 UE，其单独分发许可仍需作者决定；CAH 原有许可证不变。
+
+UE 本体不随包提供，请通过上面的 Epic 官方安装入口安装匹配的 UE 5.6.1。当前版本在 Windows x64 上使用已安装的 Editor 运行，不是免安装程序，也没有验证其他 UE 版本。公开材料不包含私人路径、浏览器资料、原始主机日志或内部开发计划。
