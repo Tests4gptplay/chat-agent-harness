@@ -43,6 +43,12 @@ The current focus is correctness and evidence: implemented, CI-proven, live-prov
 
 No production-ready release is published here yet.
 
+## Future architecture
+
+CAH's current two-lane work is the smallest live proof of a broader multi-lane scheduling model, not a fixed two-worker architecture. Exploratory directions include event-driven Worker release and resumption, migratable continuations and work stealing, capability-aware multi-host scheduling, durable semantic memory, shared-nothing distributed execution, and a possible permissionless public agent network.
+
+These are explicitly separated from implemented and live-proven capabilities. See [Future Architecture discussion drafts](docs/vision/README.md).
+
 ## License
 
 CAH is available under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. See [LICENSE](LICENSE).
