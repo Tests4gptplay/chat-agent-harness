@@ -57,7 +57,11 @@ The human should normally handle the trust-boundary actions that an Agent should
 - approving runner registration and other account-level authorization;
 - loading/approving the browser extension when the browser requires user confirmation.
 
-The Agent should handle the mechanical setup around those approvals: environment checks, repository wiring, configuration generation, builds, topology checks and first smoke validation. If a prerequisite is missing, it should tell the user exactly what to install or authorize, then continue after that step is satisfied.
+The Agent should **actively guide those human steps**, not merely say "go authorize this." It should give one concrete step at a time, including the relevant site/settings path, what control to click, what the user should expect to see, and how to confirm success. If the user's UI differs from the guide, the user can upload a screenshot of the current page and the Agent should use that screenshot to identify the next action instead of guessing.
+
+Never ask the user to paste or screenshot secrets such as passwords, session cookies, access tokens, runner registration tokens, recovery codes, or other credentials. Guide the user through using those values locally without exposing them to the chat.
+
+The Agent should handle the mechanical setup around those approvals: environment checks, repository wiring, configuration generation, builds, topology checks and first smoke validation. If a prerequisite is missing, it should tell the user exactly what to install or authorize, verify the result, then continue from the same installation step.
 
 **Do not attach your computer's runner or live CAH state to this public distribution.** A real CAH instance runs from a verified private operational repository.
 
