@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync vision drafts to Ideas discussions
+      - name: Ensure vision drafts exist as Ideas discussions
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,7 +83,7 @@ jobs:
 
           existing = {x["title"]: x for x in meta["discussions"]["nodes"]}
 
-          create_mutation = """
+          mutation = """
           mutation($repo:ID!, $category:ID!, $title:String!, $body:String!) {
             createDiscussion(input:{
               repositoryId:$repo,
@@ -96,20 +96,8 @@ jobs:
           }
           """
 
-          update_mutation = """
-          mutation($id:ID!, $body:String!) {
-            updateDiscussion(input:{
-              discussionId:$id,
-              body:$body
-            }) {
-              discussion { id title url }
-            }
-          }
-          """
-
-          drafts = {}
-          actions = {}
-          discussions = {}
+          results = []
+          seen_titles = set()
 
           for p in paths:
               raw = pathlib.Path(p).read_text(encoding="utf-8").strip()
@@ -117,47 +105,37 @@ jobs:
               if not lines or not lines[0].strip().startswith("# "):
                   raise RuntimeError(f"{p}: first line must be H1")
               title = lines[0].strip()[2:].strip()
-              body = "\n".join(lines[1:]).strip()
-              drafts[title] = {"path": p, "body": body}
+              if title in seen_titles:
+                  raise RuntimeError(f"duplicate discussion title in source set: {title}")
+              seen_titles.add(title)
 
               current_discussion = existing.get(title)
               if current_discussion:
-                  discussions[title] = current_discussion
-                  actions[title] = "SYNCED_EXISTING"
+                  discussion = current_discussion
+                  action = "VERIFIED_EXISTING"
               else:
-                  created = gql(
-                      create_mutation,
+                  discussion = gql(
+                      mutation,
                       {
                           "repo": meta["id"],
                           "category": category["id"],
                           "title": title,
-                          "body": body,
+                          "body": raw,
                       },
                   )["createDiscussion"]["discussion"]
-                  discussions[title] = created
-                  actions[title] = "CREATED"
+                  action = "CREATED"
 
-          titles = list(drafts)
-          for title in titles:
-              related = [
-                  f"- [{other}]({discussions[other]['url']})"
-                  for other in titles
-                  if other != title
-              ]
-              source_url = f"https://github.com/{repo}/blob/main/{drafts[title]['path']}"
-              final_body = (
-                  drafts[title]["body"].rstrip()
-                  + "\n\n---\n\n"
-                  + "### Related CAH future architecture ideas\n\n"
-                  + "\n".join(related)
-                  + "\n\n"
-                  + f"Canonical public draft: [{drafts[title]['path']}]({source_url})"
-              )
-              updated = gql(
-                  update_mutation,
-                  {"id": discussions[title]["id"], "body": final_body},
-              )["updateDiscussion"]["discussion"]
-              discussions[title] = updated
+              results.append({
+                  "title": title,
+                  "source": p,
+                  "action": action,
+                  "url": discussion["url"],
+              })
+
+          if len(results) != 6:
+              raise RuntimeError(f"expected 6 discussions, got {len(results)}")
+          if len({x["url"] for x in results}) != 6:
+              raise RuntimeError("discussion URLs are not unique")
 
           evidence = {
               "v": 1,
@@ -168,15 +146,8 @@ jobs:
               "synced_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "workflow_run_id": os.environ["GH_RUN_ID"],
               "source_commit": os.environ["GH_SHA"],
-              "discussions": [
-                  {
-                      "title": title,
-                      "source": drafts[title]["path"],
-                      "action": actions[title],
-                      "url": discussions[title]["url"],
-                  }
-                  for title in titles
-              ],
+              "discussion_count": len(results),
+              "discussions": results,
           }
 
           out = pathlib.Path("evidence/public-discussions/vision.json")
