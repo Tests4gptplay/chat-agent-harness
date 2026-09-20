@@ -1,0 +1,19 @@
+{
+  "v": 5,
+  "kind": "sync_future_architecture_discussions_after_index_update",
+  "category": "Ideas",
+  "replace_titles": [
+    "Multi-Lane Semantic Runtime: From Two-Lane Proof to Dynamic Worker Scheduling",
+    "Event-Driven Semantic Scheduling: Tasks Should Not Pin Workers",
+    "Shared-Nothing Distributed Agent Fabric",
+    "Capability-Centric Scheduling Across Models, Hardware and Regions",
+    "Durable Semantic Memory as a Compute Asset",
+    "Toward a Permissionless Public Agent Network"
+  ],
+  "source": "docs/vision",
+  "canonical_index": "docs/vision/README.md",
+  "reason": "resync Bot-authored Ideas after documenting canonical vision maintenance and publication flow",
+  "require_bot_author": true,
+  "persist_public_evidence": true,
+  "expected_count": 6
+}
