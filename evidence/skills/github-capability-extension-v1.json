@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "task_id": "public-github-capability-extension-example-20260920",
+  "status": "PASS",
+  "kind": "sanitized_public_skill_evidence",
+  "summary": "A maintainer validation exercised the fallback when the connected GitHub tool lacked a Discussion write action: an ephemeral branch-scoped GitHub Actions workflow used least-privilege GITHUB_TOKEN permissions and gh api GraphQL, verified the created remote resource, and kept the helper workflow out of main. Private repository and resource identifiers are intentionally omitted from this public evidence.",
+  "verified_at": "2026-09-20T08:56:40+00:00"
+}
