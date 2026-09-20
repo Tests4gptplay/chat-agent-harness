@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "tag": "v1.0.4",
+  "publish": true,
+  "source_commit": "38042e18e0a63b4c1bccbecb3b19db806897b99b",
+  "expected_manifest_sha256": "26d106940cb923a1de2bc6a164d07618419a458ede738eca376f62d19785cb88",
+  "scope": "First public experimental runtime release, including the cleaned camera asset and self-update report.",
+  "preserve_existing_license_bytes": true,
+  "exclude_development_memos_and_future_plans": true,
+  "preserve_existing_public_discussions": true,
+  "independent_local_checks": {
+    "python_tests": 137,
+    "node_tests": 23,
+    "chromium_build": "PASS",
+    "firefox_build": "PASS",
+    "skill_registry": "PASS",
+    "reviewed_release_files": 194
+  }
+}
