@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HarnessAgentState",
+  "type": "object",
+  "required": ["v", "agent", "updated", "phase", "current", "verified", "unresolved", "fault_boundary", "next_reads", "writeback_reason"],
+  "properties": {
+    "v": {"const": 1},
+    "agent": {"type": "string", "minLength": 1},
+    "updated": {"type": "string", "minLength": 1},
+    "phase": {"enum": ["IDLE", "RUNNING", "NEED_AGENT", "READY_TO_EXECUTE", "EXECUTING", "VERIFY", "DONE", "BLOCKED", "NEED_USER"]},
+    "current": {"type": "array", "items": {"type": "string"}},
+    "verified": {"type": "array", "items": {"type": "string"}},
+    "unresolved": {"type": "array", "items": {"type": "string"}},
+    "fault_boundary": {"type": "string"},
+    "active_task": {"type": ["string", "null"]},
+    "active_action": {"type": ["string", "null"]},
+    "last_result": {"type": ["string", "null"]},
+    "pending_wake_id": {"type": ["string", "null"], "maxLength": 128},
+    "last_consumed_wake_id": {"type": ["string", "null"], "maxLength": 128},
+    "foreground_task": {"type": ["object", "null"]},
+    "next_reads": {"type": "array", "items": {"type": "string"}},
+    "next_action": {"type": ["string", "null"]},
+    "writeback_reason": {"type": "string"},
+    "worker_project": {"type": "object"},
+    "repository_trust": {"type": "object"},
+    "foreground_monitor": {"type": "object"},
+    "pool_handoff_protocol": {"type": "object"},
+    "worker_rollover_request": {"type": ["object", "null"]},
+    "last_pool_takeover_id": {"type": ["string", "null"], "maxLength": 128},
+    "last_delivered_wake_id": {"type": ["string", "null"], "maxLength": 128},
+    "history_ref": {"type": "string", "description": "Immutable on-demand reference to historical state, not a startup read requirement."},
+    "history_rule": {"type": "string"},
+    "paused_work": {"type": ["object", "null"], "description": "Preserved checkpoint/dispatch references for work not currently authorized to resume."},
+    "hot_start": {
+      "type": ["object", "null"],
+      "required": ["profile", "mode", "router", "expand_read_set"],
+      "properties": {
+        "profile": {"type": "string", "minLength": 1, "maxLength": 128},
+        "mode": {"enum": ["state_only"]},
+        "router": {"type": "string", "minLength": 1},
+        "expand_read_set": {"type": "string", "minLength": 1},
+        "expand_when": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      },
+      "additionalProperties": false
+    },
+    "control_request": {
+      "type": ["object", "null"],
+      "required": ["request_id", "kind", "status", "created_at"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 8, "maxLength": 128},
+        "kind": {"enum": ["topology_reconcile", "lane_clear", "lane_pool_reset", "task_cell_prompt"]},
+        "ref": {"type": "string", "minLength": 1, "maxLength": 512},
+        "status": {"enum": ["PENDING", "APPLYING", "DONE", "ERROR", "CANCELLED"]},
+        "created_at": {"type": "string", "minLength": 1},
+        "control_lane_id": {"type": ["string", "null"], "pattern": "^lane-[0-9]{2,}$"},
+        "worker_project_key": {"type": ["string", "null"], "pattern": "^g-p-[A-Za-z0-9]+$"},
+        "task_cell_project_key": {"type": "string", "pattern": "^g-p-[A-Za-z0-9]+$"},
+        "prompt": {"type": "string"},
+        "semantic_result_ref": {"type": "string"},
+        "scope": {"type": ["string", "null"], "enum": ["all_project_conversations", null]},
+        "completed_at": {"type": ["string", "null"]},
+        "result": {
+          "type": ["object", "null"],
+          "properties": {
+            "deleted_count": {"type": "integer", "minimum": 0},
+            "remaining_count": {"type": "integer", "minimum": 0},
+            "lane_id": {"type": "string", "pattern": "^lane-[0-9]{2,}$"},
+            "project_key": {"type": "string", "pattern": "^g-p-[A-Za-z0-9]+$"},
+            "task_cell_project_key": {"type": "string", "pattern": "^g-p-[A-Za-z0-9]+$"},
+            "response_started": {"type": "boolean"},
+            "local_pool_reset": {"type": "boolean"},
+            "reason": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "handoff_packet_ref": {"type": ["string", "null"]},
+    "active_dispatch_ref": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

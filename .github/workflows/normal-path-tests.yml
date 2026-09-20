@@ -1,0 +1,21 @@
+name: CAH normal-path checks
+on:
+  pull_request:
+    paths: [harness/request_scan.py, harness/request_drain.py, extension/background.js, tests/test_normal_path.py, tests/test_normal_path.cjs, tools/benchmark_normal_path.py, .github/workflows/normal-path-tests.yml]
+  push:
+    branches: [main]
+    paths: [harness/request_scan.py, harness/request_drain.py, extension/background.js, tests/test_normal_path.py, tests/test_normal_path.cjs, tools/benchmark_normal_path.py, .github/workflows/normal-path-tests.yml]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python -m unittest discover -s tests -p 'test_normal_path.py' -v
+      - run: python -m unittest discover -s tests -p 'test_request*.py' -v
+      - run: node --test tests/test_normal_path.cjs
+      - run: python tools/benchmark_normal_path.py --iterations 1

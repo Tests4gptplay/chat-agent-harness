@@ -1,0 +1,21 @@
+name: Request ledger behavior checks
+on:
+  push:
+    branches: [fix/050-request-ledger]
+    paths: [harness/request_scan.py, harness/request_drain.py, tests/test_request_scan.py, tests/test_request_drain.py, .github/workflows/request-ledger-tests.yml, .github/workflows/durable-control-reconcile.yml]
+  pull_request:
+    paths: [harness/request_scan.py, harness/request_drain.py, tests/test_request_scan.py, tests/test_request_drain.py, .github/workflows/request-ledger-tests.yml, .github/workflows/durable-control-reconcile.yml]
+permissions:
+  contents: read
+jobs:
+  behavior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python -m unittest discover -s tests -p 'test_request*.py' -v
+      - run: python -m unittest discover -s tests -p 'test_semantic_finalize.py' -v
+      - run: python -m unittest discover -s tests -p 'test_workflow_git_transactions.py' -v
+      - run: python -m compileall -q harness/request_scan.py harness/request_drain.py

@@ -1,0 +1,26 @@
+name: Publish release archive
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package the public source and selected camera assets
+        run: |
+          mkdir -p /tmp/cah-release
+          git archive --format=zip -o "/tmp/cah-release/CAH-${GITHUB_REF_NAME}.zip" HEAD
+          cp showcases/camera/final.blend /tmp/cah-release/camera-final.blend
+          cp showcases/camera/final.png /tmp/cah-release/camera-final.png
+          cd /tmp/cah-release
+          sha256sum CAH-*.zip camera-final.blend camera-final.png > SHA256SUMS
+      - name: Publish experimental release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" /tmp/cah-release/* --verify-tag --prerelease --title "CAH ${GITHUB_REF_NAME} — first public release" --notes-file RELEASE_NOTES.md

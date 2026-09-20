@@ -1,0 +1,93 @@
+{
+  "v": 1,
+  "task_id": "camera-showcase",
+  "status": "PASS",
+  "evidence_type": "sanitized_summary_of_observed_private_run",
+  "iterations": 5,
+  "selected_iteration": 5,
+  "render_dimensions": [
+    800,
+    800
+  ],
+  "failures_disclosed": [
+    "Initial executor repairs",
+    "Material dependency repair in iteration 2",
+    "Visual-attachment transport improvement during the task",
+    "Foreground recovery of a stalled semantic review"
+  ],
+  "assets": {
+    "final.blend": {
+      "sha256": "e3e9c6464ba5c7eea6e35faf1604ce059b14f93a3b993e41dff686e46945f6c2",
+      "bytes": 6186932
+    },
+    "final.png": {
+      "sha256": "65dd95e98e07f0a95d367e622bb573a34cf215337cce7805ff90ace46d69f710",
+      "bytes": 825656
+    },
+    "reproduce.py": {
+      "sha256": "ed87576cf3aba38fbbdc8b6c721ca65418fb59aaa96a0830a6479d827bc5be5a",
+      "bytes": 1358
+    },
+    "renders/iter_01.png": {
+      "sha256": "c79c564616abd31526036274937705f752efb127987f813c2d26c17368601b10",
+      "bytes": 780241
+    },
+    "renders/iter_02.png": {
+      "sha256": "3f8ca81433e2f1cdbf3c73e22be4b864dae3828c28cecdc3cf7a6a4b29f64d5d",
+      "bytes": 809805
+    },
+    "renders/iter_03.png": {
+      "sha256": "1bacf8588afa838e64ba97c91c50f4bb8026dcc18b26e9671fc6112996f817d5",
+      "bytes": 835679
+    },
+    "renders/iter_04.png": {
+      "sha256": "f6c200c085e9e6c176f3b0912e6e04144cac2e26245fc45f7ac29bb56c9c20cf",
+      "bytes": 838159
+    },
+    "renders/iter_05.png": {
+      "sha256": "65dd95e98e07f0a95d367e622bb573a34cf215337cce7805ff90ace46d69f710",
+      "bytes": 825656
+    },
+    "scripts/iter_01.py": {
+      "sha256": "fb3c7c05c60c60daf6d9ccdc794595ea47c64df69bdff12b8b7280f1330432ef",
+      "bytes": 19455
+    },
+    "scripts/iter_02.py": {
+      "sha256": "adf01857da313d88fb28d9a86975e5ce78cb2f7a27913cfcbd2b9681ab695ae3",
+      "bytes": 8486
+    },
+    "scripts/iter_03.py": {
+      "sha256": "d509b1484a89bd6970a542e7b1f72dc85f0507e549a66f1eda84f0d33d7a6b8f",
+      "bytes": 14520
+    },
+    "scripts/iter_04.py": {
+      "sha256": "a7d4f8b9e2c03b681d56e9a3d5385037740eb156a0af3e61ed9444992e18bfa7",
+      "bytes": 11798
+    },
+    "scripts/iter_05.py": {
+      "sha256": "121859335efa79443f04b8cef1c0a93956015cbb0044db0c0f5df1472da788dd",
+      "bytes": 10072
+    },
+    "stages/iter_05/01_blockout.png": {
+      "sha256": "0f8ee13792b86a37a47d5569b662ac9a4d95aa48f4b555f9453165dc1696ce44",
+      "bytes": 774594
+    },
+    "stages/iter_05/02_lens.png": {
+      "sha256": "99d03e528f1cca6ba9c2a4b1921af07ef3f9e05d2f2f4916f86dddd9a20c92b4",
+      "bytes": 784449
+    },
+    "stages/iter_05/03_controls.png": {
+      "sha256": "ca8cf31a283b2fbe487e3b3f791b32ee8860f3cbcf3a8300addd4fecaf389ec7",
+      "bytes": 811678
+    },
+    "stages/iter_05/04_materials.png": {
+      "sha256": "ca8cf31a283b2fbe487e3b3f791b32ee8860f3cbcf3a8300addd4fecaf389ec7",
+      "bytes": 811678
+    },
+    "stages/iter_05/05_lighting.png": {
+      "sha256": "65dd95e98e07f0a95d367e622bb573a34cf215337cce7805ff90ace46d69f710",
+      "bytes": 825656
+    }
+  },
+  "privacy_note": "Raw conversations, original machine paths and private run identifiers are not distributed. PNG metadata removed without changing image pixels. Blend path fields and embedded text blocks sanitized; exported hashes describe public bytes."
+}

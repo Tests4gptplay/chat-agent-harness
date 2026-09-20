@@ -1,0 +1,106 @@
+name: CAH host self-update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/host-update/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gah-host-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve host update request
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/host-update/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one host-update request, found $($changed.Count)" }
+          $requestPath = $changed[0]
+          $req = Get-Content $requestPath -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($req.request_id)) { throw "request_id required" }
+          if ([string]::IsNullOrWhiteSpace($req.expected_extension_version)) { throw "expected_extension_version required" }
+          if ([string]::IsNullOrWhiteSpace($req.target_repo)) { throw "target_repo required" }
+          "HOST_REQUEST_PATH=$requestPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_REQUEST_ID=$($req.request_id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_TARGET_REPO=$($req.target_repo)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_BRANCH=$($req.branch)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_EXPECTED_EXTENSION_VERSION=$($req.expected_extension_version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_ALLOW_CHROME_RESTART=$([bool]$req.allow_chrome_restart)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_CREATE_DESKTOP_SHORTCUT=$([bool]$req.create_desktop_shortcut)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HOST_EVIDENCE=evidence/host-update/$($req.request_id).json" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure git
+        shell: pwsh
+        run: |
+          git config user.name "gah-self-hosted-runner"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Run guarded self-update
+        id: host_update
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $branch = if ([string]::IsNullOrWhiteSpace($env:HOST_BRANCH)) { 'main' } else { $env:HOST_BRANCH }
+          & .\host\host_update.ps1 `
+            -TargetRepo $env:HOST_TARGET_REPO `
+            -Branch $branch `
+            -ExpectedExtensionVersion $env:HOST_EXPECTED_EXTENSION_VERSION `
+            -AllowChromeRestart ([System.Convert]::ToBoolean($env:HOST_ALLOW_CHROME_RESTART)) `
+            -CreateDesktopShortcut ([System.Convert]::ToBoolean($env:HOST_CREATE_DESKTOP_SHORTCUT)) `
+            -EvidenceOut (Join-Path $env:GITHUB_WORKSPACE $env:HOST_EVIDENCE)
+
+      - name: Persist deployment evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path $env:HOST_EVIDENCE)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $env:HOST_EVIDENCE) | Out-Null
+            @{
+              v = 1
+              kind = 'host_update'
+              overall = 'ERROR'
+              request_id = $env:HOST_REQUEST_ID
+              errors = @('host_update did not produce evidence')
+              completed_at = (Get-Date).ToUniversalTime().ToString('o')
+            } | ConvertTo-Json -Depth 6 | Set-Content $env:HOST_EVIDENCE -Encoding utf8
+          }
+          $ev = Get-Content $env:HOST_EVIDENCE -Raw | ConvertFrom-Json
+          $ev | Add-Member -NotePropertyName request_id -NotePropertyValue $env:HOST_REQUEST_ID -Force
+          $ev | Add-Member -NotePropertyName workflow_run_id -NotePropertyValue $env:GITHUB_RUN_ID -Force
+          $ev | ConvertTo-Json -Depth 8 | Set-Content $env:HOST_EVIDENCE -Encoding utf8
+          git add -- $env:HOST_EVIDENCE
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Record host update $env:HOST_REQUEST_ID [skip ci]"
+            py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+            if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+          }
+
+      - name: Enforce host update result
+        if: always()
+        shell: pwsh
+        run: |
+          $ev = Get-Content $env:HOST_EVIDENCE -Raw | ConvertFrom-Json
+          Write-Host ("overall=" + $ev.overall)
+          Write-Host ("repo_update=" + $ev.repo_update)
+          Write-Host ("extension_build=" + $ev.extension_build)
+          Write-Host ("bridge_restart=" + $ev.bridge_restart)
+          Write-Host ("extension_reload=" + $ev.extension_reload)
+          Write-Host ("desktop_shortcut=" + $ev.desktop_shortcut)
+          if ($ev.overall -eq 'ERROR') { exit 1 }

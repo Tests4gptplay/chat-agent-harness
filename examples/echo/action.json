@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "action_id": "echo-r001-a001",
+  "task_id": "echo-smoke",
+  "round": 1,
+  "executor": "echo",
+  "operation": "echo",
+  "payload": {
+    "message": "git-agent-harness smoke"
+  },
+  "expected_evidence": [
+    "result status PASS",
+    "echo evidence matches payload.message"
+  ],
+  "notes": "Deterministic bootstrap action."
+}

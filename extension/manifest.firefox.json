@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "CAH Wake Bridge",
+  "version": "1.0.4",
+  "description": "CAH control + execution browser host with a protected Task Cell and independent 5+1 backend lanes.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+  "background": {
+    "scripts": [
+      "control_transport.js",
+      "lane_registry.js",
+      "task_cell_registry.js",
+      "ui_recovery_runtime.js",
+      "background.js",
+      "lane_worker_runtime.js",
+      "lane_worker_retirement.js",
+      "lane_clear_runtime.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "worker_retirement_content.js",
+        "worker_content.js",
+        "worker_root_content.js",
+        "history_rate_limit.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CAH Wake Bridge",
+    "default_icon": {
+      "16": "icons/cah-icon-16.png",
+      "24": "icons/cah-icon-24.png",
+      "32": "icons/cah-icon-32.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cah-wake@cah.invalid",
+      "strict_min_version": "128.0"
+    }
+  },
+  "icons": {
+    "16": "icons/cah-icon-16.png",
+    "32": "icons/cah-icon-32.png",
+    "48": "icons/cah-icon-48.png",
+    "128": "icons/cah-icon-128.png"
+  }
+}

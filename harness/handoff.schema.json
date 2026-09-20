@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHWorkerHandoffPacket",
+  "type": "object",
+  "required": [
+    "v",
+    "handoff_id",
+    "task_id",
+    "generation",
+    "reason",
+    "work_checkpoint",
+    "memory_capsule",
+    "next_action",
+    "created_at"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "handoff_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^pool-[A-Za-z0-9._-]+$"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fence_token": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "reason": {
+      "const": "context_compacted"
+    },
+    "work_checkpoint": {
+      "type": "object"
+    },
+    "memory_capsule": {
+      "type": "object"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

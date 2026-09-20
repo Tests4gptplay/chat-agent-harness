@@ -1,0 +1,18 @@
+name: Public source checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python -m unittest discover -s tests -p 'test_*.py'
+      - run: node --test tests/*.cjs tests/test_control_transport.js tests/test_content_wake_probe.js tests/test_history_rate_limit_modal.js
+      - run: python harness/skills.py validate-all
+      - run: python extension/build.py chromium
+      - run: python extension/build.py firefox
+      - run: python -m compileall -q harness local_bridge executors tools

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHExecutorCapabilities",
+  "type": "object",
+  "required": [
+    "v",
+    "node_id",
+    "observed_at",
+    "platform",
+    "interactive_desktop",
+    "tools"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "node_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "observed_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "system",
+        "architecture"
+      ],
+      "properties": {
+        "system": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "architecture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": false
+    },
+    "interactive_desktop": {
+      "enum": [
+        true,
+        false,
+        "unknown"
+      ]
+    },
+    "tools": {
+      "type": "object",
+      "required": [
+        "python",
+        "git",
+        "blender",
+        "unreal_editor"
+      ],
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/tool"
+        },
+        "git": {
+          "$ref": "#/$defs/tool"
+        },
+        "blender": {
+          "$ref": "#/$defs/tool"
+        },
+        "unreal_editor": {
+          "$ref": "#/$defs/tool"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "required": [
+        "available",
+        "version",
+        "source"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "source": {
+          "enum": [
+            "runtime",
+            "path",
+            "env",
+            "local_cache",
+            "user_config",
+            "launcher",
+            "registry",
+            "filesystem",
+            "missing"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

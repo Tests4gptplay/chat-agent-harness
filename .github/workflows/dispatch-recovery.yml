@@ -1,0 +1,135 @@
+name: CAH semantic dispatch recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/dispatch-recovery/*.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gah-dispatch-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.event.repository.private == true
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Recover fenced semantic dispatch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA | Where-Object { $_ -like 'requests/dispatch-recovery/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one dispatch recovery request, found $($changed.Count)" }
+          $req = Get-Content $changed[0] -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($req.request_id)) { throw 'request_id required' }
+          if ([string]::IsNullOrWhiteSpace($req.task_id)) { throw 'task_id required' }
+          if ([string]::IsNullOrWhiteSpace($req.backend_cl)) { throw 'backend_cl required' }
+
+          git fetch --quiet --no-tags origin main
+          $bgRaw = (& git show "FETCH_HEAD:$($req.backend_cl)") -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw 'failed to read canonical backend CL' }
+          $bg = $bgRaw | ConvertFrom-Json
+          if ($bg.task_id -ne $req.task_id) { throw 'task_id mismatch' }
+          if ($bg.dispatch.dispatch_id -ne $req.from_dispatch_id) { throw 'from dispatch_id mismatch' }
+          if ([int]$bg.dispatch.generation -ne [int]$req.from_generation) { throw 'from generation mismatch' }
+          if ($bg.dispatch.fence_token -ne $req.from_fence_token) { throw 'from fence mismatch' }
+          if ($bg.dispatch.state -ne 'RUNNING') { throw ('dispatch recovery requires RUNNING, got ' + $bg.dispatch.state) }
+          if ([string]::IsNullOrWhiteSpace($bg.dispatch.continuation_ref)) { throw 'continuation_ref missing' }
+
+          $seed = "$($req.task_id)|$($req.request_id)|$($req.from_dispatch_id)|$($req.from_generation)|$($bg.dispatch.continuation_ref)"
+          $sha = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($seed))
+          $hex = [System.Convert]::ToHexString($sha).ToLowerInvariant()
+          $newGeneration = [int]$req.from_generation + 1
+          $dispatchId = 'dispatch-' + $hex.Substring(0,24)
+          $fenceToken = 'fence-' + $hex.Substring(24,32)
+          $wakeId = 'wake-' + $hex.Substring(0,32)
+          $now = (Get-Date).ToUniversalTime().ToString('o')
+
+          $bg.dispatch = [ordered]@{
+            dispatch_id = $dispatchId
+            wake_id = $wakeId
+            generation = $newGeneration
+            fence_token = $fenceToken
+            state = 'READY'
+            requested_at = $now
+            delivered_at = $null
+            acked_at = $null
+            acked_by_worker_ref = $null
+            lease_expires_at = $null
+            continuation_ref = $bg.dispatch.continuation_ref
+            wait_ref = $null
+          }
+          $bg.overall = 'READY'
+          $bg.wait_ref = $null
+          $bg.error = $null
+          $bg.updated_at = $now
+          foreach ($c in @($bg.conditions)) {
+            if ($c.id -eq 'claimed') { $c.state='READY'; $c.detail='Recovered semantic dispatch awaiting runtime admission'; $c.evidence_ref=$changed[0] }
+            if ($c.id -eq 'terminal') { $c.state='WAIT'; $c.detail='Recovered semantic continuation pending'; $c.evidence_ref=$changed[0] }
+          }
+
+          $tmp = New-TemporaryFile
+          $bg | ConvertTo-Json -Depth 12 | Set-Content $tmp -Encoding utf8
+          Copy-Item $tmp $req.backend_cl -Force
+          Remove-Item $tmp -Force
+          git config user.name 'gah-self-hosted-runner'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- $req.backend_cl
+          git commit -m "Recover semantic dispatch $($req.task_id) generation $newGeneration [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }
+
+          $emitArgs = @(
+            '.\\local_bridge\\emit_wake.py',
+            '--project-id', 'git-agent-harness',
+            '--state', 'NEED_AGENT',
+            '--wake-id', $wakeId,
+            '--repo', 'example-owner/cah-private',
+            '--run-id', $env:GITHUB_RUN_ID,
+            '--result-ref', $bg.dispatch.continuation_ref,
+            '--lane-id', $req.lane_id,
+            '--worker-project-key', $req.worker_project_key,
+            '--kind', $req.kind,
+            '--task-id', $req.task_id,
+            '--backend-cl', $req.backend_cl,
+            '--dispatch-id', $dispatchId,
+            '--dispatch-generation', $newGeneration,
+            '--fence-token', $fenceToken
+          )
+          if (-not [string]::IsNullOrWhiteSpace([string]$req.attachment_ref)) {
+            $emitArgs += @('--attachment-ref', [string]$req.attachment_ref)
+          }
+          py @emitArgs
+
+          $evidencePath = "evidence/dispatch-recovery/$($req.request_id).json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $evidencePath) | Out-Null
+          [ordered]@{
+            v = 1
+            request_id = $req.request_id
+            task_id = $req.task_id
+            reason = $req.reason
+            from_dispatch_id = $req.from_dispatch_id
+            from_generation = [int]$req.from_generation
+            from_fence_token = $req.from_fence_token
+            to_dispatch_id = $dispatchId
+            to_generation = $newGeneration
+            to_fence_token = $fenceToken
+            wake_id = $wakeId
+            continuation_ref = $bg.dispatch.continuation_ref
+            attachment_ref = if ([string]::IsNullOrWhiteSpace([string]$req.attachment_ref)) { $null } else { [string]$req.attachment_ref }
+            recovered_at = $now
+          } | ConvertTo-Json -Depth 8 | Set-Content $evidencePath -Encoding utf8
+          git add -- $evidencePath
+          git commit -m "Record dispatch recovery $($req.request_id) [skip ci]"
+          py .\harness\git_publish.py --branch main --remote origin --attempts 3 --gah-owned-workspace
+          if ($LASTEXITCODE -ne 0) { throw "Transactional Git publish failed: $LASTEXITCODE" }

@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "node_id": "example-win-node",
+  "observed_at": "2026-09-18T00:00:00+00:00",
+  "platform": {
+    "system": "Windows",
+    "architecture": "AMD64"
+  },
+  "interactive_desktop": true,
+  "tools": {
+    "python": {
+      "available": true,
+      "version": "3.x.y",
+      "source": "runtime"
+    },
+    "git": {
+      "available": true,
+      "version": "git version 2.x.y.windows.z",
+      "source": "path"
+    },
+    "blender": {
+      "available": true,
+      "version": "Blender 4.x.y",
+      "source": "env"
+    },
+    "unreal_editor": {
+      "available": true,
+      "version": null,
+      "source": "env"
+    }
+  }
+}

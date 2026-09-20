@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHSkill",
+  "type": "object",
+  "required": [
+    "v",
+    "skill_id",
+    "title",
+    "status",
+    "summary",
+    "tags",
+    "applicability",
+    "procedure",
+    "evidence",
+    "stats",
+    "provenance"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "skill_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "status": {
+      "enum": [
+        "CANDIDATE",
+        "ACTIVE",
+        "DEPRECATED"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "uniqueItems": true
+    },
+    "applicability": {
+      "type": "object",
+      "required": [
+        "intents",
+        "required_capabilities",
+        "constraints"
+      ],
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "uniqueItems": true
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "uniqueItems": true
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "procedure": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "step_id",
+          "instruction"
+        ],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "instruction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 800
+          },
+          "deterministic": {
+            "type": "boolean"
+          },
+          "implementation_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "result_ref",
+          "outcome",
+          "verified_at"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "result_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "verified_at": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": [
+        "success_count",
+        "failure_count",
+        "use_count"
+      ],
+      "properties": {
+        "success_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "use_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "created_at",
+        "updated_at",
+        "source_kind",
+        "source_refs"
+      ],
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "updated_at": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "source_kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

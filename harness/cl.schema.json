@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHControlLight",
+  "type": "object",
+  "required": [
+    "v",
+    "cl_id",
+    "task_id",
+    "scope",
+    "overall",
+    "created_at",
+    "updated_at",
+    "conditions"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "cl_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "enum": [
+        "foreground_supervision",
+        "backend_execution"
+      ]
+    },
+    "overall": {
+      "enum": [
+        "WAIT",
+        "READY",
+        "RUNNING",
+        "GREEN",
+        "SUCCESS",
+        "ERROR",
+        "BLOCKED",
+        "CANCELLED"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completion_rule": {
+      "type": "string"
+    },
+    "backend_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "result_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "visual": {
+      "type": "string"
+    },
+    "supervisor_guard": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "HELD",
+            "RELEASED"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "enum": [
+              "WAIT",
+              "READY",
+              "RUNNING",
+              "GREEN",
+              "ERROR",
+              "BLOCKED",
+              "CANCELLED"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "checkpoint_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "memory_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "handoff_packet_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "wait_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resource_wait": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind",
+        "capability_id",
+        "prompt",
+        "projection_ref",
+        "requested_at"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "NEED_HOST_CONFIG"
+          ]
+        },
+        "capability_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "projection_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 512
+        },
+        "requested_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "dispatch": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "dispatch_id",
+        "generation",
+        "fence_token",
+        "state"
+      ],
+      "properties": {
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "wake_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fence_token": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "state": {
+          "enum": [
+            "READY",
+            "DISPATCHED",
+            "ACKED",
+            "RUNNING",
+            "WAIT_RESULT",
+            "WAIT_RESOURCE",
+            "WAIT_DEP",
+            "HANDOFF",
+            "DONE",
+            "ERROR",
+            "BLOCKED",
+            "CANCELLED"
+          ]
+        },
+        "requested_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delivered_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "acked_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "acked_by_worker_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lease_expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "continuation_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wait_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ack_source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
+        },
+        "recovered_from": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "dispatch_id",
+            "generation",
+            "fence_token",
+            "state",
+            "reason",
+            "recovered_at"
+          ],
+          "properties": {
+            "dispatch_id": {
+              "type": "string"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "fence_token": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "acked_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "acked_by_worker_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "recovered_at": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

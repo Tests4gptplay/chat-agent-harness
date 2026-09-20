@@ -1,0 +1,22 @@
+name: Finalize parallel branch result
+on:
+  push:
+    branches: [main]
+    paths: ["requests/parallel-branch-finalize/*.json"]
+permissions:
+  contents: write
+concurrency:
+  group: gah-control-finalization
+  cancel-in-progress: false
+  queue: max
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Reconcile all durable branch-finalization requests
+        run: python harness/request_drain.py --kind parallel_finalize --max-requests 100 --max-seconds 240

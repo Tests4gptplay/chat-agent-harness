@@ -1,0 +1,26 @@
+body { font: 13px system-ui, sans-serif; margin: 0; min-width: 430px; }
+main { padding: 12px; }
+.brand { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.brand-icon { width: 32px; height: 32px; border-radius: 8px; }
+h1 { font-size: 16px; margin: 0; }
+.brand-name { margin: 1px 0 0; font-size: 11px; opacity: .65; }
+label { display: block; margin: 8px 0; }
+input[type="text"], input[type="url"] { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; }
+.check { display: flex; gap: 6px; align-items: center; }
+.buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+button { padding: 6px 9px; }
+details { margin-top: 12px; border-top: 1px solid rgba(127,127,127,.25); padding-top: 8px; }
+summary { cursor: pointer; font-weight: 600; }
+.hint { opacity: .7; font-size: 12px; }
+.lane { border: 1px solid rgba(127,127,127,.28); border-radius: 8px; padding: 9px; margin: 9px 0; }
+.lane-top { display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 6px; }
+.lane-top input[type="text"] { margin-top: 0; }
+.lane-root { margin-top: 7px !important; }
+.lane-meta { margin-top: 6px; opacity: .72; font-size: 11px; word-break: break-all; }
+.summary { margin: 10px 0; padding: 7px; background: rgba(127,127,127,.1); border-radius: 6px; }
+pre { white-space: pre-wrap; word-break: break-word; background: rgba(127,127,127,.12); padding: 8px; min-height: 42px; max-height: 260px; overflow: auto; }
+
+.section-title { margin: 12px 0 6px; font-weight: 700; font-size: 13px; }
+.badge { display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 10px; font-weight: 600; opacity: .78; }
+.task-cell { border: 1px solid rgba(127,127,127,.38); border-radius: 9px; padding: 9px; margin: 9px 0 12px; }
+.task-cell .section-title { margin-top: 0; }

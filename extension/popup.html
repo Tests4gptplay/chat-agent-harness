@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+  <title>CAH Control & Execution</title>
+</head>
+<body>
+  <main>
+    <div class="brand">
+      <img class="brand-icon" src="icons/cah-icon-32.png" alt="">
+      <div>
+        <h1>CAH Control & Execution</h1>
+        <p class="brand-name">Chat Agent Harness</p>
+      </div>
+    </div>
+    <section class="task-cell">
+      <div class="section-title">Task Cell <span class="badge">control plane</span></div>
+      <label class="row check"><input id="taskCellEnabled" type="checkbox"> Enabled</label>
+      <label>Display name
+        <input id="taskCellName" type="text" placeholder="CAH Task Cell">
+      </label>
+      <label>ChatGPT Project root
+        <input id="taskCellRoot" type="url" placeholder="https://chatgpt.com/g/g-p-.../project">
+      </label>
+      <div id="taskCellMeta" class="lane-meta"></div>
+      <div class="buttons">
+        <button id="saveTaskCell">Save Task Cell</button>
+        <button id="openTaskCell">Open</button>
+        <button id="taskCellStatus">Status</button>
+      </div>
+      <p class="hint">Protected task-level control host. It is not an execution lane and never enters the 5+1 Worker rollover/retirement pool. Normal release is gated on Foreground result delivery.</p>
+    </section>
+
+    <div class="section-title">Execution lanes <span class="badge">5+1 pools</span></div>
+    <label class="row check"><input id="enabled" type="checkbox"> Backend polling enabled</label>
+
+    <div id="lanes"></div>
+
+    <div class="buttons">
+      <button id="addLane">+ Add lane</button>
+      <button id="save">Save topology</button>
+      <button id="refresh">Refresh</button>
+    </div>
+
+    <div id="topology" class="summary"></div>
+
+    <details>
+      <summary>Advanced / diagnostics</summary>
+      <label>Bridge endpoint override
+        <input id="localEndpoint" type="url" placeholder="http://127.0.0.1:8765/api">
+      </label>
+      <label>Bridge project id override
+        <input id="projectId" type="text" placeholder="git-agent-harness">
+      </label>
+      <div class="buttons">
+        <button id="poll">Poll now</button>
+      </div>
+      <p class="hint">Normal operation uses built-in localhost/project defaults. Foreground conversation binding is no longer required.</p>
+    </details>
+
+    <pre id="status"></pre>
+  </main>
+  <script src="lane_registry.js"></script>
+  <script src="task_cell_registry.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
