@@ -6,6 +6,39 @@ The CAH control/runtime model is built around Git, Python, a Chromium-class brow
 
 Do not claim an untested platform is already validated merely because the adaptation is straightforward. The Windows path below is the one currently demonstrated end to end; other platforms should be adapted and then verified with the same installation/readback/smoke criteria.
 
+## Platform-adaptation contract for installer Agents
+
+Before following the numbered steps, determine the host platform.
+
+If the host is Windows, use the validated reference path below.
+
+If the host is Linux, macOS, or another supported desktop environment, treat Windows-specific filenames and mechanisms as **reference implementations of a required function**, not as mandatory literals. Map them to the closest native equivalent while keeping the CAH contracts unchanged.
+
+Examples:
+
+| Required function | Windows reference | Other-host adaptation |
+| --- | --- | --- |
+| self-hosted runner entry point | `run.cmd` | official runner entry point such as `run.sh` |
+| CAH launcher | `Start_CAH.bat` / PowerShell | shell script, app launcher, user service, or equivalent |
+| browser discovery | `chrome.exe` / Windows install paths | native Chrome/Chromium application/executable discovery |
+| background/startup integration | Startup folder / Windows process APIs | user service, login item, LaunchAgent, systemd-user, or equivalent |
+| paths | drive-letter / backslash conventions | native filesystem paths |
+| process inspection | Windows CIM/process APIs | native process/service inspection |
+
+The installer Agent may make the small source/configuration adjustments required for the target host. This is an open-source installation, not a binary appliance whose Windows glue must remain untouched.
+
+However, **do not silently weaken or rewrite the semantic contracts** while adapting the host layer. These remain invariant:
+
+- live CAH state belongs in a verified PRIVATE operational repository;
+- Git remains canonical for durable task/runtime state;
+- the official self-hosted runner must be correctly bound to the intended private repository or authorized private scope;
+- Task Cell / Worker Project identity must remain exact;
+- bridge health and extension topology must be verified;
+- runner/bridge/browser integration must actually work on the chosen host;
+- the first bounded smoke task must produce a real result before the installation is called ready.
+
+If a platform-specific adaptation is required, the Agent should make the change, explain it briefly, test it, and continue. The user should not be expected to manually translate a Windows command into Linux/macOS syntax.
+
 This guide is for the experimental CAH 1.0.4 source distribution. The installer **must not hard-code** the maintainer's username, drives, runner roots or ChatGPT Project URLs. This release ships disabled example bindings and empty task state.
 
 ## Recommended installation mode: AI-guided, human-authorized
@@ -48,7 +81,7 @@ The installer Agent should normally:
 
 - read the public `AGENTS.md` bootstrap gate before performing live setup;
 - verify that the eventual operational repository is PRIVATE;
-- inspect Git, Python, PowerShell, browser and optional executor availability;
+- identify the host OS and inspect Git, Python, the native shell/runtime tools, browser and optional executor availability;
 - distinguish already-installed prerequisites from missing ones;
 - prepare the public-to-private repository transition;
 - wire the operational `origin` to the private repository;
@@ -163,7 +196,7 @@ The installation guide defines the required outcome; the AI is responsible for a
 
 A user should be able to begin with something close to:
 
-> Install CAH from this public repository. Follow its public AGENTS.md and Windows installation guide. Keep the live instance in a verified private repository. Inspect what is already installed, do the mechanical setup yourself where possible, and ask me only for hardware preparation, account authorization, private-repository creation, ChatGPT Project creation, or other steps that require my direct approval.
+> Install CAH from this public repository. Follow its public AGENTS.md and installation reference. Detect my host OS first. Preserve CAH's runtime/privacy contracts, but adapt Windows-specific reference commands and launchers to native equivalents if this is not Windows. Keep the live instance in a verified private repository. Inspect what is already installed, do the mechanical setup yourself where possible, and ask me only for hardware preparation, account authorization, private-repository creation, ChatGPT Project creation, or other steps that require my direct approval.
 
 This AI-guided flow is the recommended experience. The numbered sections below remain the authoritative detailed procedure and can also be followed manually.
 
