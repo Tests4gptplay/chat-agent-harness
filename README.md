@@ -28,7 +28,7 @@ Task Cell carries task-level planning and supervision; it is not part of the dis
 
 The distribution includes canonical state and condition ledgers, dispatch/continuation handling, independent Worker lanes and 5+1 conversation lifecycle, deterministic executors, host capability discovery, an evidence-backed Skill Registry, and the host/extension self-update path. Skills can be accumulated, retrieved, promoted and reused; personal imported Skill libraries are not shipped.
 
-## Two recorded showcases
+## Recorded showcases
 
 ### A camera built through an actual reasoning–execution–review loop
 
@@ -41,6 +41,15 @@ Five Blender iterations, rendered visual review, executor repairs and a selected
 [The self-update case](showcases/self-update/README.md) follows a tested source change through Git, the existing Windows runner, extension build, bridge restart, native extension reload and fresh runtime readback. The recorded update reached version **1.0.4** without restarting Chrome and retained both Worker bindings. A subsequent one-lane task produced a usable result.
 
 These are **sanitized case reports**, not a dump of the maintainer's private chats, machine configuration or repository history. Reported failures and the limits of the measurements remain visible.
+
+
+### Parallel test: Blender assets to UE/Cook + Viewer development
+
+Two Worker lanes prepared the asset pipeline and Viewer under Task Cell coordination, then joined on a real native UE result.
+
+[![Native UE camera result](showcases/ue-parallel-viewer/images/perspective.png)](showcases/ue-parallel-viewer/README.md)
+
+[Read the case study](showcases/ue-parallel-viewer/README.md) · [Agent guide](showcases/ue-parallel-viewer/AGENT_VIEWER.md)
 
 ## Installation
 
