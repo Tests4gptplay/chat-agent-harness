@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure vision drafts exist as Ideas discussions
+      - name: Publish and verify CAH vision Ideas
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,33 +57,42 @@ jobs:
                   },
                   method="POST",
               )
-              with urllib.request.urlopen(req, timeout=30) as r:
-                  data = json.load(r)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  data = json.load(response)
               if data.get("errors"):
                   raise RuntimeError(json.dumps(data["errors"], ensure_ascii=False))
               return data["data"]
 
-          meta = gql(
-              """
-              query($owner:String!, $name:String!) {
-                repository(owner:$owner, name:$name) {
+          repo_query = """
+          query($owner:String!, $name:String!) {
+            repository(owner:$owner, name:$name) {
+              id
+              discussionCategories(first:50) { nodes { id name } }
+              discussions(first:100) {
+                nodes {
                   id
-                  discussionCategories(first:50) { nodes { id name } }
-                  discussions(first:100) { nodes { id title url } }
+                  number
+                  title
+                  url
+                  category { name }
+                  author { login }
                 }
               }
-              """,
-              {"owner": owner, "name": name},
-          )["repository"]
+            }
+          }
+          """
 
+          meta = gql(repo_query, {"owner": owner, "name": name})["repository"]
           categories = {x["name"].lower(): x for x in meta["discussionCategories"]["nodes"]}
-          category = categories.get("ideas")
-          if not category:
+          ideas = categories.get("ideas")
+          if not ideas:
               raise RuntimeError("Ideas discussion category not found")
 
-          existing = {x["title"]: x for x in meta["discussions"]["nodes"]}
+          existing_by_title = {}
+          for d in meta["discussions"]["nodes"]:
+              existing_by_title.setdefault(d["title"], []).append(d)
 
-          mutation = """
+          create_mutation = """
           mutation($repo:ID!, $category:ID!, $title:String!, $body:String!) {
             createDiscussion(input:{
               repositoryId:$repo,
@@ -91,54 +100,109 @@ jobs:
               title:$title,
               body:$body
             }) {
-              discussion { id title url }
+              discussion {
+                id
+                number
+                title
+                url
+                category { name }
+                author { login }
+              }
             }
           }
           """
 
-          results = []
+          drafts = []
           seen_titles = set()
 
-          for p in paths:
-              raw = pathlib.Path(p).read_text(encoding="utf-8").strip()
+          for path in paths:
+              raw = pathlib.Path(path).read_text(encoding="utf-8").strip()
               lines = raw.splitlines()
               if not lines or not lines[0].strip().startswith("# "):
-                  raise RuntimeError(f"{p}: first line must be H1")
+                  raise RuntimeError(f"{path}: first line must be H1")
               title = lines[0].strip()[2:].strip()
               if title in seen_titles:
-                  raise RuntimeError(f"duplicate discussion title in source set: {title}")
+                  raise RuntimeError(f"duplicate source title: {title}")
               seen_titles.add(title)
 
-              current_discussion = existing.get(title)
-              if current_discussion:
-                  discussion = current_discussion
+              body = "\n".join(lines[1:]).strip()
+              source_url = f"https://github.com/{repo}/blob/main/{path}"
+              index_url = f"https://github.com/{repo}/blob/main/docs/vision/README.md"
+              body = (
+                  body.rstrip()
+                  + "\n\n---\n\n"
+                  + f"_Published automatically from the canonical public draft: [{path}]({source_url}). "
+                  + f"See the [Future Architecture index]({index_url})._"
+              )
+
+              matches = existing_by_title.get(title, [])
+              if len(matches) > 1:
+                  raise RuntimeError(f"duplicate existing discussions for title: {title}")
+
+              if matches:
+                  discussion = matches[0]
                   action = "VERIFIED_EXISTING"
               else:
                   discussion = gql(
-                      mutation,
+                      create_mutation,
                       {
                           "repo": meta["id"],
-                          "category": category["id"],
+                          "category": ideas["id"],
                           "title": title,
-                          "body": raw,
+                          "body": body,
                       },
                   )["createDiscussion"]["discussion"]
                   action = "CREATED"
 
-              results.append({
+              drafts.append({
                   "title": title,
-                  "source": p,
+                  "source": path,
                   "action": action,
-                  "url": discussion["url"],
+                  "discussion": discussion,
               })
 
-          if len(results) != 6:
-              raise RuntimeError(f"expected 6 discussions, got {len(results)}")
+          # Re-query after all writes. The final evidence is based on observed GitHub state,
+          # not on mutation return values alone.
+          final_meta = gql(repo_query, {"owner": owner, "name": name})["repository"]
+          target_titles = {x["title"] for x in drafts}
+          found = [d for d in final_meta["discussions"]["nodes"] if d["title"] in target_titles]
+
+          if len(found) != 6:
+              raise RuntimeError(f"expected exactly 6 target discussions after publish, found {len(found)}")
+
+          final_by_title = {}
+          for d in found:
+              if d["title"] in final_by_title:
+                  raise RuntimeError(f"duplicate final discussion title: {d['title']}")
+              final_by_title[d["title"]] = d
+
+          allowed_bot_logins = {"github-actions", "github-actions[bot]"}
+          results = []
+          for item in drafts:
+              d = final_by_title.get(item["title"])
+              if not d:
+                  raise RuntimeError(f"missing final discussion: {item['title']}")
+              if d["category"]["name"].lower() != "ideas":
+                  raise RuntimeError(f"wrong category for {item['title']}: {d['category']['name']}")
+              author = (d.get("author") or {}).get("login")
+              if author not in allowed_bot_logins:
+                  raise RuntimeError(f"unexpected author for {item['title']}: {author}")
+
+              results.append({
+                  "title": item["title"],
+                  "source": item["source"],
+                  "action": item["action"],
+                  "number": d["number"],
+                  "url": d["url"],
+                  "category": d["category"]["name"],
+                  "author": author,
+              })
+
           if len({x["url"] for x in results}) != 6:
-              raise RuntimeError("discussion URLs are not unique")
+              raise RuntimeError("target discussion URLs are not unique")
 
           evidence = {
-              "v": 1,
+              "v": 2,
               "kind": "public_vision_discussions",
               "category": "Ideas",
               "status": "PASS",
@@ -147,6 +211,7 @@ jobs:
               "workflow_run_id": os.environ["GH_RUN_ID"],
               "source_commit": os.environ["GH_SHA"],
               "discussion_count": len(results),
+              "bot_authored_count": sum(1 for x in results if x["author"] in allowed_bot_logins),
               "discussions": results,
           }
 
@@ -166,5 +231,5 @@ jobs:
             echo "No evidence change."
             exit 0
           fi
-          git commit -m "Record published CAH vision discussions [skip ci]"
+          git commit -m "Record verified CAH vision discussions [skip ci]"
           git push origin HEAD:main
