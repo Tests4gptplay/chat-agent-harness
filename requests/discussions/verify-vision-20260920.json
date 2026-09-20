@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "kind": "verify_vision_discussions",
+  "category": "Ideas",
+  "source": "docs/vision",
+  "mode": "create_missing_verify_existing",
+  "persist_public_evidence": true,
+  "expected_count": 6
+}
