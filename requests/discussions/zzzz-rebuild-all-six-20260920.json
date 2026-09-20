@@ -1,0 +1,18 @@
+{
+  "v": 4,
+  "kind": "rebuild_all_future_architecture_discussions",
+  "category": "Ideas",
+  "replace_titles": [
+    "Multi-Lane Semantic Runtime: From Two-Lane Proof to Dynamic Worker Scheduling",
+    "Event-Driven Semantic Scheduling: Tasks Should Not Pin Workers",
+    "Shared-Nothing Distributed Agent Fabric",
+    "Capability-Centric Scheduling Across Models, Hardware and Regions",
+    "Durable Semantic Memory as a Compute Asset",
+    "Toward a Permissionless Public Agent Network"
+  ],
+  "source": "docs/vision",
+  "reason": "align all six future-architecture discussions to the shared dynamic scheduling, semantic memory, distributed placement and permissionless trust model",
+  "require_bot_author": true,
+  "persist_public_evidence": true,
+  "expected_count": 6
+}
