@@ -251,4 +251,4 @@ jobs:
             exit 0
           fi
           git commit -m "Record verified CAH vision discussions [skip ci]"
-          git push origin HEAD:main
+          python harness/git_publish.py --branch main --attempts 3 --gah-owned-workspace
