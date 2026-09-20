@@ -7,7 +7,7 @@ on:
       - "requests/discussions/*.json"
 
 permissions:
-  contents: read
+  contents: write
   discussions: write
 
 jobs:
@@ -17,12 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Publish vision drafts as Ideas discussions
+      - name: Sync vision drafts to Ideas discussions
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_SHA: ${{ github.sha }}
         run: |
+          import datetime
           import json
           import os
           import pathlib
@@ -32,6 +35,15 @@ jobs:
           owner, name = repo.split("/", 1)
           token = os.environ["GH_TOKEN"]
           endpoint = "https://api.github.com/graphql"
+
+          paths = [
+              "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
+              "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
+              "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
+              "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
+              "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
+              "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
+          ]
 
           def gql(query, variables):
               payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
@@ -57,7 +69,7 @@ jobs:
                 repository(owner:$owner, name:$name) {
                   id
                   discussionCategories(first:50) { nodes { id name } }
-                  discussions(first:100) { nodes { title url } }
+                  discussions(first:100) { nodes { id title url } }
                 }
               }
               """,
@@ -69,18 +81,9 @@ jobs:
           if not category:
               raise RuntimeError("Ideas discussion category not found")
 
-          existing = {x["title"]: x["url"] for x in meta["discussions"]["nodes"]}
+          existing = {x["title"]: x for x in meta["discussions"]["nodes"]}
 
-          paths = [
-              "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
-              "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
-              "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
-              "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
-              "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
-              "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
-          ]
-
-          mutation = """
+          create_mutation = """
           mutation($repo:ID!, $category:ID!, $title:String!, $body:String!) {
             createDiscussion(input:{
               repositoryId:$repo,
@@ -88,32 +91,109 @@ jobs:
               title:$title,
               body:$body
             }) {
-              discussion { title url }
+              discussion { id title url }
             }
           }
           """
 
-          results = []
+          update_mutation = """
+          mutation($id:ID!, $body:String!) {
+            updateDiscussion(input:{
+              discussionId:$id,
+              body:$body
+            }) {
+              discussion { id title url }
+            }
+          }
+          """
+
+          drafts = {}
+          actions = {}
+          discussions = {}
+
           for p in paths:
-              text = pathlib.Path(p).read_text(encoding="utf-8").strip()
-              first = text.splitlines()[0].strip()
-              if not first.startswith("# "):
+              raw = pathlib.Path(p).read_text(encoding="utf-8").strip()
+              lines = raw.splitlines()
+              if not lines or not lines[0].strip().startswith("# "):
                   raise RuntimeError(f"{p}: first line must be H1")
-              title = first[2:].strip()
+              title = lines[0].strip()[2:].strip()
+              body = "\n".join(lines[1:]).strip()
+              drafts[title] = {"path": p, "body": body}
 
-              if title in existing:
-                  results.append({"title": title, "status": "SKIPPED_EXISTS", "url": existing[title]})
-                  continue
+              current_discussion = existing.get(title)
+              if current_discussion:
+                  discussions[title] = current_discussion
+                  actions[title] = "SYNCED_EXISTING"
+              else:
+                  created = gql(
+                      create_mutation,
+                      {
+                          "repo": meta["id"],
+                          "category": category["id"],
+                          "title": title,
+                          "body": body,
+                      },
+                  )["createDiscussion"]["discussion"]
+                  discussions[title] = created
+                  actions[title] = "CREATED"
 
-              created = gql(
-                  mutation,
+          titles = list(drafts)
+          for title in titles:
+              related = [
+                  f"- [{other}]({discussions[other]['url']})"
+                  for other in titles
+                  if other != title
+              ]
+              source_url = f"https://github.com/{repo}/blob/main/{drafts[title]['path']}"
+              final_body = (
+                  drafts[title]["body"].rstrip()
+                  + "\n\n---\n\n"
+                  + "### Related CAH future architecture ideas\n\n"
+                  + "\n".join(related)
+                  + "\n\n"
+                  + f"Canonical public draft: [{drafts[title]['path']}]({source_url})"
+              )
+              updated = gql(
+                  update_mutation,
+                  {"id": discussions[title]["id"], "body": final_body},
+              )["updateDiscussion"]["discussion"]
+              discussions[title] = updated
+
+          evidence = {
+              "v": 1,
+              "kind": "public_vision_discussions",
+              "category": "Ideas",
+              "status": "PASS",
+              "source": "docs/vision",
+              "synced_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "workflow_run_id": os.environ["GH_RUN_ID"],
+              "source_commit": os.environ["GH_SHA"],
+              "discussions": [
                   {
-                      "repo": meta["id"],
-                      "category": category["id"],
                       "title": title,
-                      "body": text,
-                  },
-              )["createDiscussion"]["discussion"]
-              results.append({"title": title, "status": "CREATED", "url": created["url"]})
+                      "source": drafts[title]["path"],
+                      "action": actions[title],
+                      "url": discussions[title]["url"],
+                  }
+                  for title in titles
+              ],
+          }
 
-          print(json.dumps(results, ensure_ascii=False, indent=2))
+          out = pathlib.Path("evidence/public-discussions/vision.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+
+      - name: Persist public discussion evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/public-discussions/vision.json
+          if git diff --cached --quiet; then
+            echo "No evidence change."
+            exit 0
+          fi
+          git commit -m "Record published CAH vision discussions [skip ci]"
+          git push origin HEAD:main
