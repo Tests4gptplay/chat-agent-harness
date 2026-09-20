@@ -1,9 +1,37 @@
 {
   "v": 1,
-  "updated_at": "2026-09-20T06:37:40+00:00",
-  "skill_count": 1,
-  "active_count": 1,
+  "updated_at": "2026-09-20T09:06:00+00:00",
+  "skill_count": 2,
+  "active_count": 2,
   "skills": [
+    {
+      "skill_id": "github-capability-extension-v1",
+      "title": "Extend missing GitHub operations through ephemeral Actions and API calls",
+      "status": "ACTIVE",
+      "ref": "skills/active/github-capability-extension-v1.json",
+      "summary": "When the connected GitHub tool lacks a repository operation, extend the reachable GitHub capability without polluting the main branch: prefer the native connector first, then use an ephemeral branch-scoped GitHub Actions workflow with least-privilege GITHUB_TOKEN permissions and gh api REST/GraphQL calls, make the operation idempotent where possible, verify the real remote effect, and remove or neutralize the helper branch/workflow afterward.",
+      "tags": [
+        "github",
+        "capability-extension",
+        "github-actions",
+        "graphql",
+        "rest-api",
+        "ephemeral-tooling"
+      ],
+      "intents": [
+        "perform a GitHub repository operation missing from the connected GitHub tool",
+        "extend GitHub automation with REST or GraphQL without adding permanent helper code to main",
+        "use a temporary GitHub Actions bridge for a repository-scoped API mutation"
+      ],
+      "required_capabilities": [
+        "github",
+        "github-actions"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-09-20T09:00:00+00:00"
+    },
     {
       "skill_id": "iterative-blender-visual-refinement-v1",
       "title": "Iterative Blender procedural asset generation with visual review",
