@@ -4,6 +4,7 @@
   "export_policy": "Allowlisted source snapshot, empty live state, selected sanitized showcases, no private Git history.",
   "files": {
     ".gitattributes": "2ecfc9ce867d4b38f8b7f2f3397b695006e744f205bbff38ad8a63a45dc819c0",
+    ".github/FUNDING.yml": "806db4af468dbcfda83cd7adb535ca30bdc7765d1428249119f4edb08cee98fd",
     ".github/pull_request_template.md": "719a4188555b9a02c1355a2313ead4d75a2fe84db37843653266742eba98924a",
     ".github/workflows/action-submit-recovery.yml": "68d2c251d9c2d6d179c115a5399afe3fa95bf1449bf9a544eb6b5432fc00b844",
     ".github/workflows/blender-case-finalize.yml": "1b25fc9dfd2292d322d078d9cac5ba07a4cd39bff3947b51b438a1843c31f465",
@@ -31,8 +32,8 @@
     "CONTRIBUTING.md": "d7327750b30b76e6a553f47198df046e4f5bb9ccccaf439a249594192ba1db8f",
     "LICENSE": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
     "NOTICE": "a17697ca0ac5097803e459ea62716ac42a3e5b25d555cfccc47d039318523b94",
-    "README.md": "785f7427c35181a403e7371992f63caf0c54f33082a7691e713dec5236e9c41c",
-    "README.zh-CN.md": "b78a6a42b2d04ddf1d14fb0497b26c3ea74254202e8521e13ac82b840790df0f",
+    "README.md": "84734482dd7bdad4965176dc1f05208188b68c1d798b32acf8d7ae7da25a7fa4",
+    "README.zh-CN.md": "210ff89373dff12cbb4b7a040aa2d214a75a5a55524dbf6d35f8cdc2dea0a786",
     "RELEASE_NOTES.md": "375495f8ba655bdc3315fd69047902ad48e0a123e4435304f746afea9e6607f7",
     "Start_CAH.bat": "e7c8eba5a6430425bde171f771b9d7d9656487c4f8d248c2077bc725fbc1808f",
     "Start_CAH.ps1": "48e7dfcfbb6c79c728a84f624804fb4adb9a1812d684faecff6aefa278781e8a",
