@@ -291,12 +291,6 @@ worker.cleanup_error
 
 Only meaningful continuity milestones are promoted to Git.
 
-## Live proof
-
-The 5+1 lifecycle is live-proven on the E: deployment: a sixth managed Worker completed Git takeover and local promotion, `worker.retire_pending` targeted the oldest verified standby, `worker.chat_retired` confirmed deletion, and managed count returned from 6 to 5. A second consecutive 6→5 cycle also succeeded.
-
-Automatic **detection** of a real future compaction remains dependent on ChatGPT exposing a stable Worker-visible summary/compaction signal. The Git/bridge/runtime response path is implemented; if the model cannot positively see compaction, it must not synthesize the request.
-
 ## Recovery
 
 If local Worker pool metadata is lost:
@@ -310,7 +304,7 @@ This intentionally prefers harmless leftover conversations over accidental delet
 
 ## Multi-lane Project registry
 
-The current fixed Sandbox0 constants are Stage 0 implementation details. The target extension generalizes them into a lane registry.
+The extension stores each execution Project in its lane registry.
 
 Each logical backend lane owns exactly one configured ChatGPT Project:
 
@@ -335,7 +329,7 @@ Rules:
 - parse and validate project_key from the exact Project root URL when a lane is registered;
 - never use display_name as a safety identity;
 - each lane has an independent 5+1 Worker-generation ring and independent handoff/fencing state;
-- the current global workerPoolState becomes lane-local state under the registry;
+- worker pool state is stored per lane under the registry;
 - adding/removing a lane changes CAH registration only, never creates/deletes the ChatGPT Project itself;
 - lane removal is blocked while RUNNING work or an unverified handoff exists;
 - backend wake routing must name lane/project identity explicitly;

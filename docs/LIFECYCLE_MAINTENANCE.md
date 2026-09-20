@@ -167,50 +167,6 @@ next workload
 
 Topology changes remain a separate control primitive.
 
-## Live proof
-
-The maintenance path is live-proven.
-
-Historical Sandbox0 proof established Project-root card deletion and durable `DONE` completion.
-
-A later pre-showcase dual-lane cleanup on 2026-09-19 exercised the same primitive against both registered lanes:
-
-```text
-lane-00 / CAH Sandbox0
-  deleted_count   = 8
-  remaining_count = 0
-
-lane-01 / CAH Sandbox1
-  deleted_count   = 1
-  remaining_count = 0
-
-canonical topology afterward
-  registered_count = 2
-  enabled_count    = 2
-  both lanes       = IDLE
-```
-
-This demonstrates that CAH can reset disposable conversational execution state without deleting lane Projects or canonical Git state.
-
-## Maintenance-control family
-
-`lane_clear` belongs to the lifecycle/maintenance control plane rather than ordinary semantic scheduling.
-
-Current/future controls in this family include:
-
-```text
-Worker rollover / retirement
-lane_clear
-topology reconcile
-host update
-extension reload
-health / diagnostics
-```
-
-They share one design principle:
-
-> maintenance may replace or repair disposable runtime state, but durable Git truth and explicit identity boundaries remain authoritative.
-
 ## Documentation layering
 
 This contract intentionally lives outside `AGENTS.md`.

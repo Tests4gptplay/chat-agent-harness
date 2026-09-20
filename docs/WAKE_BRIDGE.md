@@ -85,11 +85,6 @@ Fail closed when:
 
 A failed wake delays reasoning; it must not corrupt or lose canonical task state.
 
-## Removed transport
-
-The earlier Gmail/Apps Script mailbox fallback was removed from the current runtime because localhost wake is proven and is the active architecture. Git history retains the old implementation if a roaming transport is needed again later.
-
-
 ## Foreground vs backend wake distinction
 
 The extension currently has two distinct roles and they must not be conflated:
@@ -97,7 +92,6 @@ The extension currently has two distinct roles and they must not be conflated:
 1. **backend Worker interrupt/lifecycle** — normal Stage 0 path; wakes the verified current Sandbox0 managed Worker so AI reasoning can continue from canonical Git state;
 2. **foreground notification/recovery** — optional on the active Foreground Supervisor path; CL monitoring replaces normal start/heartbeat/terminal business notifications.
 
-A CL-based foreground Supervisor does not eliminate the need for backend Worker wake transport. Until a future Host/browser controller replaces it, a reasoning task that must involve Sandbox0 is incomplete if only the self-hosted runner/executor path runs and no managed Worker is awakened.
 
 ## Lane-aware backend routing
 

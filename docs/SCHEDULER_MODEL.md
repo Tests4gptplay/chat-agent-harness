@@ -212,32 +212,6 @@ It answers:
 
 It does not replace the backend task scheduler state machine.
 
-## CPU/GPU concepts worth borrowing
-
-Useful:
-
-- ready queues and blocked queues;
-- dispatch/accept acknowledgement;
-- epochs/fences;
-- leases/watchdogs;
-- interrupt/event-driven wakeup;
-- completion queues;
-- context save/restore;
-- preemption at explicit safe points;
-- coarse-grained work stealing;
-- streams/events for independent work;
-- barriers/reduction for dependent fan-in;
-- occupancy thinking: do not pin a Worker while work is blocked.
-
-Do not copy literally:
-
-- instruction-level scheduling;
-- hardware cache coherence;
-- SMT register sharing;
-- SIMT warp lockstep;
-- cycle-level timing;
-- micro-op reorder semantics.
-
 ## Stage 0 invariant
 
 For the single-lane proof, correctness requires:

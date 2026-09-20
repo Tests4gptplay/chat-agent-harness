@@ -75,3 +75,9 @@ test('fast mailbox alarm does not increase lifecycle maintenance rate',async()=>
   events.alarm({name:'cah-fast-wake-poll'});await settle();
   assert.equal(polls,1);assert.equal(maintenance,0);
 });
+
+test('unconfigured or disabled extension does not start maintenance', async()=>{
+  const {c}=context();let calls=0;c.config=async()=>({enabled:false});
+  for (const name of ['pollEnabledLanes','extensionRuntimeMaintenance','maintainParallelBootstrap','reconcilePendingAdmissions','semanticLivenessSweep']) c[name]=async()=>calls++;
+  await c.runMaintenanceTick();assert.equal(calls,0);
+});
