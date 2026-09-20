@@ -2,54 +2,151 @@
 
 **Status:** exploratory discussion draft. Not a roadmap commitment.
 
+## Relationship to the multi-lane runtime
+
+The multi-lane model treats Workers as temporary compute capacity. Event-driven scheduling is the rule that prevents a logical task from pinning that capacity while it is unable to make progress.
+
+The scheduler should advance work from canonical state transitions and events, not by keeping chats alive in polling loops.
+
+```text
+RUNNING
+  |
+  +--> WAIT_DEP ------+
+  |                   |
+  +--> WAIT_RESOURCE -+--> release Worker
+  |                   |
+  +--> WAIT_EVENT ----+
+                      ...
+                  event satisfied
+                      |
+                    READY
+                      |
+               compatible Worker
+                      |
+                    RUNNING
+```
+
 ## Core idea
 
 A logical task should not permanently occupy the Worker that happened to execute its previous segment.
 
-When work reaches an unresolved dependency or unavailable resource, it should checkpoint the minimum durable continuation state, enter a wait state, and release reasoning capacity.
+When work reaches an unresolved dependency, unavailable resource or explicit external wait, it should checkpoint the minimum durable continuation state, transition to a wait state and release reasoning capacity.
 
 ```text
 Task A on Worker 0
  -> dependency unavailable
- -> durable checkpoint
- -> WAIT_DEP / WAIT_RESOURCE
- -> Worker 0 becomes free
+ -> durable semantic checkpoint
+ -> A = WAIT_DEP
+ -> Worker 0 becomes schedulable capacity
  ...
  dependency event arrives
- -> Task A becomes READY
- -> any compatible Worker claims it
- -> fresh lease / generation / fence
- -> resume from durable continuation
+ -> A = READY
+ -> Worker 8 is compatible and idle
+ -> Worker 8 claims A with fresh lease/fence
+ -> restore required continuation state
+ -> resume
 ```
 
-## Why this matters
+## READY is a logical property, not a lane assignment
 
-LLM-backed Workers are expensive semantic capacity. Waiting for a tool, dependency or remote result should not pin that capacity when unrelated READY work exists.
+A task becomes READY because its declared predicates are satisfied, for example:
 
-This allows CAH to approach a work/span style execution model: blocked logical work stops consuming reasoning slots, while independent work continues.
+```text
+READY =
+  dependencies satisfied
+  AND required resources available
+  AND capability constraints satisfiable
+  AND parent/task not cancelled
+  AND current ownership epoch permits dispatch
+```
 
-## Migratable continuation
+READY does not mean "return to the Worker that previously ran this task."
 
-Correctness must not depend on the original Worker returning.
+## Migratable semantic continuation
 
-A continuation should externalize enough explicit state to resume:
+A continuation should externalize enough explicit state for another compatible Worker to resume:
 
 - task/subtask identity;
 - semantic resume boundary;
-- satisfied and unresolved dependencies;
-- required evidence/result references;
-- relevant verified decisions and constraints;
+- unresolved/satisfied dependency refs;
+- required memory/evidence refs;
+- verified decisions and active constraints;
 - capability/resource requirements;
-- current ownership metadata.
+- current ownership/fencing metadata;
+- acceptance or verification gate for the next step.
 
-A warm original Worker may be preferred for locality, but affinity is an optimization rather than identity.
+This is semantic migration, not hidden-state migration. An LLM conversation is not a serializable CPU register file.
 
-## Work stealing / help-join
+## Shared memory interaction
 
-Completed or idle Workers may claim eligible READY successors when that usefully shortens the critical path.
+Checkpointing and reusable memory are related but distinct:
 
-They must not split non-decomposable critical sections merely to stay busy. Every reassignment receives fresh ownership/fencing, and shared resources remain independently leased.
+```text
+continuation checkpoint
+  = what is needed to resume this logical task
 
-## Important limitation
+shared semantic memory
+  = verified reusable knowledge that may help this or future tasks
 
-An LLM conversation is not a serializable CPU register file. CAH can migrate explicit semantic state, evidence, decisions and checkpoints, not hidden model activations. Resume correctness therefore depends on durable explicit context plus verification.
+evidence/artifacts
+  = durable facts and outputs that can be inspected or verified
+```
+
+A Worker should retrieve only what the resumed node needs.
+
+## Work stealing and help-join
+
+Completed or idle Workers may claim eligible READY work when this shortens the critical path.
+
+A helper Worker must receive fresh ownership and must respect capability, locality, trust and exclusive-resource constraints. It may not split a non-decomposable critical section merely to keep itself busy.
+
+## Cooperative yield, not arbitrary preemption
+
+CAH should yield at explicit durable semantic boundaries:
+
+- after a result is published;
+- before an external wait;
+- at a declared checkpoint;
+- after a plan revision;
+- before ownership transfer.
+
+It should not pretend that an LLM can be interrupted at an arbitrary token and resumed losslessly elsewhere.
+
+## Event-driven wakeup
+
+Prefer state events over repeated semantic probes.
+
+Examples include:
+
+- dependency result accepted;
+- resource lease becomes available;
+- executor result arrives;
+- verification completes;
+- cancellation or invalidation occurs;
+- capability configuration becomes available.
+
+The event should re-evaluate readiness; it should not itself become a second source of task truth.
+
+## Fairness and starvation
+
+Work stealing and out-of-order execution improve utilization but can starve low-priority or repeatedly preempted work.
+
+A future scheduler may therefore need bounded priority/fairness policy, aging or explicit service classes. These are policy concerns layered above the core ownership/fencing mechanism.
+
+## Performance objective
+
+The objective is not maximum Worker occupancy for its own sake. It is lower end-to-end span:
+
+- release capacity during real waits;
+- overlap independent work;
+- avoid repeated reasoning;
+- reuse durable verified state;
+- preserve true dependency ordering.
+
+## Open questions
+
+- What events are strong enough to transition WAIT -> READY?
+- How should fairness interact with priority and critical-path scheduling?
+- When should warm affinity be preferred over the first compatible idle Worker?
+- How much continuation state is sufficient for reliable migration?
+- When should a WAIT condition time out into BLOCKED, FAILURE or human escalation?
