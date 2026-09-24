@@ -50,6 +50,7 @@ jobs:
           if request_files:
               latest_request = json.loads(request_files[-1].read_text(encoding="utf-8"))
           replace_titles = set(latest_request.get("replace_titles") or [])
+          reply_request = latest_request.get("reply") if isinstance(latest_request.get("reply"), dict) else None
 
           def gql(query, variables):
               payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
@@ -126,6 +127,33 @@ jobs:
           }
           """
 
+          reply_query = """
+          query($owner:String!, $name:String!, $number:Int!) {
+            repository(owner:$owner, name:$name) {
+              discussion(number:$number) {
+                id
+                number
+                title
+                url
+                comments(first:100) {
+                  nodes { id url body }
+                }
+              }
+            }
+          }
+          """
+
+          reply_mutation = """
+          mutation($discussionId:ID!, $body:String!) {
+            addDiscussionComment(input:{
+              discussionId:$discussionId,
+              body:$body
+            }) {
+              comment { id url body }
+            }
+          }
+          """
+
           drafts = []
           seen_titles = set()
 
@@ -180,6 +208,57 @@ jobs:
                   "discussion": discussion,
               })
 
+          reply_evidence = None
+          if reply_request:
+              number = int(reply_request.get("discussion_number") or 0)
+              reply_id = str(reply_request.get("reply_id") or "").strip()
+              reply_body = str(reply_request.get("body") or "").strip()
+              if number < 1:
+                  raise RuntimeError("reply.discussion_number must be a positive integer")
+              if not reply_id:
+                  raise RuntimeError("reply.reply_id is required")
+              if not reply_body:
+                  raise RuntimeError("reply.body is required")
+
+              target_data = gql(
+                  reply_query,
+                  {"owner": owner, "name": name, "number": number},
+              )["repository"]["discussion"]
+              if not target_data:
+                  raise RuntimeError(f"Discussion #{number} not found")
+
+              marker = f"<!-- cah-reply-id:{reply_id} -->"
+              existing_comment = next(
+                  (
+                      item
+                      for item in target_data["comments"]["nodes"]
+                      if marker in str(item.get("body") or "")
+                  ),
+                  None,
+              )
+              if existing_comment:
+                  comment = existing_comment
+                  reply_action = "VERIFIED_EXISTING"
+              else:
+                  comment = gql(
+                      reply_mutation,
+                      {
+                          "discussionId": target_data["id"],
+                          "body": reply_body.rstrip() + "\n\n" + marker,
+                      },
+                  )["addDiscussionComment"]["comment"]
+                  reply_action = "CREATED"
+
+              reply_evidence = {
+                  "reply_id": reply_id,
+                  "discussion_number": target_data["number"],
+                  "discussion_title": target_data["title"],
+                  "discussion_url": target_data["url"],
+                  "action": reply_action,
+                  "comment_id": comment["id"],
+                  "comment_url": comment["url"],
+              }
+
           # Re-query after all writes. The final evidence is based on observed GitHub state,
           # not on mutation return values alone.
           final_meta = gql(repo_query, {"owner": owner, "name": name})["repository"]
@@ -232,6 +311,7 @@ jobs:
               "discussion_count": len(results),
               "bot_authored_count": sum(1 for x in results if x["author"] in allowed_bot_logins),
               "discussions": results,
+              "reply": reply_evidence,
           }
 
           out = pathlib.Path("evidence/public-discussions/vision.json")
