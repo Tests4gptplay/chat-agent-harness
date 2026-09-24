@@ -4,16 +4,16 @@
   "category": "Ideas",
   "status": "PASS",
   "source": "docs/vision",
-  "synced_at": "2026-09-20T07:33:46.645549+00:00",
-  "workflow_run_id": "35497196552",
-  "source_commit": "4966fb06ed942369bcb571d8125cd8a31baf9f92",
+  "synced_at": "2026-09-24T07:09:11.039258+00:00",
+  "workflow_run_id": "35968070625",
+  "source_commit": "93d6e33a182908386d5f96a02669c1a2b9e904a7",
   "discussion_count": 6,
   "bot_authored_count": 6,
   "discussions": [
     {
       "title": "Multi-Lane Semantic Runtime: From Two-Lane Proof to Dynamic Worker Scheduling",
       "source": "docs/vision/MULTI_LANE_SEMANTIC_RUNTIME.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 24,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/24",
       "category": "Ideas",
@@ -22,7 +22,7 @@
     {
       "title": "Event-Driven Semantic Scheduling: Tasks Should Not Pin Workers",
       "source": "docs/vision/EVENT_DRIVEN_SEMANTIC_SCHEDULING.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 25,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/25",
       "category": "Ideas",
@@ -31,7 +31,7 @@
     {
       "title": "Shared-Nothing Distributed Agent Fabric",
       "source": "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 26,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/26",
       "category": "Ideas",
@@ -40,7 +40,7 @@
     {
       "title": "Capability-Centric Scheduling Across Models, Hardware and Regions",
       "source": "docs/vision/CAPABILITY_CENTRIC_SCHEDULING.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 27,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/27",
       "category": "Ideas",
@@ -49,7 +49,7 @@
     {
       "title": "Durable Semantic Memory as a Compute Asset",
       "source": "docs/vision/DURABLE_SEMANTIC_MEMORY.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 28,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/28",
       "category": "Ideas",
@@ -58,11 +58,20 @@
     {
       "title": "Toward a Permissionless Public Agent Network",
       "source": "docs/vision/PERMISSIONLESS_AGENT_NETWORK.md",
-      "action": "RECREATED",
+      "action": "VERIFIED_EXISTING",
       "number": 29,
       "url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/29",
       "category": "Ideas",
       "author": "github-actions"
     }
-  ]
+  ],
+  "reply": {
+    "reply_id": "cross-machine-runner-routing-20260924",
+    "discussion_number": 26,
+    "discussion_title": "Shared-Nothing Distributed Agent Fabric",
+    "discussion_url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/26",
+    "action": "CREATED",
+    "comment_id": "DC_kwDOUhwSOs4BG3c5",
+    "comment_url": "https://github.com/Tests4gptplay/chat-agent-harness/discussions/26#discussioncomment-18577209"
+  }
 }
