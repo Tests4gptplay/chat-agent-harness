@@ -33,7 +33,7 @@
     "NOTICE": "84b9967afedb76c7ebea278281b2d5c6a632e0b376a21978661b5a5902e945d2",
     "README.md": "ec92f0f9495a8d97ba28642ce93bb89ef25029722bfb8c312bb326ee1d77ab50",
     "README.zh-CN.md": "9da5a24b998229a63389669fa389f765b59603203067686ed4c13e37745292b0",
-    "RELEASE_NOTES.md": "375495f8ba655bdc3315fd69047902ad48e0a123e4435304f746afea9e6607f7",
+    "RELEASE_NOTES.md": "3f26a8583e13f9699708d324377f98c2838d64ff8d8da413327f88acd499d040",
     "Start_CAH.bat": "e7c8eba5a6430425bde171f771b9d7d9656487c4f8d248c2077bc725fbc1808f",
     "Start_CAH.ps1": "48e7dfcfbb6c79c728a84f624804fb4adb9a1812d684faecff6aefa278781e8a",
     "ai/repo-map.json": "49a47ff9e501cd31d6fd224377e60a422218ffcaa4088e345a49d35ee0ec4722",
@@ -60,7 +60,7 @@
     "docs/NORMAL_TASK_PATH.md": "a2bad689a67cdcc01e35cbadc79c50aa350d38a78d6717fba233c9ee8579cea0",
     "docs/OPERATIONS.md": "c8820b8d8c389214000315bd01d07c3d7abaf81360aae01d6c08c9c47c11326e",
     "docs/PARALLEL_STAGE1.md": "dffc56ed98c779b1fec8076da68e96e0c9b6d5c293747d52c8ead21dc2b1605d",
-    "docs/PUBLIC_EXPORT_CONTRACT.md": "16e4351c0492c5ab708d823a20bf199bb8fe62830cd16c0b04563a5754d131f8",
+    "docs/PUBLIC_EXPORT_CONTRACT.md": "84da74dff91b1391bdc8238c365035b25cb7e809c7d8a93548b4b53f6a180fd3",
     "docs/SCHEDULER_MODEL.md": "ba9529a542f6a39ccacd94f2899fa9a1060b7715bdc5548ea4e12632cf5c44fe",
     "docs/SKILL_SYSTEM.md": "b67d6cc181d5241b0d34bea2baa2c33523ddcd5cc0f6fda8278c4d9df59eb952",
     "docs/STORAGE_POLICY.md": "70794518618f1310308989f3bd2b121bd911a7c36bd90bd7c8073267e22571d7",
@@ -125,7 +125,7 @@
     "harness/parallel_branch_finalize.py": "06597539514d9f2292e58353c6b9e8004e74e09abaa04a4334edec52ad7596f4",
     "harness/parallel_task.schema.json": "07d1c7ef2ba1cb3bd109f6ed27c08b11903c04758df5a8d691f43c21bc0cc48e",
     "harness/prepare_blender_review_asset.ps1": "c1c811265fb92b63a7ea6e5c7d3d7f112cd720ef69a91dacaa98cafe0e744750",
-    "harness/public_export_required.json": "2be59108b4ab7dbe12de3cac45839982b6ff05352452ae572c75d1dc5766e2a4",
+    "harness/public_export_required.json": "96dd8c51aa6fbb919b4ba002550e30311367cfad62f9e492b95d55b455834c32",
     "harness/request_drain.py": "64527ecbfea33dd79d3d24454744e435b6c418599f844492e990b9d5dbfc6c24",
     "harness/request_scan.py": "7145bd7843d643d98626681663eaa6e48725067e0e1a75c4a4eec1be0c4602c9",
     "harness/resource_wait.py": "c08f8961ccda95fb6db48cfc7ac0b1cebb8256c87c451f0458103b9c01decaa0",
@@ -215,7 +215,10 @@
     "tools/audit_ai_routing.py": "85d1589df8fb4e5fb76e0daa270ec1eae969ad6048cda3782ca930bf9e5c5b9c",
     "tools/benchmark_normal_path.py": "b7ba91e738cfea804e1c5d6716d863469b86ffd73bb2180b0f0c29e8641f40c8",
     "tools/configure_install.py": "e6d0ebfe054cd3a4c7a2f94af4b98ffb7a981ef8b90e1049bead2a60991ee6db",
-    "tools/package_release.py": "30c62d427b623d135a3ee5b573efc0f3173316e1e829c3c1b1c7b8684f5c439a"
+    "tools/package_release.py": "30c62d427b623d135a3ee5b573efc0f3173316e1e829c3c1b1c7b8684f5c439a",
+    "showcases/ue-parallel-viewer/DOWNLOADS.md": "87a5275008f346b3b167ab45631f4ab19ca826a1ed4fb135e7c13155dad3f4c8",
+    "showcases/ue-parallel-viewer/README.md": "b434719ba333e675da456a78677f3571931878f1d5849c17fe62d8b00c849cb9",
+    "showcases/ue-parallel-viewer/README.zh-CN.md": "d8ffba6d0562c461b48fae677a3dc982003b7b2a5a71e46c52a11775aa17c81b"
   },
   "preserved_public_content": [
     ".github/workflows/publish-vision-discussions.yml",
