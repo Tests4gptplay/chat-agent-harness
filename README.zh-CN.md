@@ -33,6 +33,6 @@ CAH 连接前台对话、Git 任务状态、本地 Bridge、浏览器扩展和�
 
 **[❤️ 在 GitHub Sponsors 上支持 CAH](https://github.com/sponsors/Tests4gptplay)** · **[☕ 在 Ko-fi 请作者喝杯咖啡](https://ko-fi.com/kou392350)**
 
-赞助主要用于持续测试、工具和后续开发，不代表购买优先修复或私人技术支持；商业授权和定制集成仍然单独处理。
+赞助主要用于持续测试、工具和后续开发，不代表购买优先修复或私人技术支持。
 
-代码采用 [AGPL](LICENSE)，具体版本选择见 [NOTICE](NOTICE)；另有经作者同意的[商业许可](COMMERCIAL_LICENSE.md)。发布内容不包含作者的对话绑定、账户配置、原始运行日志、私人导入 Skill、无关项目和私有开发提交历史。
+代码采用 [MIT License](LICENSE)。第三方软件、依赖和素材仍遵循各自的许可证。发布内容不包含作者的对话绑定、账户配置、原始运行日志、私人导入 Skill、无关项目和私有开发提交历史。
