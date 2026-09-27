@@ -5,10 +5,9 @@ from pathlib import Path
 
 root = Path.cwd()
 licenses = {
-    'LICENSE': 'd8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee',
-    'NOTICE': 'a17697ca0ac5097803e459ea62716ac42a3e5b25d555cfccc47d039318523b94',
-    'COMMERCIAL_LICENSE.md': '35e350bbd2b64cea2e5fe401f352c6a7e8ba02cbea37aa98af832c6b3ee6934d',
-    'CONTRIBUTING.md': 'd7327750b30b76e6a553f47198df046e4f5bb9ccccaf439a249594192ba1db8f',
+    'LICENSE': 'a4c4241100b108ce611d06f7163e6f21cfe7d85180ddde5edf8b8a0c6268aadd',
+    'NOTICE': '84b9967afedb76c7ebea278281b2d5c6a632e0b376a21978661b5a5902e945d2',
+    'CONTRIBUTING.md': 'a40e199b9021ab34c7f5efc66e2c6da55533856f0bade7474dea0f43bbada83f',
     '.github/pull_request_template.md': '719a4188555b9a02c1355a2313ead4d75a2fe84db37843653266742eba98924a',
 }
 for name, expected in licenses.items():
