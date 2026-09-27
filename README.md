@@ -102,10 +102,10 @@ If CAH saves you time, API cost, or simply makes your existing ChatGPT subscript
 
 **[❤️ Sponsor CAH on GitHub](https://github.com/sponsors/Tests4gptplay)** · **[☕ Buy me a coffee on Ko-fi](https://ko-fi.com/kou392350)**
 
-Sponsorship helps cover testing, tools and continued development. It does not buy priority fixes or private support; commercial licensing and commissioned integration remain separate.
+Sponsorship helps cover testing, tools and continued development. It does not buy priority fixes or private support.
 
 ## License and contribution
 
-[GNU AGPL v3](LICENSE) applies under the version choice stated in [NOTICE](NOTICE). An alternative commercial license is available by agreement with the copyright holder: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md). Commercial activity is not automatically forbidden by the AGPL route. Third-party applications and dependencies retain their own licenses.
+CAH is released under the [MIT License](LICENSE). Third-party applications and dependencies retain their own licenses.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting code. Use public issues for reproducible bugs or licensing inquiries; do not post credentials, session cookies, private Project URLs or raw personal execution logs.
