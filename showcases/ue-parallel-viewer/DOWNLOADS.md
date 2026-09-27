@@ -15,7 +15,7 @@
 
 **The full Viewer download is not yet published.** The local implementation has been built and tested; public distribution of its directly UE-linked module still needs the copyright holder's module-specific licensing decision. The HTTP client above must not be mistaken for a runnable Viewer download.
 
-CAH's existing AGPL/commercial license files are unchanged. No separate Viewer license is granted by this page. See [Epic's Unreal Engine EULA, sections 5 and 6(c–d)](https://www.unrealengine.com/eula/unreal) for the engine-code, tool-distribution and license-compatibility provisions.
+CAH source is released under the MIT License. No separate Viewer license is granted by this page; any directly UE-linked Viewer distribution must also satisfy Epic's applicable Unreal Engine license terms. See [Epic's Unreal Engine EULA, sections 5 and 6(c–d)](https://www.unrealengine.com/eula/unreal) for the engine-code, tool-distribution and license-compatibility provisions.
 
 ## Unreal Engine: install separately
 
@@ -25,6 +25,6 @@ The tested host is Windows x64. The current Viewer uses the installed Editor run
 
 ## 中文
 
-案例、截图、AI 操作说明与 Python 接口客户端已公开；**Viewer 本体下载尚未发布，客户端不能替代它**。本地已验证的 Viewer 直接依赖 UE，其单独分发许可仍需作者决定；CAH 原有许可证不变。
+案例、截图、AI 操作说明与 Python 接口客户端已公开；**Viewer 本体下载尚未发布，客户端不能替代它**。CAH 源码采用 MIT License；本地已验证的 Viewer 直接依赖 UE，其单独分发仍需同时满足 Epic 适用的 Unreal Engine 许可条款。
 
 UE 本体不随包提供，请通过上面的 Epic 官方安装入口安装匹配的 UE 5.6.1。当前版本在 Windows x64 上使用已安装的 Editor 运行，不是免安装程序，也没有验证其他 UE 版本。公开材料不包含私人路径、浏览器资料、原始主机日志或内部开发计划。
