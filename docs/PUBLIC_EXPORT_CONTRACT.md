@@ -9,6 +9,7 @@ The public export is therefore not a trimmed demo fork. It is a sanitized distri
 A public edition must preserve at least:
 
 - Git-canonical continuity/state and replaceable Worker semantics;
+- `LICENSE` and `NOTICE` carrying the current MIT licensing terms;
 - foreground/backend CL supervision and evidence-gated completion;
 - scheduler dispatch identity, generation/fencing, WAIT/continuation behavior;
 - backend lane topology and bounded Worker-generation lifecycle;
