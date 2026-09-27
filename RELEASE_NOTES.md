@@ -8,4 +8,4 @@ Start with README and docs/INSTALL_WINDOWS.md. Use your own private running repo
 
 Experimental limitations: browser UI coupling, minute-scale delegated latency, no universal emergency stop, and unfinished general adaptive scheduling/model selection. Public source/build tests and a native load of the cleaned camera asset were checked; independent installation on a third-party machine is not claimed.
 
-AGPL terms and the previously established commercial-license route are retained in LICENSE, NOTICE and COMMERCIAL_LICENSE.md. Third-party applications are not bundled.
+The current repository is distributed under the MIT License. Third-party applications are not bundled and retain their own license terms.
