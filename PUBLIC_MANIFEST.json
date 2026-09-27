@@ -1,7 +1,7 @@
 {
   "v": 1,
   "version": "1.0.4",
-  "export_policy": "Allowlisted source snapshot, empty live state, selected sanitized showcases, no private Git history.",
+  "export_policy": "Allowlisted MIT-licensed source snapshot, empty live state, selected sanitized showcases, no private Git history.",
   "files": {
     ".gitattributes": "2ecfc9ce867d4b38f8b7f2f3397b695006e744f205bbff38ad8a63a45dc819c0",
     ".github/FUNDING.yml": "806db4af468dbcfda83cd7adb535ca30bdc7765d1428249119f4edb08cee98fd",
@@ -28,12 +28,11 @@
     ".github/workflows/stage0-single-thread.yml": "27ace5c985c98c47179341ffa1b12968e613da7a5fc10e11e565451f934cb35d",
     ".gitignore": "82d10c117b6e15d39d662f642686638aba8727d2dfd5d3a7ca39d98ccd119f9e",
     "AGENTS.md": "7c7487be000e8c413f653b7274eb52a6dc1e9afcb94a3a81559a86d3df7c79da",
-    "COMMERCIAL_LICENSE.md": "35e350bbd2b64cea2e5fe401f352c6a7e8ba02cbea37aa98af832c6b3ee6934d",
-    "CONTRIBUTING.md": "d7327750b30b76e6a553f47198df046e4f5bb9ccccaf439a249594192ba1db8f",
-    "LICENSE": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
-    "NOTICE": "a17697ca0ac5097803e459ea62716ac42a3e5b25d555cfccc47d039318523b94",
-    "README.md": "84734482dd7bdad4965176dc1f05208188b68c1d798b32acf8d7ae7da25a7fa4",
-    "README.zh-CN.md": "210ff89373dff12cbb4b7a040aa2d214a75a5a55524dbf6d35f8cdc2dea0a786",
+    "CONTRIBUTING.md": "0c6a16d8b571b90dfd9285fea35dcf59c99a9a5d3538da7dff1146b027dff11c",
+    "LICENSE": "89f4385e58dabdb0e8e47676819c66c37ee95016083d47056b81d19af8d1c593",
+    "NOTICE": "50163ea31f213e8ab05c9adbfbaa24a708649475f912635a8ba894399d1c8da9",
+    "README.md": "433f2584bef292e998301d5cc8a479fa3bbfe35b3fd2cf431cc1f689f3eab964",
+    "README.zh-CN.md": "4f980749267db191364fcf653e473a780fe1254144d40248b52f69ccc2d8381e",
     "RELEASE_NOTES.md": "375495f8ba655bdc3315fd69047902ad48e0a123e4435304f746afea9e6607f7",
     "Start_CAH.bat": "e7c8eba5a6430425bde171f771b9d7d9656487c4f8d248c2077bc725fbc1808f",
     "Start_CAH.ps1": "48e7dfcfbb6c79c728a84f624804fb4adb9a1812d684faecff6aefa278781e8a",
@@ -216,7 +215,7 @@
     "tools/audit_ai_routing.py": "85d1589df8fb4e5fb76e0daa270ec1eae969ad6048cda3782ca930bf9e5c5b9c",
     "tools/benchmark_normal_path.py": "b7ba91e738cfea804e1c5d6716d863469b86ffd73bb2180b0f0c29e8641f40c8",
     "tools/configure_install.py": "e6d0ebfe054cd3a4c7a2f94af4b98ffb7a981ef8b90e1049bead2a60991ee6db",
-    "tools/package_release.py": "a02c6d26d0781c1c41a409c43a0be7a456c4bc6cfda9a5e106a0f5ae2ee4eafb"
+    "tools/package_release.py": "87721f8803f5a1e016bda9682f332d8841b506221c4745abd31700716cb2d767"
   },
   "preserved_public_content": [
     ".github/workflows/publish-vision-discussions.yml",
