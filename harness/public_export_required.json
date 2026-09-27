@@ -5,6 +5,8 @@
   "required_paths": [
     "AGENTS.md",
     "README.md",
+    "NOTICE",
+    "LICENSE",
     "ai/repo-map.json",
     "docs/CONTINUITY.md",
     "docs/SCHEDULER_MODEL.md",
