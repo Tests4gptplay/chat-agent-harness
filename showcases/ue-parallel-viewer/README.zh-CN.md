@@ -78,7 +78,7 @@
 
 本地交付包括人用入口、AI 静默入口、`/v1` 接口和[独立的 AI 操作说明](AGENT_VIEWER.md)。当前使用已安装的 **UE 5.6.1 Editor，以 `-game / DX11 / SM5` 运行**，不是脱离 UE 的独立程序。已验证经典 PAK 相机样例，不宣称通吃任意游戏和 IoStore 资源。
 
-[下载页](DOWNLOADS.md)说明 Viewer 包的状态和依赖。**不附带 UE 本体。**CAH 原许可证保持不变；直接链接 UE 的 Viewer 模块需要单独确认分发许可，公开下载暂待该项决定。
+[下载页](DOWNLOADS.md)说明 Viewer 包的状态和依赖。**不附带 UE 本体。**CAH 源码采用 MIT License；直接链接 UE 的 Viewer 模块仍需同时满足 Epic 适用的 Unreal Engine 许可条款。
 
 ## 脱敏与可读性
 
