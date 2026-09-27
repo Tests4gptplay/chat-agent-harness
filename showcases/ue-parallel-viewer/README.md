@@ -80,7 +80,7 @@ The accepted cooked camera reported **9 material slots and 7 dependencies**. Six
 
 The local Viewer includes a visible entry, a silent agent entry, a loopback `/v1` API and an [agent manual](AGENT_VIEWER.md) covering camera presets, selection, view modes and completed-file screenshot retrieval. It uses an installed **UE 5.6.1 Editor runtime in `-game`, DX11/SM5 mode**, not a standalone executable. The tested input is a classic PAK camera fixture; universal game/IoStore compatibility is not claimed.
 
-See [Downloads](DOWNLOADS.md) for the Viewer package status and dependencies. **Unreal Engine itself is not bundled.** CAH's existing license files are unchanged; publication of the directly UE-linked Viewer module is awaiting a separate licensing decision.
+See [Downloads](DOWNLOADS.md) for the Viewer package status and dependencies. **Unreal Engine itself is not bundled.** CAH source is MIT-licensed; publication of the directly UE-linked Viewer module remains subject to Epic's applicable Unreal Engine license terms.
 
 ## Evidence and privacy
 
