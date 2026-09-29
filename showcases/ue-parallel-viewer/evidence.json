@@ -102,6 +102,45 @@
       "external_build_cook_run": "2m20s",
       "external_time_after_worker_handoff": "1m10s",
       "interpretation": "The external job continued independently after the Worker had durably handed off."
+    },
+    "g20_post_recovery_success": {
+      "interpretation": "First clean end-to-end mechanism-level success after the second human intervention strengthened Helper/recovery behavior.",
+      "preconditions": [
+        "G12 external blockage",
+        "G13-G15 continued on backup capacity",
+        "Planner escalated an operational incident",
+        "first Helper behavior proved insufficient",
+        "second human intervention strengthened Helper recovery semantics",
+        "Helper completed cleanup, durable closure and return-control",
+        "original Planner resumed and G16-G19 continued"
+      ],
+      "timeline": {
+        "worker_response_start_jst": "2026-09-29T02:45:31+09:00",
+        "external_build_cook_start_jst": "2026-09-29T02:47:58+09:00",
+        "worker_durable_result_jst": "2026-09-29T02:49:08+09:00",
+        "canonical_child_finalize_jst": "2026-09-29T02:49:50+09:00",
+        "result_enqueued_to_planner_jst": "2026-09-29T02:50:04+09:00",
+        "external_build_success_marker_jst": "2026-09-29T02:50:07+09:00",
+        "external_terminal_success_jst": "2026-09-29T02:50:18+09:00",
+        "planner_review_response_start_jst": "2026-09-29T02:50:36+09:00"
+      },
+      "timing": {
+        "worker_semantic_interval": "3m37s",
+        "external_interval": "2m20s",
+        "external_after_worker_handoff": "1m10s"
+      },
+      "validated_chain": [
+        "Helper recovery returns control",
+        "Planner regains semantic ownership",
+        "successor Workers continue",
+        "Worker launches real external work",
+        "Worker durably hands off before external completion",
+        "canonical Child finalizes",
+        "Result routes to Planner",
+        "external Build/Cook succeeds",
+        "Planner review resumes"
+      ],
+      "conclusion": "The recovery hotfix restored actual semantic, external-execution, handoff and control-loop behavior on the same Parent Task; it did not merely restore a status flag."
     }
   },
   "public_artifacts": {
@@ -127,7 +166,7 @@
   "part_framing": {
     "part1": "SUCCESSFUL_LONG_RUNNING_MULTI_WORKSTREAM_CASE",
     "part2": "RECOVERY_STRESS_AND_PROBLEM_DISCOVERY_CASE",
-    "interpretation": "Part 1 is the positive stability case under non-catastrophic task failures. Part 2 begins after that accepted baseline and probes recovery from system-level external interference."
+    "interpretation": "Part 1 is the positive long-running stability case. Part 2 is a recovery stress test with both positive and negative evidence: G20 proves a repaired recovery path can restore healthy end-to-end task operation after system-level interference; G32 later exposes a different physical web-conversation failure still outside the then-current recovery boundary."
   },
   "recovery_stress_timeline": [
     {
