@@ -119,110 +119,212 @@ Already accepted work was preserved. Failed hypotheses became evidence for the n
 
 ---
 
-# Part 2 — Follow-up investigation exposed deeper problems
+# Part 2 — Recovery stress test under destructive external interference
 
 Part 2 began only after the successful Phase-1 baseline had already been accepted.
 
-The new question was harder: could the Viewer path be extended from the known-good camera fixture toward a real package/direct-preview workflow with more complicated package provenance and IoStore/runtime behavior?
+Its most useful result is not another Viewer feature. It is that a much heavier follow-up load exposed a different problem class:
 
-This became less a “success demo” and more a **problem-discovery case**.
+> **What happens when a Worker, while doing legitimate task work, produces an execution shape capable of blocking the execution system itself — or when the browser conversation surface stops producing usable output?**
 
-## Part 2A — the first convenient interpretation was wrong
+Part 1 had already shown more than five hours of stable multi-workstream progress when failures remained bounded to the task itself. Part 2 pushed beyond that envelope and started hitting **system-level recovery failures**.
 
-The combined-provider path successfully exported the logical target asset.
+## Part 2A — technical investigation still behaved well
 
-At first glance, that looked like evidence that the intended MOD had supplied the object.
+The first follow-up stage was still ordinary evidence-driven engineering.
 
-Provenance inspection later showed otherwise.
+A combined provider successfully exported the logical target asset, but provenance inspection later showed that default same-path selection had chosen a base-game PatchPak candidate rather than proving the intended MOD source.
 
-There were multiple same-path candidates, and the default provider had selected a base-game PatchPak candidate. So:
-
-```text
-logical path loaded successfully
-!=
-desired source provenance proved
-```
-
-The task did not keep the convenient interpretation.
-
-Archive-specific loading then directly proved that the exact selected package member contained a real `USkeletalMesh` with:
+Archive-specific loading then directly proved that the selected package member contained a real `USkeletalMesh` with:
 
 - **25 material slots**
 - **26 morph targets**
 - **1 LOD**
 
-That reconnaissance boundary was formally accepted at **18:47:16 JST**, **7h21m28s** after Parent start.
+Part 2A was formally accepted at **18:47:16 JST**, **7h21m28s** after Parent start.
 
-So Part 2A succeeded as an investigation: it found a real hidden assumption and replaced it with a stronger implementation rule.
+This part still looked like Part 1: hypotheses could be wrong, Workers could be replaced, and the task could continue because the failures did not destroy the execution substrate.
 
-## Planner replacement became part of the experiment
+## G9 — a Worker-authored mistake blocked the system
 
-During the accumulated Phase-1 + Phase-2 history, Planner G1 eventually handed off.
+The recovery story changes at G9.
 
-Planner G2 resumed from durable task surfaces rather than from the full previous chat transcript:
+At **21:19:20 JST**, G9 reached Worker response-start. It launched an external staged runtime operation at **21:24:07** and wrote its own durable handoff at **21:25:42**.
 
-- Task;
-- Plan;
-- Planner Memory;
-- Plan Note;
-- Child Reply;
-- Result;
-- Evidence.
+The problem was inside the Worker-authored task-local execution wrapper: it synchronously nested the Viewer launcher without an outer watchdog/timeout and without reliable finally-style cleanup.
 
-This was a useful secondary observation: the investigation survived Planner replacement without resetting the task.
+The result was not simply “this experiment failed”.
 
-## External execution outlived Worker turns
+The external run remained stuck from:
 
-Generation 20 provides a clean timing example:
+**21:24:07 → 22:24:45 JST = 1h00m38s**
 
-- Worker semantic interval: **3m37s**
-- external Build/Cook interval: **2m20s**
-- external execution continuing after Worker durable handoff: **1m10s**
+and occupied the primary Runner.
 
-The Worker did not need to remain alive merely to watch the machine.
+This is the important distinction:
 
-The external operation remained addressable through durable state and could be inspected by a successor.
+```text
+ordinary task failure
+    → Worker records failure
+    → next bounded decision
 
-## Part 2B — pushing farther exposed infrastructure problems
+G9-class destructive failure
+    → Worker-created execution blocks shared infrastructure
+    → normal continuation path itself becomes impaired
+```
 
-The native direct-preview implementation reached real package-store/cooked-runtime work, but the follow-up also exposed failure modes outside the original Phase-1 success boundary.
+G10 had already been dispatched at **21:26:37**, but did not reach response-start until **22:13:13** — a **46m36s** admission/transport delay — while the G9 external operation was still wedged.
 
-One task-local execution wrapper blocked the primary Runner for about an hour.
+That exposed a real weakness in the then-current CAH design: preserving semantic state was not enough if the physical execution/recovery path itself could be monopolized by a bad external action.
 
-Backup capacity then carried **three consecutive Worker generations** while the primary path remained occupied. This turned a theoretical redundancy mechanism into a real recovery observation.
+## Hotfixes got the task moving again
 
-Planner correctly classified the inherited blockage as an operational incident and invoked Helper.
+The task was not restarted from zero.
 
-The first Helper behavior was still insufficient: it diagnosed the problem but did not complete the required recovery/closure path.
+Several recovery changes were made while the same Parent Task remained alive.
 
-That triggered a human operational intervention and a live Harness improvement. After the Helper recovery contract was strengthened, the same Parent Task resumed from its preserved semantic frontier.
+G10 eventually completed its semantic work and wrote a durable result at **22:58:18**. During the semantic-sync hot upgrade, that already-durable result was recovered and canonically finalized at **23:18:11** without rerunning the Worker.
 
-So Part 2 was doing two things at once:
+A later G11 dispatch exposed another lifecycle delay:
 
-1. investigating the harder Viewer/runtime problem; and
-2. revealing weaknesses in CAH's own recovery machinery.
+**23:31:42 → 00:01:31 JST = 29m49s**
 
-## The follow-up did not finish
+The Worker-retention/binding path was repaired and the same dispatch eventually continued.
 
-Part 2B continued through many Worker generations and accumulated useful native runtime evidence, but it never crossed the final direct-preview acceptance boundary.
+These are not Viewer achievements. They are evidence that Part 2 had turned into a live recovery-engineering exercise around CAH itself.
 
-The last admitted Worker generation was **G32**.
+## G12 — the same class of danger appeared again, but redundancy helped
 
-Its physical response started, but no durable semantic result followed. The user explicitly stopped further work.
+A later corrected hybrid-mode experiment launched at **00:21:01 JST** and again became stuck for roughly one hour:
 
-The correct terminal state is therefore:
+**00:21:01 → 01:21:40 = 1h00m39s**
+
+The difference this time was that backup execution capacity already existed.
+
+While the primary Runner remained occupied, three consecutive Worker generations still reached response-start and durable continuation on backup capacity:
+
+- **G13:** 00:26:13 → 00:31:45
+- **G14:** 00:32:43 → 00:39:25
+- **G15:** 00:40:41 → 00:45:43
+
+That was the first real proof that redundant Runner capacity could keep the Task Cell alive while one execution lane was blocked.
+
+## Helper recovery was still too weak
+
+At **00:47:30 JST**, Planner reviewed the inherited blockage and correctly classified it as an operational incident rather than inventing another semantic experiment.
+
+Helper reached response-start at **00:51:26**.
+
+But the first Helper behavior still over-focused on diagnosis. It did not complete the full mutation → canonical closure → return-control sequence needed to restore the task automatically.
+
+That triggered another human operational intervention.
+
+The Helper role was strengthened during the live incident into a more active recovery owner. The resumed recovery completed the exact cleanup, persisted the incident result, and returned control to Planner. The original Planner reached response-start again at **02:00:32**, and later Workers continued from the preserved frontier.
+
+This is exactly the kind of weakness Part 2 was useful for exposing.
+
+## The system recovered far enough to continue real work
+
+After recovery, the task did not merely idle.
+
+Later generations continued normally again.
+
+G20 provides a clean example:
+
+- Worker response-start: **02:45:31**
+- independent Build/Cook launched: **02:47:58**
+- Worker durable handoff: **02:49:08**
+- external job terminal success: **02:50:18**
+
+The Worker semantic interval was **3m37s**. The external job lasted **2m20s**, including **1m10s after Worker handoff**.
+
+So the hotfix path did restore enough lifecycle continuity for real semantic and machine work to proceed.
+
+## G32 — a second recovery class: the web conversation itself stopped producing output
+
+The run eventually exposed a different failure mode.
+
+G32 was requested at **05:14:51 JST on 29 September** and reached exact response-start / runtime ACK at **05:15:11**.
+
+Unlike G9, there was no active external computation that needed to finish.
+
+Instead, the physical ChatGPT conversation itself became the blocker.
+
+A direct page inspection at **07:36:47 JST** — more than **2h21m** after response-start — found:
+
+- the exact G32 conversation still open;
+- **0 rendered assistant messages**;
+- a visible **Stop** control, meaning the page still appeared busy/running;
+- no durable Worker Reply;
+- no durable Result.
+
+At **07:41:16 JST**, the canonical backend was still `RUNNING`.
+
+So G32 exposed a second failure class:
+
+```text
+G9:
+bad Worker execution
+→ shared Runner / external execution path wedged
+
+G32:
+single browser conversation runs too long
+→ web page remains busy / non-responsive
+→ response-start exists
+→ no consumable semantic output ever arrives
+```
+
+At that point the user explicitly stopped further P2-B work.
+
+The stop did not abandon an accepted result: Part 1 and Part 2A remained durable and accepted. It stopped an unresolved recovery problem.
+
+## What Part 2 actually demonstrates
+
+Part 2 therefore should not be read as “the Viewer failed after 32 generations”.
+
+It is a **recovery stress test** that found two concrete boundaries in the current system:
+
+1. a Worker can generate externally destructive execution that blocks shared infrastructure; and
+2. the browser/ChatGPT physical execution surface can itself stall for hours after response-start without producing semantic output.
+
+The first class was partially mitigated during the run through backup capacity, semantic-sync recovery, lifecycle fixes, and a stronger Helper role.
+
+The second class — physical conversation failure — is exactly why the recovery model now needs to treat the browser conversation as a disposable resource rather than assuming that response-start implies eventual semantic completion.
+
+## Current development direction
+
+This showcase directly feeds the current recovery work.
+
+The system is being strengthened around:
+
+- physical Worker/Planner conversation watchdogs;
+- same-generation physical retry instead of falsely advancing semantic generation;
+- deterministic stop/delete/reinject behavior for dead browser conversations;
+- clearer separation between semantic failure and transport/physical failure;
+- a stronger semantic Helper role that can perform bounded recovery mutations, close incidents durably, and return control to the correct role;
+- redundant execution capacity so one blocked external job does not automatically freeze the whole Parent Task.
+
+This work is still being debugged and validated. The showcase should therefore not claim that recovery is already complete.
+
+The current evidence supports a narrower conclusion:
+
+> **Part 1 already demonstrates stable long-running CAH behavior when failures remain inside the normal task/replanning envelope. Part 2 shows that the next major reliability problem is recovery from strong external interference — especially Worker-created execution wedges and long-lived browser conversations that stop responding.**
+
+That is now one of the main engineering directions for CAH.
+
+## Terminal state
 
 ```text
 Part 1 / Phase 1   ACCEPTED
 
 Part 2A            ACCEPTED INVESTIGATION
-Part 2B            STOPPED INCOMPLETE
+Part 2B            STOPPED AT RECOVERY LIMIT
 Part 2C            NOT REACHED
 ```
 
-That is not a failed Part-1 showcase.
+The Part-2 stop does not reduce the Part-1 success claim.
 
-It is a successful baseline followed by a deliberately harder investigation that discovered additional technical and Harness problems before being stopped.
+It identifies the next system boundary to fix.
 
 ---
 
