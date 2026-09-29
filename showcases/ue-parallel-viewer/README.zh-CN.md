@@ -322,24 +322,75 @@ Helper 在 **00:51:26** response-start。
 
 这正是 P2 最有价值的地方之一：它不是把系统问题藏起来，而是把 Helper 在真实事故下的能力缺口直接暴露出来。
 
-## Recovery 之后，系统重新恢复了真实工作能力
+## G20 — 第二次人工干预后的机制性抗干扰成功
 
-Hotfix 之后不是只“状态变绿”。
+G20 不应该只被看成一个“时间分离样本”。
 
-后面的真实语义和本机任务又继续跑起来了。
+它其实是第二次人工干预完成后，**新的 recovery 组合在同一个 Parent Task 上第一次完整跑出的正向闭环验证**。
 
-G20 是一个很清楚的样本：
+前面的链路是：
+
+```text
+G12 外部执行再次堵塞
+→ G13 / G14 / G15 由 backup capacity 继续承接
+→ Planner 正确升级为 operational incident
+→ 第一版 Helper 只诊断、不会闭环
+→ 第二次人工干预强化 Helper recovery contract
+→ Helper 完成精确清理 / durable closure / return-control
+→ 原 Planner 在 02:00:32 恢复
+→ G16 / G17 / G18 / G19 继续滚动
+→ G20 跑出完整正常闭环
+```
+
+G20 的时间线是：
 
 - Worker response-start：**02:45:31**
-- independent Build/Cook 启动：**02:47:58**
-- Worker durable handoff：**02:49:08**
-- 外部任务 terminal success：**02:50:18**
+- independent fresh standalone/cooked Game Build/Cook 启动：**02:47:58**
+- Worker durable result：**02:49:08**
+- canonical Child finalize：**02:49:50**
+- Result enqueue to Planner：**02:50:04**
+- external archive / `BUILD SUCCESSFUL`：**02:50:07**
+- external workflow terminal success：**02:50:18**
+- Planner review response-start：**02:50:36**
 
 Worker semantic interval 是 **3 分 37 秒**。
 
-外部 Build/Cook 共 **2 分 20 秒**，其中 **1 分 10 秒发生在 Worker 已经 handoff 之后**。
+外部 Build/Cook 共 **2 分 20 秒**，其中 **1 分 10 秒发生在 Worker 已经 durable handoff 之后**。
 
-这说明前面的 hotfix 至少恢复了足够的 lifecycle 连续性，使任务真的重新进入了正常执行状态。
+这个案例验证的不只是“Runner 又能跑了”，而是整条恢复后的控制链重新成立：
+
+```text
+Helper recovery
+→ Planner 重新获得控制权
+→ Worker 正常继续换代
+→ Worker 可以启动真实外部任务
+→ Worker 不必等待外部任务结束
+→ durable handoff 成功
+→ 外部任务独立继续
+→ Build/Cook 真正成功
+→ canonical finalize / Planner review 正常衔接
+```
+
+这正是一次非常干净的 **post-recovery mechanism success**。
+
+它证明：第二次人工干预和 Helper/recovery hotfix 并不是只把某个状态字段改回绿色，而是真的恢复了 CAH 的语义推进、外部执行、handoff 和回收链路，使同一个 Parent Task 再次进入健康运行状态。
+
+因此 P2 的结构应该是：
+
+```text
+G9   → 发现 recovery 薄弱
+G12  → 再次重压，第一次 Helper 仍不够
+Hotfix / 第二次人工干预
+G20  → recovery 机制成功恢复实际工作
+G32  → 暴露另一类尚未覆盖的网页物理失效
+```
+
+也就是说，P2 既不是“全程失败”，也不是“recovery 已经解决”。
+
+它同时提供了两类证据：
+
+1. **G20：某些 recovery 机制已经在真实事故后被证明有效；**
+2. **G32：物理网页长时间无输出这一类 failure 当时仍然没有完整自动恢复路径。**
 
 ## G32 — 第二种 Recovery Failure：网页本身长时间运行后不再产出结果
 
