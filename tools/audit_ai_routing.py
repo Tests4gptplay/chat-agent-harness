@@ -72,7 +72,7 @@ def main() -> int:
     if hot_start:
         if hot_router != "ai/repo-map.json":
             hot_start_errors.append("hot_start.router must be ai/repo-map.json")
-        if hot_read_set not in repo_map.get("read_sets", {}):
+        if hot_read_set is not None and hot_read_set not in repo_map.get("read_sets", {}):
             hot_start_errors.append(f"unknown hot_start.expand_read_set: {hot_read_set}")
 
     state_bytes = state_path.stat().st_size

@@ -61,3 +61,16 @@ The smoke requires this sequence:
 5. Reducer completion moves the graph to `DONE`.
 6. A stale fence test fails closed.
 7. A one-lane topology still executes the same graph sequentially.
+
+## Next gate
+
+After this deterministic smoke is accepted, the next step is a live two-lane transport proof using the reserved Sandbox1 Project, lane-addressed wakes, and durable evidence. That future step is the point at which CAH may claim actual parallel browser Worker execution.
+
+
+## Current deployment entry
+
+The former extension 0.7.0 fixed-two-lane deployment gate is retired. Its launcher,
+request and evidence are not an active deployment path. Use
+[AI-led installation](../installation/README.md) and the native Playwright Host;
+canonical topology remains `state/lanes.json`. The deterministic scheduler smoke
+above does not by itself establish simultaneous live browser execution.

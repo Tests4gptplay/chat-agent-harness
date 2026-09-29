@@ -1,6 +1,6 @@
 # Public export feature contract
 
-A public edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
+A public/clean-room edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
 
 The public export is therefore not a trimmed demo fork. It is a sanitized distribution of the same architecture.
 
@@ -25,7 +25,8 @@ A public edition must preserve at least:
 - self-maintenance/update contracts that are safe to publish;
 - a reproducible Windows installation path;
 - a one-click Windows launcher entry point equivalent to `Start_CAH.bat`;
-- Chromium extension build/load instructions and lane Project onboarding;
+- a public operator stop procedure equivalent to `docs/SAFETY_STOP.md`;
+- Playwright existing-browser attachment instructions and lane Project onboarding;
 - context-economy guidance that keeps hot-path contracts small and routes low-frequency knowledge through focused docs/Skills/Cases.
 
 ## Skill-specific export rule
@@ -43,13 +44,13 @@ Sanitization must **not** remove:
 - `harness/skill.schema.json`;
 - `harness/skills.py`;
 - `docs/SKILL_SYSTEM.md`;
-- the `skills/` directory structure and at least one safe example Skill;
+- the Skill Registry structure and synthetic unit-test coverage;
 - Skill routing in `ai/repo-map.json`;
 - Worker Skill guidance in `AGENTS.md`;
 - Skill Registry tests;
 - the external Skill import interface/docs where the adapter itself is publishable.
 
-If private Skills are stripped, replace them with sanitized examples so public users receive a functional Skill subsystem rather than an empty architectural reference.
+If private Skills are stripped, retain the functional subsystem and synthetic tests. This clean source edition explicitly ships an empty personal-content registry; example population is deferred.
 
 ## Why Skill is core
 
@@ -77,10 +78,11 @@ The private development environment has demonstrated that installation is a real
 
 A public edition must therefore preserve:
 
-- `docs/INSTALL_WINDOWS.md` or an equivalent maintained installation guide;
+- `installation/README.md` or an equivalent maintained installation guide;
 - a Windows one-click launcher entry point;
-- the Chromium extension build/package path;
-- documented `chrome://extensions` Developer mode / **Load unpacked** setup for source installs;
+- the Playwright existing-browser attachment path;
+- documented dedicated CAH Chrome profile and loopback CDP attachment, shared by native Host, official MCP and CLI;
+- pinned official package manifests/lock, install script, MCP adapter and existing-Runner CLI wrapper;
 - self-hosted runner setup;
 - localhost bridge startup/health verification;
 - lane Project registration and first-run topology checks.
@@ -92,7 +94,7 @@ The public export should preserve the proven user experience:
 ```text
 first-time setup
   -> install/configure runner
-  -> build/load Chromium extension
+  -> enable the supported Playwright browser attachment path
   -> configure own ChatGPT lane Projects
   -> Start_CAH.bat
   -> bridge + runner + browser lanes become available

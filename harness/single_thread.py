@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,115 @@ def result_identity_error(action: dict[str, Any], result: dict[str, Any]) -> str
     )
     bad = [f"{key} expected {expected!r} got {result.get(key)!r}" for key, expected in checks if result.get(key) != expected]
     return "; ".join(bad) if bad else None
+
+
+FOREGROUND_TERMINAL_LEASE_SECONDS = 120
+
+
+def _terminal_status(status: str, overall: str) -> str | None:
+    normalized = str(status or "").upper()
+    overall = str(overall or "").upper()
+    if normalized == "PASS":
+        return "PASS" if overall == "GREEN" else None
+    if normalized == "BLOCKED":
+        return "BLOCKED" if overall == "BLOCKED" else None
+    if normalized == "ERROR":
+        return "ERROR" if overall == "ERROR" else None
+    return None
+
+
+def _dispatch_identity_for_event(action: dict[str, Any], bg: dict[str, Any]) -> dict[str, Any] | None:
+    current = bg.get("dispatch")
+    if not isinstance(current, dict):
+        return None
+    action_dispatch = str(action.get("dispatch_id") or "")
+    action_generation = int(action.get("dispatch_generation") or action.get("generation") or 0)
+    action_fence = str(action.get("fence_token") or "")
+    if not action_dispatch and not action_generation and not action_fence:
+        return None
+    exact = (
+        action_dispatch
+        and action_generation > 0
+        and action_fence
+        and str(current.get("dispatch_id") or "") == action_dispatch
+        and int(current.get("generation") or 0) == action_generation
+        and str(current.get("fence_token") or "") == action_fence
+    )
+    if not exact:
+        raise SystemExit("foreground terminal publication rejected stale dispatch identity")
+    return {
+        "dispatch_id": action_dispatch,
+        "generation": action_generation,
+        "fence_token": action_fence,
+    }
+
+
+def publish_foreground_terminal_event(
+    *,
+    action: dict[str, Any],
+    action_ref: str,
+    result: dict[str, Any],
+    result_ref: str,
+    fg: dict[str, Any],
+    bg: dict[str, Any],
+    verified: bool,
+) -> dict[str, Any] | None:
+    if not verified or bool(action.get("worker_continuation")):
+        return None
+    terminal_status = _terminal_status(str(result.get("status") or ""), str(fg.get("overall") or ""))
+    if terminal_status is None:
+        return None
+
+    result_id = str(result.get("result_id") or "").strip()
+    action_id = str(action.get("action_id") or "").strip()
+    task_id = str(action.get("task_id") or "").strip()
+    if not result_id or not action_id or not task_id:
+        return None
+
+    event_id = "terminal-" + hashlib.sha256(f"{action_id}|{result_id}".encode("utf-8")).hexdigest()[:24]
+    existing = fg.get("terminal_event")
+    if isinstance(existing, dict):
+        if str(existing.get("event_id") or "") != event_id:
+            delivery = existing.get("delivery") if isinstance(existing.get("delivery"), dict) else {}
+            if str(delivery.get("state") or "") != "CONSUMED":
+                raise SystemExit("foreground terminal publication would replace an unconsumed event")
+        else:
+            return existing
+
+    published = datetime.now(timezone.utc)
+    due = published + timedelta(seconds=FOREGROUND_TERMINAL_LEASE_SECONDS)
+    dispatch_identity = _dispatch_identity_for_event(action, bg)
+    event: dict[str, Any] = {
+        "v": 1,
+        "kind": "executor_terminal",
+        "event_id": event_id,
+        "task_id": task_id,
+        "control_epoch": int(action.get("control_epoch") or 0) or None,
+        "action_id": action_id,
+        "action_ref": action_ref,
+        "result_id": result_id,
+        "result_ref": result_ref,
+        "foreground_cl_ref": str(action.get("foreground_cl") or ""),
+        "backend_cl_ref": str(action.get("backend_cl") or ""),
+        "terminal_status": terminal_status,
+        "published_at": published.isoformat(timespec="seconds"),
+        "delivery": {
+            "state": "PENDING",
+            "claim_id": None,
+            "claimed_at": None,
+            "delivered_at": None,
+            "consumed_at": None,
+        },
+        "watchdog": {
+            "due_at": due.isoformat(timespec="seconds"),
+            "claim_id": None,
+            "escalated_at": None,
+        },
+    }
+    if dispatch_identity is not None:
+        event["dispatch"] = dispatch_identity
+    fg["terminal_event"] = event
+    return event
 
 
 class SingleThreadRuntime:
@@ -635,9 +745,22 @@ class SingleThreadRuntime:
             bg["error"] = err
             fg["error"] = dict(err)
 
+        action_ref = str(action_path.resolve().relative_to(self.root)).replace("\\", "/")
+        terminal_event = publish_foreground_terminal_event(
+            action=action,
+            action_ref=action_ref,
+            result=result,
+            result_ref=result_ref,
+            fg=fg,
+            bg=bg,
+            verified=(verification_error is None and evidence_ok),
+        )
         write_json(bg_path, bg)
         write_json(fg_path, fg)
-        return {"phase": "verify", "task_id": action["task_id"], "backend": bg["overall"], "foreground": fg["overall"]}
+        out = {"phase": "verify", "task_id": action["task_id"], "backend": bg["overall"], "foreground": fg["overall"]}
+        if terminal_event is not None:
+            out["terminal_event_id"] = terminal_event["event_id"]
+        return out
 
 
 def main() -> int:

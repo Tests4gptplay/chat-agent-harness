@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Loopback-only file-backed wake bridge for the local Chrome extension.
+"""Loopback-only file-backed wake bridge for the local CAH browser host.
 
 The bridge binds only to 127.0.0.1. Durable task/result state remains in Git;
 files under the bridge root are disposable wake transport/runtime state.
@@ -27,15 +27,23 @@ if str(PY_ROOT) not in sys.path:
 from harness.git_process import run_git
 
 try:
-    from .control import begin_lane_clear, complete_lane_clear, complete_lane_pool_reset, complete_task_cell_clear, complete_task_cell_prompt, control_status
-    from .scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, semantic_lease_expires_at, stage_action_submit
+    from .control import begin_lane_clear, complete_lane_clear, complete_lane_pool_reset, complete_task_cell_clear, complete_task_cell_project_clear, complete_task_cell_prompt, control_status
+    from .task_cell_roles import complete_task_cell_role_prompt
+    from .scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, reconcile_foreground_terminal, semantic_lease_expires_at, stage_action_submit
+    from .planner_runtime import begin_foreground_planner_handoff, record_foreground_planner_create_attempt, complete_foreground_planner_handoff_binding, complete_planner_predecessor_retire, complete_planner_successor_bootstrap, complete_planner_successor_promote, enqueue_planner_event, migrate_planner_runtime, planner_final_delivery_status, planner_final_delivery_update, planner_runtime_tick, request_planner_rotation, planner_git_cli_fallback, observe_semantic_turn, sync_semantic_turn, stage_worker_watchdog_helper
+    from .planner_janitor import execute_planner_cleanup
+    from .planner_control import PlannerControlError, insert_planner_event, make_planner_event
     from .topology import finalize_topology_request, stage_topology_request, topology_status
 except ImportError:
-    from control import begin_lane_clear, complete_lane_clear, complete_task_cell_prompt, control_status
-    from scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, semantic_lease_expires_at, stage_action_submit
+    from control import begin_lane_clear, complete_lane_clear, complete_lane_pool_reset, complete_task_cell_clear, complete_task_cell_project_clear, complete_task_cell_prompt, control_status
+    from task_cell_roles import complete_task_cell_role_prompt
+    from scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, reconcile_foreground_terminal, semantic_lease_expires_at, stage_action_submit
+    from planner_runtime import begin_foreground_planner_handoff, record_foreground_planner_create_attempt, complete_foreground_planner_handoff_binding, complete_planner_predecessor_retire, complete_planner_successor_bootstrap, complete_planner_successor_promote, enqueue_planner_event, migrate_planner_runtime, planner_final_delivery_status, planner_final_delivery_update, planner_runtime_tick, request_planner_rotation, planner_git_cli_fallback, observe_semantic_turn, sync_semantic_turn, stage_worker_watchdog_helper
+    from planner_janitor import execute_planner_cleanup
+    from planner_control import PlannerControlError, insert_planner_event, make_planner_event
     from topology import finalize_topology_request, stage_topology_request, topology_status
 
-ROOT_DEFAULT = Path(os.environ.get("GAH_LOCAL_ROOT", str(Path.home() / ".cah" / "runtime")))
+ROOT_DEFAULT = Path(os.environ.get("GAH_LOCAL_ROOT", r"__CAH_BRIDGE_ROOT__"))
 REPO_ROOT_DEFAULT = Path(os.environ.get("GAH_REPO_ROOT", Path(__file__).resolve().parents[1]))
 GIT_REMOTE_DEFAULT = os.environ.get("GAH_GIT_REMOTE", "origin")
 GIT_BRANCH_DEFAULT = os.environ.get("GAH_GIT_BRANCH", "main")
@@ -102,6 +110,32 @@ def _task_execution_binding(task: dict[str, Any]) -> tuple[str, str, str]:
         or ""
     ).strip()
     return backend_cl, lane_id, project_key
+
+
+def _task_worker_owner(task: dict[str, Any], cl: dict[str, Any]) -> tuple[str, int]:
+    scheduling = cl.get("scheduling") if isinstance(cl.get("scheduling"), dict) else {}
+    owner_task_id = str(
+        scheduling.get("owner_task_id")
+        or task.get("owner_task_id")
+        or task.get("parent_task_id")
+        or task.get("task_id")
+        or ""
+    ).strip()
+    owner_control_epoch = int(
+        scheduling.get("owner_control_epoch")
+        or task.get("owner_control_epoch")
+        or 1
+    )
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    if not 3 <= len(owner_task_id) <= 128 or any(ch not in allowed for ch in owner_task_id):
+        raise ValueError("invalid owner_task_id")
+    if owner_control_epoch < 1:
+        raise ValueError("invalid owner_control_epoch")
+    return owner_task_id, owner_control_epoch
+
+
+def _task_pool_key(owner_task_id: str, owner_control_epoch: int) -> str:
+    return f"{owner_task_id}::{int(owner_control_epoch)}"
 
 
 class WakeStore:
@@ -278,7 +312,7 @@ class WakeStore:
                         continue
                     return {
                         "ok": True,
-                        "wake": wake,
+                        "wake": {**wake, "git_branch": self.git_branch},
                         "message_id": wake["wake_id"],
                         "lease_expires_at": int(claim["expires_at"]),
                     }
@@ -302,12 +336,12 @@ class WakeStore:
 
             _, path, wake = candidates[0]
             expires = now + lease_seconds * 1000
-            record = {"wake": wake, "claim": {"client_id": client_id, "expires_at": expires}}
+            record = {"wake": {**wake, "git_branch": self.git_branch}, "claim": {"client_id": client_id, "expires_at": expires}}
             atomic_json(self._path(self.claimed, wake["wake_id"]), record)
             path.unlink(missing_ok=True)
             return {
                 "ok": True,
-                "wake": wake,
+                "wake": {**wake, "git_branch": self.git_branch},
                 "message_id": wake["wake_id"],
                 "lease_expires_at": expires,
             }
@@ -327,7 +361,7 @@ class WakeStore:
             claim = record.get("claim") or {}
             if claim.get("client_id") != client_id and int(claim.get("expires_at", 0)) > now_ms():
                 return {"ok": False, "error": "CLAIM_OWNED_BY_OTHER"}
-            atomic_json(consumed_path, {"wake": wake, "consumed_at": utc_now(), "client_id": client_id})
+            atomic_json(consumed_path, {"wake": {**wake, "git_branch": self.git_branch}, "consumed_at": utc_now(), "client_id": client_id})
             claim_path.unlink(missing_ok=True)
             self._path(self.inbox, wake_id).unlink(missing_ok=True)
             return {"ok": True, "message_id": wake_id, "duplicate": False}
@@ -447,12 +481,7 @@ class WakeStore:
         }
 
     def worker_takeover_status(self, req: dict[str, Any]) -> dict[str, Any]:
-        """Fetch canonical Git state and compare one Worker handoff id exactly.
-
-        The same read also exposes a narrowly-scoped post-compaction rollover request
-        for that exact current handoff. Git access is serialized because multiple
-        extension listeners may otherwise race `git fetch` against the same repo.
-        """
+        """Read the exact task-owned Worker pool authority from canonical Git."""
         self._safe_client(req.get("client_id"))
         project_id = str(req.get("project_id") or "").strip()
         if not project_id or len(project_id) > 256:
@@ -460,6 +489,17 @@ class WakeStore:
         handoff_id = self._safe_id(req.get("handoff_id"), "handoff_id")
         if not handoff_id.startswith("pool-"):
             raise ValueError("handoff_id must start with pool-")
+        lane_id = str(req.get("lane_id") or "").strip()
+        worker_project_key = str(req.get("worker_project_key") or "").strip()
+        owner_task_id = str(req.get("owner_task_id") or "").strip()
+        allowed_owner = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+        if not 3 <= len(owner_task_id) <= 256 or any(ch not in allowed_owner for ch in owner_task_id):
+            raise ValueError("invalid owner_task_id")
+        owner_control_epoch = int(req.get("owner_control_epoch") or 0)
+        if not lane_id.startswith("lane-") or not worker_project_key.startswith("g-p-"):
+            raise ValueError("lane identity required")
+        if owner_control_epoch < 1:
+            raise ValueError("owner_control_epoch must be positive")
         if not self.repo_root.exists():
             return {"ok": False, "error": "GIT_REPO_NOT_FOUND"}
 
@@ -468,67 +508,45 @@ class WakeStore:
         with self.git_lock:
             try:
                 self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
-            except (OSError, subprocess.SubprocessError):
-                return {"ok": False, "error": "GIT_TAKEOVER_FETCH_FAILED"}
-
-            try:
-                shown = self._git("show", "FETCH_HEAD:state/chatgpt.json")
-                state = json.loads(shown.stdout)
+                state = json.loads(self._git("show", "FETCH_HEAD:state/chatgpt.json").stdout)
+                lane_state = json.loads(self._git("show", "FETCH_HEAD:state/lanes.json").stdout)
             except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
                 return {"ok": False, "error": "GIT_TAKEOVER_STATE_FAILED"}
-            try:
-                lane_shown = self._git("show", "FETCH_HEAD:state/lanes.json")
-                lane_state = json.loads(lane_shown.stdout)
-            except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-                lane_state = None
 
         if not isinstance(state, dict) or state.get("agent") != "chatgpt":
             return {"ok": False, "error": "GIT_TAKEOVER_STATE_INVALID"}
 
-        lane_id = str(req.get("lane_id") or "")
-        worker_project_key = str(req.get("worker_project_key") or "")
         lane_record: dict[str, Any] | None = None
-        if lane_id and isinstance(lane_state, dict):
-            for item in lane_state.get("lanes") or []:
-                if not isinstance(item, dict):
-                    continue
-                if str(item.get("lane_id") or "") != lane_id:
-                    continue
-                if worker_project_key and str(item.get("project_key") or "") != worker_project_key:
-                    continue
-                lane_record = item
-                break
+        for item in lane_state.get("lanes") or []:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("lane_id") or "") != lane_id:
+                continue
+            if str(item.get("project_key") or "") != worker_project_key:
+                return {"ok": False, "error": "GIT_TAKEOVER_LANE_MISMATCH"}
+            lane_record = item
+            break
+        if lane_record is None:
+            return {"ok": False, "error": "GIT_TAKEOVER_LANE_MISSING"}
 
-        top_actual = str(state.get("last_pool_takeover_id") or "")
-        top_rollover = state.get("worker_rollover_request")
-        if lane_record is not None:
-            actual = str(lane_record.get("last_pool_takeover_id") or "")
-            rollover = lane_record.get("worker_rollover_request")
-            # lane-00 migration compatibility is exact-identity based. A newer
-            # top-level takeover may legitimately outrun the lane mirror; accept
-            # it only when it matches the handoff being queried. Likewise prefer
-            # an exact top-level rollover request over a stale lane-local request.
-            if lane_id == "lane-00":
-                if top_actual == handoff_id or not actual:
-                    actual = top_actual or actual
-                lane_req = ""
-                if isinstance(rollover, dict):
-                    lane_req = str(rollover.get("handoff_id") or rollover.get("outgoing_pool_id") or "")
-                top_req = ""
-                if isinstance(top_rollover, dict):
-                    top_req = str(top_rollover.get("handoff_id") or top_rollover.get("outgoing_pool_id") or "")
-                if top_req == handoff_id:
-                    rollover = top_rollover
-                elif not isinstance(rollover, dict) or not lane_req:
-                    rollover = top_rollover
+        pools = lane_record.get("task_pools")
+        owner_key = _task_pool_key(owner_task_id, owner_control_epoch)
+        pool = pools.get(owner_key) if isinstance(pools, dict) else None
+        if not isinstance(pool, dict):
+            actual = ""
+            rollover: dict[str, Any] = {}
         else:
-            actual = top_actual
-            rollover = top_rollover
-        if not isinstance(rollover, dict):
-            rollover = {}
+            if (
+                str(pool.get("owner_task_id") or "") != owner_task_id
+                or int(pool.get("owner_control_epoch") or 0) != owner_control_epoch
+            ):
+                return {"ok": False, "error": "GIT_TAKEOVER_OWNER_MISMATCH"}
+            actual = str(pool.get("last_pool_takeover_id") or "")
+            rollover = pool.get("worker_rollover_request") if isinstance(pool.get("worker_rollover_request"), dict) else {}
+
         request_handoff = str(rollover.get("handoff_id") or rollover.get("outgoing_pool_id") or "")
         request_reason = str(rollover.get("reason") or "")
-        handoff_packet_ref = str(rollover.get("handoff_packet_ref") or state.get("handoff_packet_ref") or "")
+        handoff_packet_ref = str(rollover.get("handoff_packet_ref") or "")
         rollover_requested = request_handoff == handoff_id and request_reason in {"context_compacted", "semantic_stall"}
         foreground_task = self._foreground_task_view(state.get("foreground_task"))
         snapshot_at = utc_now()
@@ -546,9 +564,12 @@ class WakeStore:
             "rollover_reason": request_reason or None,
             "handoff_packet_ref": handoff_packet_ref or None,
             "active_task": str(state.get("active_task") or "") or None,
-            "lane_id": lane_id or None,
-            "worker_project_key": worker_project_key or None,
-            "lane_scoped": lane_record is not None,
+            "lane_id": lane_id,
+            "worker_project_key": worker_project_key,
+            "owner_task_id": owner_task_id,
+            "owner_control_epoch": owner_control_epoch,
+            "lane_scoped": True,
+            "task_pool_scoped": True,
             "topology_finalize": topology_finalize,
         }
 
@@ -607,11 +628,13 @@ class WakeStore:
                 if declared_project and declared_project != worker_project_key:
                     return {"ok": False, "error": "DISPATCH_LANE_MISMATCH"}
 
+                owner_task_id, owner_control_epoch = _task_worker_owner(task, cl)
                 canonical_owner, owner_conflict, owner_source = canonical_worker_owner(
                     canonical_lanes,
-                    canonical_state,
                     lane_id=lane_id,
                     worker_project_key=worker_project_key,
+                    owner_task_id=owner_task_id,
+                    owner_control_epoch=owner_control_epoch,
                 )
                 if owner_source in {"lane_missing", "lane_project_mismatch"}:
                     return {
@@ -619,11 +642,40 @@ class WakeStore:
                         "error": "DISPATCH_LANE_MISMATCH",
                         "owner_source": owner_source,
                     }
-                if not canonical_owner or canonical_owner != worker_ref:
+                if owner_source == "task_pool_identity_mismatch":
                     return {
                         "ok": False,
                         "error": "DISPATCH_WORKER_MISMATCH",
-                        "canonical_owner": canonical_owner or None,
+                        "owner_source": owner_source,
+                    }
+                pending_dispatch = cl.get("dispatch") or {}
+                recovered_from = (
+                    pending_dispatch.get("recovered_from")
+                    if isinstance(pending_dispatch.get("recovered_from"), dict)
+                    else {}
+                )
+                legacy_recovery_predecessor = (
+                    recovered_from.get("acked_by_worker_ref")
+                    if int(recovered_from.get("generation") or 0) == generation - 1
+                    else None
+                )
+                predecessor_worker_ref = (
+                    pending_dispatch.get("predecessor_worker_ref")
+                    or legacy_recovery_predecessor
+                )
+                replacing_predecessor = (
+                    task.get("kind") == "planner_worker_child"
+                    and generation > 1
+                    and pending_dispatch.get("state") in {"READY", "DISPATCHED", "ACKED"}
+                    and not pending_dispatch.get("acked_by_worker_ref")
+                    and bool(canonical_owner)
+                    and predecessor_worker_ref == canonical_owner
+                )
+                if canonical_owner and canonical_owner != worker_ref and not replacing_predecessor:
+                    return {
+                        "ok": False,
+                        "error": "DISPATCH_WORKER_MISMATCH",
+                        "canonical_owner": canonical_owner,
                         "owner_source": owner_source,
                         "owner_mirror_conflict": owner_conflict,
                     }
@@ -654,47 +706,178 @@ class WakeStore:
                 if current_state not in {"READY", "DISPATCHED", "ACKED"}:
                     return {"ok": False, "error": f"DISPATCH_STATE_{current_state or 'UNKNOWN'}"}
 
-                worktree = self.runtime / f"dispatch-accept-{dispatch_id}-{attempt}"
-                if worktree.exists():
-                    import shutil
-                    shutil.rmtree(worktree, ignore_errors=True)
-                try:
-                    self._git("worktree", "add", "--force", "--detach", str(worktree), "FETCH_HEAD")
-                    run_git(worktree, "config", "user.name", "gah-local-bridge", timeout=20)
-                    run_git(worktree, "config", "user.email", "gah-local-bridge@example.invalid", timeout=20)
-                    cl_path = worktree / backend_cl
-                    current = json.loads(cl_path.read_text(encoding="utf-8"))
-                    d = current.get("dispatch")
-                    if not isinstance(d, dict):
-                        return {"ok": False, "error": "DISPATCH_CHANGED_DURING_ACCEPT"}
-                    if not (
-                        str(d.get("dispatch_id") or "") == dispatch_id
-                        and int(d.get("generation") or 0) == generation
-                        and str(d.get("fence_token") or "") == fence_token
-                    ):
-                        return {"ok": False, "error": "DISPATCH_CHANGED_DURING_ACCEPT"}
+                current = json.loads(json.dumps(cl))
+                d = current.get("dispatch")
+                if not isinstance(d, dict):
+                    return {"ok": False, "error": "DISPATCH_CHANGED_DURING_ACCEPT"}
 
-                    now = utc_now()
-                    d["state"] = "RUNNING"
-                    d["delivered_at"] = d.get("delivered_at") or now
-                    d["acked_at"] = d.get("acked_at") or now
-                    d["acked_by_worker_ref"] = worker_ref
-                    d["ack_source"] = "extension_response_start"
-                    d["lease_expires_at"] = semantic_lease_expires_at()
-                    current["dispatch"] = d
-                    current["overall"] = "RUNNING"
-                    current["updated_at"] = now
-                    for item in current.get("conditions") or []:
-                        if isinstance(item, dict) and item.get("id") == "claimed":
-                            item["state"] = "GREEN"
-                            item["detail"] = "runtime observed assistant response start for exact dispatch"
-                            item["evidence_ref"] = backend_cl
-                    cl_path.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                now = utc_now()
+                d["state"] = "RUNNING"
+                d["delivered_at"] = d.get("delivered_at") or now
+                d["acked_at"] = d.get("acked_at") or now
+                d["acked_by_worker_ref"] = worker_ref
+                d["ack_source"] = "extension_response_start"
+                d["lease_expires_at"] = semantic_lease_expires_at()
+                current["dispatch"] = d
+                current["overall"] = "RUNNING"
+                current["updated_at"] = now
+                for item in current.get("conditions") or []:
+                    if isinstance(item, dict) and item.get("id") == "claimed":
+                        item["state"] = "GREEN"
+                        item["detail"] = "runtime observed assistant response start for exact dispatch"
+                        item["evidence_ref"] = backend_cl
 
-                    run_git(worktree, "add", "--", backend_cl, timeout=20)
-                    run_git(worktree, "commit", "-m", f"Scheduler runtime accept {dispatch_id} [skip ci]", timeout=20)
+                # Response-start admission also binds the task-owned Worker pool.
+                # Harness writes machine ownership in the same admission commit.
+                next_lanes = json.loads(json.dumps(canonical_lanes))
+                owner_key = _task_pool_key(owner_task_id, owner_control_epoch)
+                lane_bound = False
+                for lane in next_lanes.get("lanes") or []:
+                    if not isinstance(lane, dict):
+                        continue
+                    if str(lane.get("lane_id") or "") != lane_id:
+                        continue
+                    if str(lane.get("project_key") or "") != worker_project_key:
+                        return {"ok": False, "error": "DISPATCH_LANE_MISMATCH"}
+                    pools = lane.setdefault("task_pools", {})
+                    pool = pools.get(owner_key)
+                    if pool is None:
+                        pool = {
+                            "owner_task_id": owner_task_id,
+                            "owner_control_epoch": owner_control_epoch,
+                            "last_pool_takeover_id": worker_ref,
+                            "worker_rollover_request": None,
+                        }
+                    elif not isinstance(pool, dict):
+                        return {"ok": False, "error": "DISPATCH_WORKER_MISMATCH"}
+                    else:
+                        if (
+                            str(pool.get("owner_task_id") or "") != owner_task_id
+                            or int(pool.get("owner_control_epoch") or 0) != owner_control_epoch
+                        ):
+                            return {"ok": False, "error": "DISPATCH_WORKER_MISMATCH"}
+                        pool["last_pool_takeover_id"] = worker_ref
+                        if isinstance(pool.get("worker_rollover_request"), dict):
+                            pool["worker_rollover_request"] = None
+                    pool["owner_task_id"] = owner_task_id
+                    pool["owner_control_epoch"] = owner_control_epoch
+                    pool["updated_at"] = now
+                    pools[owner_key] = pool
+                    lane_bound = True
+                    break
+                if not lane_bound:
+                    return {"ok": False, "error": "DISPATCH_LANE_MISMATCH"}
+                next_lanes["updated_at"] = now
+
+                # Planner-routed children must atomically turn exact Worker
+                # response-start admission into a durable parent Planner event.
+                updates: dict[str, dict[str, Any]] = {
+                    backend_cl: current,
+                    "state/lanes.json": next_lanes,
+                }
+                planner_event_id = None
+                parent_task_id = str(task.get("parent_task_id") or "").strip()
+                parent_decision_ref = str(task.get("parent_planner_decision_ref") or "").strip()
+                if parent_task_id or parent_decision_ref:
+                    if not parent_task_id or not parent_decision_ref:
+                        return {"ok": False, "error": "PLANNER_PARENT_IDENTITY_INCOMPLETE"}
+                    parent_cell_rel = f"state/task_cells/{parent_task_id}.json"
                     try:
-                        run_git(worktree, "push", self.git_remote, f"HEAD:{self.git_branch}", timeout=30)
+                        parent_cell = json.loads(self._git("show", f"FETCH_HEAD:{parent_cell_rel}").stdout)
+                    except (subprocess.SubprocessError, json.JSONDecodeError):
+                        return {"ok": False, "error": "PLANNER_PARENT_CELL_INVALID"}
+                    parent_control = parent_cell.get("planner_control")
+                    if not isinstance(parent_control, dict) or parent_control.get("enabled") is not True:
+                        return {"ok": False, "error": "PLANNER_PARENT_CONTROL_MISSING"}
+                    parent_epoch = int(parent_cell.get("control_epoch") or 0)
+                    if parent_epoch < 1:
+                        return {"ok": False, "error": "PLANNER_PARENT_EPOCH_INVALID"}
+                    admission_blob_sha = hashlib.sha256(
+                        json.dumps(
+                            current,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                    ).hexdigest()
+                    try:
+                        event = make_planner_event(
+                            task_id=parent_task_id,
+                            control_epoch=parent_epoch,
+                            kind="admission_changed",
+                            source_role="harness",
+                            source_identity={
+                                "admission_ref": backend_cl,
+                                "admission_blob_sha": admission_blob_sha,
+                                "new_state": "RUNNING",
+                                "child_task_id": task_id,
+                                "dispatch_id": dispatch_id,
+                                "dispatch_generation": generation,
+                                "fence_token": fence_token,
+                                "worker_ref": worker_ref,
+                                "parent_planner_decision_ref": parent_decision_ref,
+                            },
+                            refs=[backend_cl, f"tasks/{task_id}.json", parent_decision_ref],
+                        )
+                        parent_control, _ = insert_planner_event(parent_control, event)
+                        # Admission is mechanical when Planner already waits for a result.
+                        if (parent_control.get("wait") or {}).get("kind") == "WAIT_RESULT":
+                            admitted = parent_control["inbox"]["events"][event["event_id"]]
+                            admitted.update(state="CONSUMED", consumed_at=now, consumption_reason="runtime_admission")
+                    except PlannerControlError as exc:
+                        return {"ok": False, "error": exc.code}
+                    parent_cell["planner_control"] = parent_control
+                    parent_cell["updated_at"] = now
+                    updates[parent_cell_rel] = parent_cell
+                    planner_event_id = event["event_id"]
+
+                # Admission mutates one or two JSON blobs. Build the new commit with
+                # a temporary index instead of materializing the full repository.
+                index_path = self.runtime / f"dispatch-accept-index-{dispatch_id}-{attempt}"
+                temp_blobs: list[Path] = []
+                index_env = {"GIT_INDEX_FILE": str(index_path)}
+                identity_env = {
+                    "GIT_AUTHOR_NAME": "gah-local-bridge",
+                    "GIT_AUTHOR_EMAIL": "gah-local-bridge@example.invalid",
+                    "GIT_COMMITTER_NAME": "gah-local-bridge",
+                    "GIT_COMMITTER_EMAIL": "gah-local-bridge@example.invalid",
+                }
+                try:
+                    index_path.unlink(missing_ok=True)
+                    index_path.with_suffix(index_path.suffix + ".lock").unlink(missing_ok=True)
+                    run_git(self.repo_root, "read-tree", "FETCH_HEAD", timeout=20, env_overrides=index_env)
+                    for rel, value in updates.items():
+                        suffix = hashlib.sha256(rel.encode("utf-8")).hexdigest()[:12]
+                        blob_path = self.runtime / f"dispatch-accept-blob-{dispatch_id}-{attempt}-{suffix}.json"
+                        blob_path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                        temp_blobs.append(blob_path)
+                        blob_sha = run_git(
+                            self.repo_root,
+                            "hash-object", "-w", f"--path={rel}", str(blob_path),
+                            timeout=20,
+                        ).stdout.strip()
+                        run_git(
+                            self.repo_root,
+                            "update-index", "--add", "--cacheinfo", "100644", blob_sha, rel,
+                            timeout=20,
+                            env_overrides=index_env,
+                        )
+                    tree_sha = run_git(
+                        self.repo_root, "write-tree", timeout=20, env_overrides=index_env
+                    ).stdout.strip()
+                    commit_sha = run_git(
+                        self.repo_root,
+                        "commit-tree", tree_sha, "-p", "FETCH_HEAD",
+                        "-m", f"Scheduler runtime accept {dispatch_id} [skip ci]",
+                        timeout=20,
+                        env_overrides=identity_env,
+                    ).stdout.strip()
+                    try:
+                        run_git(
+                            self.repo_root,
+                            "push", self.git_remote, f"{commit_sha}:{self.git_branch}",
+                            timeout=30,
+                        )
                     except subprocess.SubprocessError:
                         # Push timeout/failure has an unknown remote outcome. The
                         # next loop iteration re-fetches canonical state before
@@ -709,20 +892,20 @@ class WakeStore:
                         "worker_ref": worker_ref,
                         "owner_source": owner_source,
                         "owner_mirror_conflict": owner_conflict,
+                        "planner_admission_event_id": planner_event_id,
                     }
                 finally:
-                    try:
-                        self._git("worktree", "remove", "--force", str(worktree))
-                    except Exception:
-                        import shutil
-                        shutil.rmtree(worktree, ignore_errors=True)
+                    index_path.unlink(missing_ok=True)
+                    index_path.with_suffix(index_path.suffix + ".lock").unlink(missing_ok=True)
+                    for path in temp_blobs:
+                        path.unlink(missing_ok=True)
 
         return {"ok": False, "error": "DISPATCH_ACCEPT_RETRY_EXHAUSTED"}
 
     def dispatch_status(self, req: dict[str, Any]) -> dict[str, Any]:
         """Return canonical scheduler state for one exact backend dispatch.
 
-        This is a read-only suppression gate used by the extension before it injects
+        This is a read-only suppression gate used by the browser host before it injects
         a wake into a Worker chat. Already-accepted or stale dispatches are consumed
         without interrupting the Worker.
         """
@@ -807,203 +990,6 @@ class WakeStore:
             "handoff_packet_ref": cl.get("handoff_packet_ref"),
         }
 
-    def extension_reload_request(self, req: dict[str, Any]) -> dict[str, Any]:
-        self._safe_client(req.get("client_id"))
-        project_id = str(req.get("project_id") or "").strip()
-        request_id = self._safe_id(req.get("request_id"), "request_id")
-        expected_version = str(req.get("expected_version") or "").strip()
-        if not project_id or len(project_id) > 256:
-            raise ValueError("project_id required")
-        if not expected_version or len(expected_version) > 64:
-            raise ValueError("expected_version required")
-
-        with self.lock:
-            status_path = self.runtime / "extension-status.json"
-            current_status = read_json(status_path) if status_path.exists() else None
-            current_version = str(current_status.get("version") or "") if isinstance(current_status, dict) else ""
-            current_extension_id = str(current_status.get("extension_id") or "") if isinstance(current_status, dict) else ""
-            already_live = current_version == expected_version
-
-            record = {
-                "v": 1,
-                "request_id": request_id,
-                "project_id": project_id,
-                "expected_version": expected_version,
-                "status": "DONE" if already_live else "PENDING",
-                "requested_at": utc_now(),
-                "completed_at": utc_now() if already_live else None,
-                "observed_version": current_version if already_live else None,
-                "extension_id": current_extension_id or None if already_live else None,
-                "managed_tabs_ready": None,
-            }
-            atomic_json(self.runtime / "extension-control.json", record)
-        return {"ok": True, "control": record, "already_live": already_live}
-
-    def extension_runtime_hello(self, req: dict[str, Any]) -> dict[str, Any]:
-        client_id = self._safe_client(req.get("client_id"))
-        project_id = str(req.get("project_id") or "").strip()
-        version = str(req.get("version") or "").strip()
-        extension_id = str(req.get("extension_id") or "").strip()
-        if not project_id or len(project_id) > 256:
-            raise ValueError("project_id required")
-        if not version or len(version) > 64:
-            raise ValueError("version required")
-        if len(extension_id) > 128:
-            raise ValueError("extension_id too long")
-
-        desired_version = int(req.get("desired_version") or 0)
-        desired_lane_count = int(req.get("desired_lane_count") or 0)
-        desired_enabled_count = int(req.get("desired_enabled_count") or 0)
-        if desired_version < 0 or not 0 <= desired_lane_count <= 16 or not 0 <= desired_enabled_count <= 16:
-            raise ValueError("invalid extension topology summary")
-        if desired_enabled_count > desired_lane_count:
-            raise ValueError("enabled lane count exceeds desired lane count")
-
-        bootstrap_parallel_status = str(req.get("bootstrap_parallel_status") or "").strip() or None
-        if bootstrap_parallel_status not in {None, "PENDING", "APPLYING", "WORKERS", "DONE", "ERROR"}:
-            raise ValueError("invalid bootstrap_parallel_status")
-
-        lane_runtime_raw = req.get("lane_runtime")
-        lane_runtime: list[dict[str, Any]] = []
-        if lane_runtime_raw is not None:
-            if not isinstance(lane_runtime_raw, list) or len(lane_runtime_raw) > 16:
-                raise ValueError("lane_runtime must be an array with at most 16 entries")
-            seen_lanes: set[str] = set()
-            for item in lane_runtime_raw:
-                if not isinstance(item, dict):
-                    raise ValueError("lane_runtime item must be an object")
-                lane_id = str(item.get("lane_id") or "")
-                project_key = str(item.get("project_key") or "")
-                if not re.fullmatch(r"lane-[0-9]{2,}", lane_id):
-                    raise ValueError("invalid lane_runtime lane_id")
-                if not re.fullmatch(r"g-p-[A-Za-z0-9]+", project_key):
-                    raise ValueError("invalid lane_runtime project_key")
-                if lane_id in seen_lanes:
-                    raise ValueError("duplicate lane_runtime lane_id")
-                seen_lanes.add(lane_id)
-                managed_count = int(item.get("managed_count") or 0)
-                if managed_count < 0 or managed_count > 64:
-                    raise ValueError("invalid lane_runtime managed_count")
-                handoff_status = str(item.get("handoff_status") or "").strip() or None
-                if handoff_status and len(handoff_status) > 64:
-                    raise ValueError("lane_runtime handoff_status too long")
-                lane_runtime.append({
-                    "lane_id": lane_id,
-                    "project_key": project_key,
-                    "enabled": bool(item.get("enabled")),
-                    "current_verified": bool(item.get("current_verified")),
-                    "managed_count": managed_count,
-                    "handoff_status": handoff_status,
-                })
-
-        now = utc_now()
-        with self.lock:
-            control_path = self.runtime / "extension-control.json"
-            control = read_json(control_path) if control_path.exists() else None
-            reload_requested = False
-            completed = False
-            if isinstance(control, dict) and str(control.get("project_id") or "") == project_id:
-                expected = str(control.get("expected_version") or "")
-                status = str(control.get("status") or "")
-                if status == "PENDING":
-                    if version == expected:
-                        control = {
-                            **control,
-                            "status": "VERIFYING",
-                            "observed_version": version,
-                            "extension_id": extension_id or None,
-                        }
-                        atomic_json(control_path, control)
-                    else:
-                        reload_requested = True
-                elif status == "VERIFYING" and version != expected:
-                    reload_requested = True
-
-            status_record = {
-                "v": 1,
-                "at": now,
-                "client_id": client_id,
-                "project_id": project_id,
-                "version": version,
-                "extension_id": extension_id or None,
-                "reload_requested": reload_requested,
-                "control_request_id": str(control.get("request_id") or "") if isinstance(control, dict) else None,
-                "desired_version": desired_version,
-                "desired_lane_count": desired_lane_count,
-                "desired_enabled_count": desired_enabled_count,
-                "bootstrap_parallel_status": bootstrap_parallel_status,
-                "lane_runtime": lane_runtime,
-                "poll_interval_seconds": req.get("poll_interval_seconds"),
-            }
-            atomic_json(self.runtime / "extension-status.json", status_record)
-
-        return {
-            "ok": True,
-            "reload_requested": reload_requested,
-            "rehydrate_required": bool(isinstance(control, dict) and str(control.get("status") or "") == "VERIFYING" and version == str(control.get("expected_version") or "")),
-            "completed": completed,
-            "expected_version": str(control.get("expected_version") or "") if isinstance(control, dict) else None,
-            "control_request_id": str(control.get("request_id") or "") if isinstance(control, dict) else None,
-            "control_status": str(control.get("status") or "") if isinstance(control, dict) else None,
-        }
-
-    def extension_runtime_ready(self, req: dict[str, Any]) -> dict[str, Any]:
-        self._safe_client(req.get("client_id"))
-        project_id = str(req.get("project_id") or "").strip()
-        request_id = self._safe_id(req.get("request_id"), "request_id")
-        version = str(req.get("version") or "").strip()
-        extension_id = str(req.get("extension_id") or "").strip()
-        managed_tabs_ready = int(req.get("managed_tabs_ready") or 0)
-        managed_tabs_failed = int(req.get("managed_tabs_failed") or 0)
-        if not project_id or len(project_id) > 256:
-            raise ValueError("project_id required")
-        if not version or len(version) > 64:
-            raise ValueError("version required")
-        if managed_tabs_ready < 0 or managed_tabs_failed < 0:
-            raise ValueError("invalid managed tab counts")
-
-        with self.lock:
-            control_path = self.runtime / "extension-control.json"
-            if not control_path.exists():
-                return {"ok": False, "error": "EXTENSION_CONTROL_MISSING"}
-            control = read_json(control_path)
-            if not isinstance(control, dict) or str(control.get("request_id") or "") != request_id:
-                return {"ok": False, "error": "EXTENSION_CONTROL_ID_MISMATCH"}
-            if str(control.get("project_id") or "") != project_id:
-                return {"ok": False, "error": "EXTENSION_CONTROL_PROJECT_MISMATCH"}
-            expected = str(control.get("expected_version") or "")
-            if version != expected:
-                return {"ok": False, "error": "EXTENSION_VERSION_MISMATCH"}
-
-            failed = managed_tabs_failed > 0
-            control = {
-                **control,
-                "status": "ERROR" if failed else "DONE",
-                "completed_at": utc_now(),
-                "observed_version": version,
-                "extension_id": extension_id or None,
-                "managed_tabs_ready": managed_tabs_ready,
-                "managed_tabs_failed": managed_tabs_failed,
-            }
-            atomic_json(control_path, control)
-        return {"ok": not failed, "control": control}
-
-    def extension_runtime_status(self, req: dict[str, Any]) -> dict[str, Any]:
-        self._safe_client(req.get("client_id"))
-        project_id = str(req.get("project_id") or "").strip()
-        if not project_id or len(project_id) > 256:
-            raise ValueError("project_id required")
-        with self.lock:
-            status_path = self.runtime / "extension-status.json"
-            control_path = self.runtime / "extension-control.json"
-            status = read_json(status_path) if status_path.exists() else None
-            control = read_json(control_path) if control_path.exists() else None
-        return {
-            "ok": True,
-            "status": status if isinstance(status, dict) else None,
-            "control": control if isinstance(control, dict) else None,
-        }
-
     def foreground_task_status(self, req: dict[str, Any]) -> dict[str, Any]:
         """Return the most recent canonical foreground-task projection.
 
@@ -1049,7 +1035,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
-        return not origin or origin.startswith("chrome-extension://") or origin.startswith("moz-extension://")
+        return not origin
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self._json(403, {"ok": False, "error": "CORS_DISABLED"})
@@ -1098,32 +1084,72 @@ class Handler(BaseHTTPRequestHandler):
                 result = complete_lane_clear(store, req)
             elif op == "task_cell_prompt_complete":
                 result = complete_task_cell_prompt(store, req)
+            elif op == "task_cell_role_prompt_complete":
+                result = complete_task_cell_role_prompt(store, req)
             elif op == "lane_pool_reset_complete":
                 result = complete_lane_pool_reset(store, req)
             elif op == "task_cell_clear_complete":
                 result = complete_task_cell_clear(store, req)
+            elif op == "task_cell_project_clear_complete":
+                result = complete_task_cell_project_clear(store, req)
+            elif op == "planner_foreground_handoff_begin":
+                result = begin_foreground_planner_handoff(store, req)
+            elif op == "planner_foreground_handoff_attempt":
+                result = record_foreground_planner_create_attempt(store, req)
+            elif op == "planner_foreground_handoff_bind":
+                result = complete_foreground_planner_handoff_binding(store, req)
+            elif op == "planner_event_enqueue":
+                result = enqueue_planner_event(store, req)
+            elif op == "planner_runtime_migrate":
+                result = migrate_planner_runtime(store, req)
+            elif op == "semantic_turn_observe":
+                result = observe_semantic_turn(store, req)
+            elif op == "semantic_turn_sync":
+                result = sync_semantic_turn(store, req)
+            elif op == "planner_runtime_tick":
+                result = planner_runtime_tick(store, req)
+            elif op == "planner_final_delivery_status":
+                result = planner_final_delivery_status(store, req)
+            elif op == "planner_final_delivery_delivered":
+                result = planner_final_delivery_update(store, req, operation="delivered")
+            elif op == "planner_final_delivery_cleaned":
+                result = planner_final_delivery_update(store, req, operation="cleaned")
+            elif op == "planner_final_delivery_consumed":
+                result = planner_final_delivery_update(store, req, operation="consumed")
+            elif op == "planner_cleanup_execute":
+                result = execute_planner_cleanup(store, req)
+            elif op == "planner_runtime_request_rotation":
+                result = request_planner_rotation(store, req)
+            elif op == "planner_successor_bootstrap_complete":
+                result = complete_planner_successor_bootstrap(store, req)
+            elif op == "planner_successor_promote_complete":
+                result = complete_planner_successor_promote(store, req)
+            elif op == "planner_predecessor_retire_complete":
+                result = complete_planner_predecessor_retire(store, req)
+            elif op == "planner_git_cli":
+                result = planner_git_cli_fallback(store, req)
             elif op == "action_submit":
                 result = stage_action_submit(store, req)
             elif op == "worker_handoff_complete":
                 result = complete_worker_handoff(store, req)
             elif op == "dispatch_liveness":
                 result = reconcile_dispatch_liveness(store, req)
+            elif op == "worker_watchdog_expired":
+                result = stage_worker_watchdog_helper(store, req)
             elif op == "artifact_read":
                 result = store.artifact_read(req)
             elif op == "dispatch_accept":
                 result = store.dispatch_accept(req)
             elif op == "dispatch_status":
                 result = store.dispatch_status(req)
-            elif op == "extension_reload_request":
-                result = store.extension_reload_request(req)
-            elif op == "extension_runtime_hello":
-                result = store.extension_runtime_hello(req)
-            elif op == "extension_runtime_ready":
-                result = store.extension_runtime_ready(req)
-            elif op == "extension_runtime_status":
-                result = store.extension_runtime_status(req)
             elif op == "foreground_task_status":
                 result = store.foreground_task_status(req)
+            elif op == "foreground_terminal_status":
+                result = reconcile_foreground_terminal(store, {**req, "terminal_op": "status"})
+            elif op == "foreground_terminal_delivered":
+                result = reconcile_foreground_terminal(store, {**req, "terminal_op": "delivered"})
+            elif op == "foreground_terminal_consumed":
+                result = reconcile_foreground_terminal(store, {**req, "terminal_op": "consumed"})
             elif op == "health":
                 result = store.health()
             else:
@@ -1154,6 +1180,8 @@ def main() -> int:
 
     if args.host not in {"127.0.0.1", "localhost"}:
         raise SystemExit("Refusing non-loopback bind; use 127.0.0.1 or localhost")
+    import subprocess, sys
+    subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'installation/preflight.py')], check=True)
     store = WakeStore(Path(args.root), Path(args.repo_root), args.git_remote, args.git_branch)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.store = store  # type: ignore[attr-defined]

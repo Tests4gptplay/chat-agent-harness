@@ -12,9 +12,40 @@ A useful harness must support both:
 
 Git state is authoritative for engineering continuity. Account memory and chat history are convenience context only.
 
+## Task Cell semantic continuity
+
+Managed Task Cell continuity uses role-owned durable surfaces:
+
+```text
+Task Contract
+= stable task goal / constraints / acceptance
+
+Plan
+= current formal future strategy
+
+Planner Memory
+= append-only parent-task semantic history
+
+Worker Child Reply
+= append-only child-local work + review + direction
+
+Worker Handoff
+= thin generation-switch continuation packet
+```
+
+A replacement Planner continues the same Planner Memory. A replacement Worker continues the same Child Reply and reads the current handoff packet when supplied.
+
+Planner saves progress and outputs `handoff` when context has collapsed; normal `done` keeps its conversation. Worker saves its frontier in Child Reply and outputs `continue`; Harness prepares the replacement identities and any thin handoff refs. Helper records one incident result, outputs `done`, and is discarded after result receipt; the next Helper inherits durable incident refs rather than reusing the finished chat.
+
+When a Helper recovery materially changes an active Child's operational execution state, continuity must not remain only in the short-lived Helper result. Carry a concise append-only `HELPER INCIDENT` breadcrumb into that Child's long-lived Reply, preserving the exact Runner/run/job/process disposition and post-recovery frontier. This breadcrumb does not become Worker-authored work or Planner direction; it exists so later Worker generations can recover the operational history that affects what is safe to resume or relaunch.
+
+Conversation history is an execution context; these Git surfaces carry the continuity that must survive replacement.
+
 ## State ownership
 
-Each agent owns one replaceable resume cache:
+For managed Task Cell roles, checkpointing means writing the role-owned Planner Memory, Child Reply or Helper result, not a shared state file per role or generation. Harness owns `state/chatgpt.json`, control/dispatch identities and lane topology. A normal semantic checkpoint must not overwrite that shared machine state. Helper's narrowly scoped operational recovery exception is defined in its role contract.
+
+Outside managed role execution, a standalone agent may own one replaceable resume cache, for example:
 
 ```text
 state/chatgpt.json
@@ -22,7 +53,7 @@ state/codex.json
 state/<other-agent>.json
 ```
 
-An agent may initialize its own file from `state/_template.json`. Once active, one agent must not overwrite another agent's live state.
+A standalone agent may initialize its own unowned cache from `state/_template.json`. Once active, one agent must not overwrite another agent's live state or a Harness-owned managed state file.
 
 State is not history. It should answer:
 - what are we doing now?
@@ -34,7 +65,7 @@ State is not history. It should answer:
 
 ## Startup / resume
 
-1. Read your own state if it exists.
+1. In managed work, read the exact Task/role/continuity refs supplied by Harness and inspect machine state as needed without taking ownership of it. Otherwise read your own standalone state if it exists.
 2. Read only `next_reads`, active action/result references, and required task context.
 3. Treat `verified` as valid unless new evidence contradicts it.
 4. Do not re-run or re-diagnose completed stages merely because the chat changed.
@@ -42,7 +73,7 @@ State is not history. It should answer:
 
 ## Mandatory checkpoint triggers
 
-Proactively refresh your own state after any of the following:
+Proactively refresh the applicable role-owned durable surface (or your standalone resume cache) after any of the following:
 - a meaningful production milestone;
 - a PASS/FAIL/ERROR result that changes what is known;
 - a decision expensive to reconstruct from scratch;
@@ -68,7 +99,7 @@ The first protocol uses four structured concepts:
 state -> action -> executor -> result -> state
 ```
 
-The agent writes/chooses an action. The executor performs mechanical work. The result carries compact evidence. The next agent turn consumes the result and decides whether to retry, change strategy, verify, finish, block, or ask the user.
+The agent writes/chooses semantic work. The executor performs mechanical work. The result carries compact evidence. The next agent turn consumes the result and decides whether to retry, change strategy, verify, finish, block, or ask the user. In managed work Harness owns the machine state transitions below; they are not a response schema or fields for AI to echo.
 
 Suggested phase flow:
 
@@ -107,7 +138,7 @@ Once stages are verified, carry them forward explicitly. A later failure should 
 A new chat should behave like a lightweight `git pull`:
 
 ```text
-read own state
+read bound Task + role continuity (or own standalone state)
 -> read next_reads
 -> inspect current result/action
 -> resume work

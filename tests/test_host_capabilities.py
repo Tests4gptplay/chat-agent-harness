@@ -35,13 +35,6 @@ def make_fake_ue(root: Path, major: int = 5, minor: int = 6, patch: int = 0) -> 
 
 
 class HostCapabilityTests(unittest.TestCase):
-    def setUp(self):
-        # Fixtures must not discover the machine's real engine installation.
-        for provider in ('_launcher_candidates', '_registry_candidates', '_path_candidates', '_filesystem_candidates'):
-            mock = patch('host.capabilities.' + provider, return_value=[])
-            mock.start()
-            self.addCleanup(mock.stop)
-
     def test_ue56_validation_persists_private_paths_but_projection_is_sanitized(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -79,7 +72,11 @@ class HostCapabilityTests(unittest.TestCase):
             self.assertEqual(cached_projection["source"], "local_cache")
             self.assertEqual(Path(cached_private["root"]), ue.resolve())
 
-    def test_directory_name_never_substitutes_for_build_version(self):
+    @patch("host.capabilities._registry_candidates", return_value=[])
+    @patch("host.capabilities._launcher_candidates", return_value=[])
+    @patch("host.capabilities._path_candidates", return_value=[])
+    @patch("host.capabilities._filesystem_candidates", return_value=[])
+    def test_directory_name_never_substitutes_for_build_version(self, *_discovery):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             ue = base / "UE5.6"
@@ -105,7 +102,7 @@ class HostCapabilityTests(unittest.TestCase):
             source="runtime",
             validation="Build.version",
         )
-        projection["reason"] = r"D:\\UE5"
+        projection["reason"] = r"X:\\CAH_TEST\\UnrealEngine"
         with self.assertRaises(ValueError):
             validate_projection(projection)
 

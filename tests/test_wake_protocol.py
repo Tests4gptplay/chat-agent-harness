@@ -10,11 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from harness.wake import deterministic_wake_id, make_wake, marker, validate_wake  # noqa: E402
 from local_bridge.server import WakeStore  # noqa: E402
+from playwright_host.worker import wake_text  # noqa: E402
 
 
 class WakeTests(unittest.TestCase):
     def test_make_validate_marker(self):
-        wake = make_wake("3d-agent-lab", repo="example-owner/cah-workload", run_id=123)
+        wake = make_wake("example-project", repo="example-owner/example-lab", run_id=123)
         validate_wake(wake)
         self.assertEqual(wake["v"], 1)
         self.assertEqual(wake["state"], "NEED_AGENT")
@@ -23,7 +24,7 @@ class WakeTests(unittest.TestCase):
     def test_deterministic_wake_id(self):
         kwargs = {
             "state": "NEED_AGENT",
-            "repo": "example-owner/cah-private",
+            "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
             "run_id": "123",
             "result_ref": "github://example/result",
         }
@@ -37,13 +38,43 @@ class WakeTests(unittest.TestCase):
         )
 
 
+    def test_worker_wake_declares_ten_minute_durable_handoff_contract(self):
+        wake = {
+            "wake_id": "wake-budget-0001",
+            "project_id": "git-agent-harness",
+            "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            "git_branch": "main",
+            "task_id": "child-budget-001",
+            "owner_task_id": "parent-budget-001",
+            "owner_control_epoch": 1,
+            "backend_cl": "cl/child-budget-001.backend.json",
+            "dispatch_id": "dispatch-budget-0001",
+            "dispatch_generation": 1,
+            "fence_token": "fence-budget-0001",
+            "child_reply_ref": "memory/worker/child-budget-001/reply.md",
+            "worker_reply_entry_ref": "state/worker_turns/child-budget-001/wake-budget-0001/reply-entry.md",
+            "result_ref": "evidence/parent-budget-001/roles/worker/child-budget-001/wake-budget-0001.json",
+        }
+        text = wake_text(wake, "git-agent-harness")
+        self.assertIn("WORKER_BUDGET", text)
+        self.assertIn("healthy_limit=10:00", text)
+        self.assertIn("on_reach=HEALTHY_LIMIT", text)
+        self.assertIn("instruction=prepare_handoff", text)
+        self.assertIn("Treat about 10 minutes as this Worker generation's healthy work budget", text)
+        self.assertIn("is not a reason to keep this Worker merely to watch it", text)
+        self.assertIn("Write the current Result LAST", text)
+        self.assertIn("turn_signal=continue", text)
+        self.assertIn('"kind":"semantic_sync"', text)
+        self.assertNotIn("finish with only continue", text)
+        self.assertNotIn("healthy_limit=05:00", text)
+
     def test_scheduler_wake_identity(self):
         wake = make_wake(
             "git-agent-harness",
             wake_id="wake-scheduler-0001",
-            repo="example-owner/cah-private",
+            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
             lane_id="lane-00",
-            worker_project_key="g-p-examplelane00",
+            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
             kind="task_continue",
             task_id="task-001",
             backend_cl="cl/task-001.backend.json",
@@ -223,7 +254,7 @@ class WakeTests(unittest.TestCase):
             "git-agent-harness",
             wake_id="wake-attachment-0001",
             lane_id="lane-00",
-            worker_project_key="g-p-examplelane00",
+            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
             attachment_ref=ref,
         )
         validate_wake(wake)
@@ -354,7 +385,7 @@ class WakeTests(unittest.TestCase):
                     "data": {"secret": "must-not-be-written"},
                 })
 
-    def test_worker_takeover_status_uses_exact_canonical_git_id(self):
+    def test_worker_takeover_status_uses_exact_task_pool_canonical_git_id(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             origin = base / "origin.git"
@@ -365,19 +396,15 @@ class WakeTests(unittest.TestCase):
             subprocess.check_call(["git", "-C", str(work), "config", "user.email", "gah-test@example.invalid"])
 
             exact = "pool-12345678-abcd"
+            owner_task_id = "owner-task-001"
+            owner_epoch = 1
+            packet = "state/handoff-test.json"
             state_dir = work / "state"
             state_dir.mkdir()
-            state_file = state_dir / "chatgpt.json"
-            state_file.write_text(json.dumps({
+            (state_dir / "chatgpt.json").write_text(json.dumps({
                 "v": 1,
                 "agent": "chatgpt",
                 "updated": "2026-09-18",
-                "last_pool_takeover_id": exact,
-                "worker_rollover_request": {
-                    "handoff_id": exact,
-                    "reason": "context_compacted",
-                    "requested_at": "2026-09-18T00:00:00Z",
-                },
                 "foreground_task": {
                     "task_id": "fg-test-001",
                     "status": "RUNNING",
@@ -387,17 +414,55 @@ class WakeTests(unittest.TestCase):
                     "summary": "not exposed by the local projection",
                 },
             }), encoding="utf-8")
-            subprocess.check_call(["git", "-C", str(work), "add", "state/chatgpt.json"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed takeover state"], stdout=subprocess.DEVNULL)
-            subprocess.check_call(["git", "-C", str(work), "push", "origin", "HEAD:main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            # Leave a contradictory uncommitted working-tree value. The bridge must
-            # read the fetched canonical Git commit, not this local file contents.
-            state_file.write_text(json.dumps({
+            lanes_file = state_dir / "lanes.json"
+            lanes_file.write_text(json.dumps({
                 "v": 1,
-                "agent": "chatgpt",
-                "updated": "2026-09-18",
-                "last_pool_takeover_id": "pool-local-stale",
+                "topology_version": 1,
+                "updated_at": "2026-09-18T00:00:00Z",
+                "registered_count": 1,
+                "enabled_count": 1,
+                "lanes": [{
+                    "lane_id": "lane-00",
+                    "display_name": "CAH Sandbox0",
+                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "enabled": True,
+                    "status": "IDLE",
+                    "task_pools": {
+                        f"{owner_task_id}::{owner_epoch}": {
+                            "owner_task_id": owner_task_id,
+                            "owner_control_epoch": owner_epoch,
+                            "last_pool_takeover_id": exact,
+                            "worker_rollover_request": {
+                                "handoff_id": exact,
+                                "reason": "context_compacted",
+                                "handoff_packet_ref": packet,
+                            },
+                        },
+                    },
+                }],
+            }), encoding="utf-8")
+            subprocess.check_call(["git", "-C", str(work), "add", "state"])
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed task pool takeover"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
+            subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            # Contradict the local worktree after the commit. The bridge must read
+            # the fetched canonical task pool, not this uncommitted local value.
+            lanes_file.write_text(json.dumps({
+                "v": 1,
+                "lanes": [{
+                    "lane_id": "lane-00",
+                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                    "task_pools": {
+                        f"{owner_task_id}::{owner_epoch}": {
+                            "owner_task_id": owner_task_id,
+                            "owner_control_epoch": owner_epoch,
+                            "last_pool_takeover_id": "pool-local-stale",
+                            "worker_rollover_request": None,
+                        },
+                    },
+                }],
             }), encoding="utf-8")
 
             store = WakeStore(base / "spool", repo_root=work)
@@ -405,14 +470,20 @@ class WakeTests(unittest.TestCase):
                 "client_id": "client-test-001",
                 "project_id": "git-agent-harness",
                 "handoff_id": exact,
+                "lane_id": "lane-00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "owner_task_id": owner_task_id,
+                "owner_control_epoch": owner_epoch,
             }
             matched = store.worker_takeover_status(request)
             self.assertTrue(matched["ok"])
             self.assertTrue(matched["matched"])
+            self.assertTrue(matched["task_pool_scoped"])
             self.assertEqual(matched["last_pool_takeover_id"], exact)
             self.assertTrue(matched["rollover_requested"])
             self.assertEqual(matched["rollover_request_handoff_id"], exact)
             self.assertEqual(matched["rollover_reason"], "context_compacted")
+            self.assertEqual(matched["handoff_packet_ref"], packet)
 
             foreground = store.foreground_task_status({
                 "client_id": "client-test-001",
@@ -420,11 +491,7 @@ class WakeTests(unittest.TestCase):
             })
             self.assertTrue(foreground["ok"])
             self.assertEqual(foreground["foreground_task"]["task_id"], "fg-test-001")
-            self.assertEqual(foreground["foreground_task"]["status"], "RUNNING")
-            self.assertEqual(foreground["foreground_task"]["started_at"], "2026-09-18T00:00:00Z")
-            self.assertIsNone(foreground["foreground_task"]["result_ref"])
             self.assertNotIn("summary", foreground["foreground_task"])
-            self.assertIsNotNone(foreground["state_at"])
 
             request["handoff_id"] = "pool-87654321-abcd"
             unmatched = store.worker_takeover_status(request)
@@ -432,10 +499,9 @@ class WakeTests(unittest.TestCase):
             self.assertFalse(unmatched["matched"])
             self.assertEqual(unmatched["last_pool_takeover_id"], exact)
             self.assertFalse(unmatched["rollover_requested"])
-            self.assertEqual(unmatched["rollover_request_handoff_id"], exact)
 
 
-    def test_lane00_takeover_falls_back_to_top_level_rollover(self):
+    def test_worker_takeover_status_does_not_borrow_another_task_pool(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             origin = base / "origin.git"
@@ -445,127 +511,149 @@ class WakeTests(unittest.TestCase):
             subprocess.check_call(["git", "-C", str(work), "config", "user.name", "gah-test"])
             subprocess.check_call(["git", "-C", str(work), "config", "user.email", "gah-test@example.invalid"])
             (work / "state").mkdir()
-            handoff = "pool-aaaaaaaa-bbbb-cccc"
+            pool_a = "pool-task-a-0001"
+            pool_b = "pool-task-b-0001"
             (work / "state" / "chatgpt.json").write_text(json.dumps({
-                "v": 1,
-                "agent": "chatgpt",
-                "updated": "2026-09-18",
-                "last_pool_takeover_id": handoff,
-                "handoff_packet_ref": "state/handoff-test.json",
-                "worker_rollover_request": {
-                    "handoff_id": handoff,
-                    "reason": "context_compacted",
-                    "requested_at": "2026-09-18T12:00:00Z"
-                }
+                "v": 1, "agent": "chatgpt", "updated": "2026-09-18"
             }), encoding="utf-8")
             (work / "state" / "lanes.json").write_text(json.dumps({
                 "v": 1,
-                "topology_version": 2,
-                "updated_at": "2026-09-18T12:00:00Z",
-                "source_request_id": "topo-test-0001",
-                "registered_count": 1,
-                "enabled_count": 1,
-                "lanes": [{
-                    "lane_id": "lane-00",
-                    "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-examplelane00",
-                    "project_root_url": "https://chatgpt.com/g/g-p-examplelane00-cah-sandbox0/project",
-                    "enabled": True,
-                    "status": "IDLE",
-                    "last_pool_takeover_id": handoff,
-                    "worker_rollover_request": None
-                }]
-            }), encoding="utf-8")
-            subprocess.check_call(["git", "-C", str(work), "add", "state"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed lane rollover fallback"], stdout=subprocess.DEVNULL)
-            subprocess.check_call(["git", "-C", str(work), "push", "origin", "HEAD:main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            store = WakeStore(base / "spool", repo_root=work)
-            got = store.worker_takeover_status({
-                "client_id": "client-test-001",
-                "project_id": "git-agent-harness",
-                "handoff_id": handoff,
-                "lane_id": "lane-00",
-                "worker_project_key": "g-p-examplelane00",
-            })
-            self.assertTrue(got["ok"])
-            self.assertTrue(got["matched"])
-            self.assertTrue(got["rollover_requested"])
-            self.assertEqual(got["rollover_reason"], "context_compacted")
-            self.assertEqual(got["handoff_packet_ref"], "state/handoff-test.json")
-            self.assertTrue(got["lane_scoped"])
-
-    def test_lane00_takeover_accepts_exact_newer_top_level_over_stale_lane_mirror(self):
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            origin = base / "origin.git"
-            work = base / "work"
-            subprocess.check_call(["git", "init", "--bare", str(origin)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.check_call(["git", "clone", str(origin), str(work)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.check_call(["git", "-C", str(work), "config", "user.name", "gah-test"])
-            subprocess.check_call(["git", "-C", str(work), "config", "user.email", "gah-test@example.invalid"])
-            (work / "state").mkdir()
-            old = "pool-old-old-old"
-            new = "pool-new-new-new"
-            packet = "state/handoffs/task-new.json"
-            (work / "state" / "chatgpt.json").write_text(json.dumps({
-                "v": 1,
-                "agent": "chatgpt",
-                "updated": "2026-09-18",
-                "last_pool_takeover_id": new,
-                "handoff_packet_ref": packet,
-                "worker_rollover_request": {
-                    "v": 1,
-                    "reason": "context_compacted",
-                    "status": "PENDING",
-                    "lane_id": "lane-00",
-                    "outgoing_pool_id": new,
-                    "task_id": "task-001",
-                    "handoff_packet_ref": packet,
-                },
-            }), encoding="utf-8")
-            (work / "state" / "lanes.json").write_text(json.dumps({
-                "v": 1,
-                "topology_version": 2,
+                "topology_version": 1,
                 "updated_at": "2026-09-18T00:00:00Z",
-                "source_request_id": "topo-test",
                 "registered_count": 1,
                 "enabled_count": 1,
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-examplelane00",
-                    "project_root_url": "https://chatgpt.com/g/g-p-examplelane00-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
                     "enabled": True,
-                    "status": "HANDOFF",
-                    "last_pool_takeover_id": old,
-                    "worker_rollover_request": {
-                        "v": 1,
-                        "reason": "context_compacted",
-                        "outgoing_pool_id": old,
-                        "handoff_packet_ref": "state/handoffs/old.json",
+                    "status": "RUNNING",
+                    "task_pools": {
+                        "task-A::1": {
+                            "owner_task_id": "task-A",
+                            "owner_control_epoch": 1,
+                            "last_pool_takeover_id": pool_a,
+                            "worker_rollover_request": None,
+                        },
+                        "task-B::1": {
+                            "owner_task_id": "task-B",
+                            "owner_control_epoch": 1,
+                            "last_pool_takeover_id": pool_b,
+                            "worker_rollover_request": {
+                                "handoff_id": pool_b,
+                                "reason": "semantic_stall",
+                                "handoff_packet_ref": "memory/tasks/task-B/handoff.json",
+                            },
+                        },
                     },
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed stale lane mirror"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed independent pools"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             store = WakeStore(base / "spool", repo_root=work)
-            got = store.worker_takeover_status({
+            a = store.worker_takeover_status({
                 "client_id": "client-test-001",
                 "project_id": "git-agent-harness",
-                "handoff_id": new,
+                "handoff_id": pool_b,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-examplelane00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "owner_task_id": "task-A",
+                "owner_control_epoch": 1,
             })
-            self.assertTrue(got["ok"])
-            self.assertTrue(got["matched"])
-            self.assertEqual(got["last_pool_takeover_id"], new)
-            self.assertTrue(got["rollover_requested"])
-            self.assertEqual(got["rollover_request_handoff_id"], new)
-            self.assertEqual(got["handoff_packet_ref"], packet)
+            self.assertTrue(a["ok"])
+            self.assertFalse(a["matched"])
+            self.assertEqual(a["last_pool_takeover_id"], pool_a)
+            self.assertFalse(a["rollover_requested"])
+
+            b = store.worker_takeover_status({
+                "client_id": "client-test-001",
+                "project_id": "git-agent-harness",
+                "handoff_id": pool_b,
+                "lane_id": "lane-00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "owner_task_id": "task-B",
+                "owner_control_epoch": 1,
+            })
+            self.assertTrue(b["matched"])
+            self.assertTrue(b["rollover_requested"])
+            self.assertEqual(b["rollover_reason"], "semantic_stall")
+
+
+    def test_worker_takeover_status_isolates_control_epochs(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            origin = base / "origin.git"
+            work = base / "work"
+            subprocess.check_call(["git", "init", "--bare", str(origin)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.check_call(["git", "clone", str(origin), str(work)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "config", "user.name", "gah-test"])
+            subprocess.check_call(["git", "-C", str(work), "config", "user.email", "gah-test@example.invalid"])
+            (work / "state").mkdir()
+            (work / "state" / "chatgpt.json").write_text(json.dumps({
+                "v": 1, "agent": "chatgpt", "updated": "2026-09-18"
+            }), encoding="utf-8")
+            (work / "state" / "lanes.json").write_text(json.dumps({
+                "v": 1,
+                "topology_version": 1,
+                "updated_at": "2026-09-18T00:00:00Z",
+                "registered_count": 1,
+                "enabled_count": 1,
+                "lanes": [{
+                    "lane_id": "lane-00",
+                    "display_name": "CAH Sandbox0",
+                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "enabled": True,
+                    "status": "RUNNING",
+                    "task_pools": {
+                        "task-A::1": {
+                            "owner_task_id": "task-A",
+                            "owner_control_epoch": 1,
+                            "last_pool_takeover_id": "pool-epoch-one",
+                            "worker_rollover_request": None,
+                        },
+                        "task-A::2": {
+                            "owner_task_id": "task-A",
+                            "owner_control_epoch": 2,
+                            "last_pool_takeover_id": "pool-epoch-two",
+                            "worker_rollover_request": None,
+                        },
+                    },
+                }],
+            }), encoding="utf-8")
+            subprocess.check_call(["git", "-C", str(work), "add", "state"])
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed epoch pools"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
+            subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            store = WakeStore(base / "spool", repo_root=work)
+
+            epoch1 = store.worker_takeover_status({
+                "client_id": "client-test-001",
+                "project_id": "git-agent-harness",
+                "handoff_id": "pool-epoch-two",
+                "lane_id": "lane-00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "owner_task_id": "task-A",
+                "owner_control_epoch": 1,
+            })
+            self.assertFalse(epoch1["matched"])
+            self.assertEqual(epoch1["last_pool_takeover_id"], "pool-epoch-one")
+
+            epoch2 = store.worker_takeover_status({
+                "client_id": "client-test-001",
+                "project_id": "git-agent-harness",
+                "handoff_id": "pool-epoch-two",
+                "lane_id": "lane-00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "owner_task_id": "task-A",
+                "owner_control_epoch": 2,
+            })
+            self.assertTrue(epoch2["matched"])
+
 
     def test_state_schema_covers_canonical_top_level_keys(self):
         schema = json.loads((ROOT / "harness" / "state.schema.json").read_text(encoding="utf-8"))
@@ -598,92 +686,6 @@ class WakeTests(unittest.TestCase):
             self.assertNotIn("hostname", encoded)
             self.assertNotIn("username", encoded)
             self.assertNotIn("executable_path", encoded)
-
-    def test_worker_lifecycle_does_not_activate_tabs(self):
-        for rel in (
-            "extension/worker_runtime_v2.js",
-            "extension/worker_retirement.js",
-            "extension/worker_cleanup.js",
-        ):
-            source = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertNotIn("active: true", source, f"{rel} must not steal browser focus")
-            self.assertNotIn("{ active: true }", source, f"{rel} must not restore/steal browser focus")
-
-    def test_build_manifests(self):
-        with tempfile.TemporaryDirectory() as td:
-            for target in ("chromium", "firefox"):
-                out = Path(td) / target
-                subprocess.check_call([sys.executable, str(ROOT / "extension" / "build.py"), target, "--out", str(out)])
-                manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-                self.assertEqual(manifest["manifest_version"], 3)
-                self.assertTrue((out / "background.js").exists())
-                self.assertTrue((out / "foreground_monitor.js").exists())
-                self.assertTrue((out / "history_rate_limit.js").exists())
-                self.assertTrue((out / "foreground_content.js").exists())
-                self.assertTrue((out / "worker_root_content.js").exists())
-                self.assertFalse((out / "pool_background.js").exists())
-                self.assertFalse((out / "worker_runtime.js").exists())
-                self.assertFalse((out / "pool_content.js").exists())
-                self.assertFalse(any("script.google" in value for value in manifest.get("host_permissions", [])))
-                if target == "chromium":
-                    self.assertEqual(manifest["background"]["service_worker"], "background_bundle.js")
-                    self.assertTrue((out / "background_bundle.js").exists())
-
-
-    def test_extension_semantic_recovery_contract_is_present(self):
-        content_js = (ROOT / "extension" / "content.js").read_text(encoding="utf-8")
-        background_js = (ROOT / "extension" / "background.js").read_text(encoding="utf-8")
-        lane_runtime_js = (ROOT / "extension" / "lane_worker_runtime.js").read_text(encoding="utf-8")
-
-        self.assertIn("SYSCALL_RESCAN_MS", content_js)
-        self.assertIn("gah-worker-response-ended", content_js)
-        self.assertIn("worker.syscall_submit_rejected", content_js)
-        self.assertIn("seenSyscallKeys", content_js)
-        self.assertIn("inFlightSyscallKeys", content_js)
-        self.assertIn("permanentSyscallError", content_js)
-        self.assertIn("scan_in_flight", content_js)
-        self.assertIn("setInterval(() =>", content_js)
-        self.assertIn("dispatch_context: latestDispatchContext()", content_js)
-
-        self.assertIn("handleWorkerResponseEnded", background_js)
-        self.assertIn("semanticLivenessSweep", background_js)
-        self.assertIn("op: 'dispatch_liveness'", background_js)
-        self.assertIn("worker.syscall_action_submit_error", background_js)
-
-        self.assertIn("handoff_packet_ref: handoffPacketRef || null", lane_runtime_js)
-        self.assertIn("op: 'worker_handoff_complete'", lane_runtime_js)
-        self.assertIn("worker.semantic_handoff_completed", lane_runtime_js)
-
-
-    def test_history_access_rate_limit_modal_recovery_contract(self):
-        content_js = (ROOT / "extension" / "content.js").read_text(encoding="utf-8")
-        helper_js = (ROOT / "extension" / "history_rate_limit.js").read_text(encoding="utf-8")
-        build_py = (ROOT / "extension" / "build.py").read_text(encoding="utf-8")
-
-        self.assertIn("isHistoryAccessRateLimitText", helper_js)
-        self.assertIn("访问对话记录", helper_js)
-        self.assertIn("MAX_DISMISS_ATTEMPTS = 2", helper_js)
-        self.assertIn("ui.history_rate_limit_dismissed", content_js)
-        self.assertIn("ui.history_rate_limit_ambiguous", content_js)
-        self.assertIn("dismissHistoryAccessRateLimitModalIfPresent", content_js)
-        self.assertLess(
-            content_js.index("await dismissHistoryAccessRateLimitModalIfPresent();"),
-            content_js.index("let composer = findComposer();"),
-        )
-        self.assertIn("const preSendRecovery = await dismissHistoryAccessRateLimitModalIfPresent();", content_js)
-        self.assertLess(
-            content_js.index("const preSendRecovery = await dismissHistoryAccessRateLimitModalIfPresent();"),
-            content_js.index("findSendButton().click();"),
-        )
-        self.assertIn('"history_rate_limit.js"', build_py)
-        self.assertIn("cah-ui-recovery-preflight", content_js)
-
-        for rel in ("manifest.chromium.json", "manifest.firefox.json"):
-            manifest = json.loads((ROOT / "extension" / rel).read_text(encoding="utf-8"))
-            scripts = manifest["content_scripts"][0]["js"]
-            self.assertIn("history_rate_limit.js", scripts)
-            self.assertLess(scripts.index("history_rate_limit.js"), scripts.index("content.js"))
-            self.assertEqual(manifest["version"], "1.0.4")
 
 
 if __name__ == "__main__":

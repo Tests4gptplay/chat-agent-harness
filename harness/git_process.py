@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 _MUTATING_COMMANDS = {"add", "commit", "config", "push", "reset", "worktree"}
 
@@ -36,6 +36,7 @@ def run_git(
     timeout: float = 20,
     binary: bool = False,
     check: bool = True,
+    env_overrides: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     if not 0 < timeout <= 120:
         raise ValueError("Git timeout must be in (0, 120] seconds")
@@ -50,6 +51,8 @@ def run_git(
         GIT_EDITOR="true",
     )
     env.setdefault("GIT_SSH_COMMAND", "ssh -oBatchMode=yes -oConnectTimeout=10")
+    if env_overrides:
+        env.update({str(key): str(value) for key, value in env_overrides.items()})
     kwargs = {} if binary else {
         "text": True,
         "encoding": "utf-8",

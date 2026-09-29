@@ -272,7 +272,7 @@ def stage_topology_request(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             state["next_reads"] = ["state/topology_request.json", "state/lanes.json"]
             state["next_action"] = (
                 "CONTROL PRIORITY: reconcile state/topology_request.json into canonical state/lanes.json exactly. "
-                "Preserve matching lane takeover/rollover fields, update counts/version/source_request_id, mark control_request DONE or ERROR, "
+                "Preserve matching lane task_pools exactly, update counts/version/source_request_id, mark control_request DONE or ERROR, "
                 "then restore the prior phase/next_action/next_reads recorded under topology_request.resume and checkpoint before continuing."
             )
             state["updated"] = created_at[:10]
@@ -292,7 +292,7 @@ def stage_topology_request(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     wake = make_wake(
         project_id,
         state="NEED_AGENT",
-        repo="example-owner/cah-private",
+        repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
         result_ref="state/topology_request.json",
         lane_id=control_lane_id,
         worker_project_key=worker_project_key,

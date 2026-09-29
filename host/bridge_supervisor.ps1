@@ -1,10 +1,13 @@
 param(
-  [string]$TargetRepo = (Split-Path -Parent $PSScriptRoot),
-  [string]$BridgeRoot = (Join-Path $env:LOCALAPPDATA 'CAH'),
+  [string]$TargetRepo = '__CAH_REPO_ROOT__',
+  [string]$BridgeRoot = '__CAH_BRIDGE_ROOT__',
   [int]$Port = 8765,
-  [string]$Branch = 'main'
+  [string]$Branch = 'main',
+  [string]$LocalWorkerLanes = 'lane-00,lane-01'
 )
 
+& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
+if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Continue'
 $runtimeDir = Join-Path $BridgeRoot 'runtime'
 $logsDir = Join-Path $BridgeRoot 'logs'
@@ -24,6 +27,7 @@ function Write-SupervisorState([string]$State, [int]$ChildPid = 0, [string]$Last
     bridge_root = $BridgeRoot
     port = $Port
     branch = $Branch
+    local_worker_lanes = $LocalWorkerLanes
     last_error = if ($LastError) { $LastError } else { $null }
     updated_at = (Get-Date).ToUniversalTime().ToString('o')
   } | ConvertTo-Json -Depth 4 | Set-Content -Path $supervisorState -Encoding utf8
@@ -41,6 +45,7 @@ while ($true) {
       continue
     }
 
+    $env:CAH_LOCAL_WORKER_LANES = $LocalWorkerLanes
     $p = Start-Process -FilePath $python -ArgumentList @(
       $server,
       '--host', '127.0.0.1',

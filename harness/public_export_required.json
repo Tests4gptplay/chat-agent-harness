@@ -24,19 +24,40 @@
     "skills/index.json",
     "tests/test_skill_registry.py",
     "tests/test_public_export_contract.py",
-    "docs/INSTALL_WINDOWS.md",
+    "installation/README.md",
     "docs/LIFECYCLE_MAINTENANCE.md",
     "docs/CONTEXT_ECONOMY.md",
     "Start_CAH.bat",
-    "extension/README.md",
-    "extension/build.py",
-    "extension/manifest.chromium.json",
     "docs/HOST_CAPABILITIES.md",
     "harness/host_capability.schema.json",
     "harness/resource_wait.py",
     "host/capabilities.py",
     "executors/host_capability.py",
-    "tests/test_host_capabilities.py"
+    "tests/test_host_capabilities.py",
+    "docs/SAFETY_STOP.md",
+    "docs/TOOL_SYSTEM.md",
+    "harness/tool.schema.json",
+    "harness/tool_runtime.py",
+    "harness/tools/registry.json",
+    "tests/test_tool_runtime.py",
+    "browser/playwright/README.md",
+    "playwright_host/__init__.py",
+    "playwright_host/__main__.py",
+    "playwright_host/bridge.py",
+    "playwright_host/config.py",
+    "playwright_host/runtime.py",
+    "playwright_host/state.py",
+    "playwright_host/ui.py",
+    "playwright_host/worker.py",
+    "host/start_playwright_host.ps1",
+    "Start_CAH.ps1",
+    "playwright_host/mcp.py",
+    "host/install_playwright_tools.ps1",
+    "host/playwright_cli.ps1",
+    "host/playwright-tools/package.json",
+    "host/playwright-tools/package-lock.json",
+    "tests/test_playwright_mcp.py",
+    "tests/test_playwright_mcp_live.py"
   ],
   "required_skill_capabilities": [
     "candidate_active_deprecated_lifecycle",
@@ -48,12 +69,13 @@
   ],
   "required_install_capabilities": [
     "windows_one_click_launcher",
-    "chromium_extension_build_and_load",
+    "playwright_existing_browser_attachment",
     "self_hosted_runner_setup",
     "localhost_bridge_health_check",
     "user_owned_lane_project_onboarding",
     "first_run_topology_verification",
-    "maintainer_specific_config_sanitization"
+    "maintainer_specific_config_sanitization",
+    "documented_operator_stop_procedure"
   ],
   "required_runtime_maintenance_capabilities": [
     "lane_scoped_conversation_reset",
@@ -76,5 +98,16 @@
     "validated_version_not_directory_name",
     "recoverable_wait_resource_need_host_config",
     "fresh_generation_fence_resume"
+  ],
+  "required_tool_runtime_capabilities": [
+    "registered_reusable_execution_paths",
+    "tool_skill_separation",
+    "ephemeral_tool_results",
+    "dispatch_bound_tool_calls",
+    "native_conversation_background_read",
+    "provider_refs_and_validation",
+    "official_mcp_catalog_and_calls",
+    "official_cli_runner_commands",
+    "shared_authenticated_cdp"
   ]
 }

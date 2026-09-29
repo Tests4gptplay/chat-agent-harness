@@ -28,6 +28,7 @@ from local_bridge.emit_wake import post_json
 
 KINDS = {'worker_wake', 'semantic_finalize', 'parallel_finalize'}
 FINAL = {'DONE', 'SUPERSEDED', 'REJECTED'}
+HOLD = {'NEEDS_RECONCILE'}
 IDENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$')
 
 
@@ -122,6 +123,21 @@ def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None
     task, bg, bg_ref = task_bundle(root, payload)
     contract = task.get('execution_contract') or {}
     dispatch = bg.get('dispatch') or {}
+    scheduling = bg.get('scheduling') if isinstance(bg.get('scheduling'), dict) else {}
+    owner_task_id = str(
+        scheduling.get('owner_task_id')
+        or task.get('owner_task_id')
+        or task.get('parent_task_id')
+        or task.get('task_id')
+        or ''
+    ).strip()
+    owner_control_epoch = int(
+        scheduling.get('owner_control_epoch')
+        or task.get('owner_control_epoch')
+        or 1
+    )
+    if not re.fullmatch(r'[A-Za-z0-9._-]{3,128}', owner_task_id) or owner_control_epoch < 1:
+        raise ValueError('valid canonical Worker owner identity required')
     identity = {'task_id': task['task_id'], 'backend_cl': bg_ref,
                 'dispatch_id': dispatch.get('dispatch_id'),
                 'dispatch_generation': dispatch.get('generation'),
@@ -133,6 +149,10 @@ def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None
         if not isinstance(identity[key], str) or not identity[key]:
             raise ValueError('complete canonical dispatch identity required')
     if any(payload.get(k) != v for k, v in identity.items()):
+        return 'SUPERSEDED', None
+    if payload.get('owner_task_id') is not None and payload.get('owner_task_id') != owner_task_id:
+        return 'SUPERSEDED', None
+    if payload.get('owner_control_epoch') is not None and payload.get('owner_control_epoch') != owner_control_epoch:
         return 'SUPERSEDED', None
     if dispatch.get('state') in {'RUNNING', 'ACKED', 'DONE', 'ERROR', 'BLOCKED', 'CANCELLED', 'WAIT_DEP', 'WAIT_RESOURCE', 'WAIT_RESULT', 'REVOKED'}:
         return 'DONE' if dispatch.get('state') in {'RUNNING', 'ACKED', 'DONE'} else 'SUPERSEDED', None
@@ -154,7 +174,14 @@ def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None
         raise ValueError('wake key does not match canonical dispatch')
     kwargs = {key: payload.get(key) for key in ('state', 'wake_id', 'repo', 'result_ref', 'lane_id',
               'worker_project_key', 'kind', 'task_id', 'backend_cl', 'dispatch_id', 'dispatch_generation', 'fence_token')}
-    return 'CLAIMED', make_wake(str(payload.get('project_id') or 'git-agent-harness'), **kwargs)
+    kwargs['owner_task_id'] = owner_task_id
+    kwargs['owner_control_epoch'] = owner_control_epoch
+    wake = make_wake(str(payload.get('project_id') or 'git-agent-harness'), **kwargs)
+    if task.get('kind') == 'planner_worker_child':
+        wake.update(kind='planner_worker_child', child_reply_ref=task['child_reply_ref'],
+                    worker_reply_entry_ref=task['worker_reply_entry_ref'],
+                    replace_conversation=generation > 1)
+    return 'CLAIMED', wake
 
 
 def process(repo: Path, record: dict[str, Any], *, remote: str = 'origin', branch: str = 'main',
@@ -192,8 +219,11 @@ def process(repo: Path, record: dict[str, Any], *, remote: str = 'origin', branc
                     if result.get('projected'):
                         changed.extend([result['backend_cl'], result['foreground_cl'], result['state']])
                 else:
-                    if result.get('rejection_kind') == 'stale_or_invalid_identity':
+                    rejection = result.get('rejection_kind')
+                    if rejection in {'stale_or_invalid_identity', 'stale_canonical_activity'}:
                         receipt.update(phase='SUPERSEDED', diagnostic=result)
+                    elif rejection == 'invalid_semantic_artifact':
+                        receipt.update(phase='REJECTED', diagnostic=result)
                     else:
                         receipt.update(phase='WAIT_VALID_RESULT', diagnostic=result, retry_after=time.time() + 60)
             else:
@@ -237,6 +267,129 @@ def process(repo: Path, record: dict[str, Any], *, remote: str = 'origin', branc
     return transaction(repo, finish, remote=remote, branch=branch)
 
 
+
+def process_worker_wake_batch(repo: Path, records: list[dict[str, Any]], *,
+                              remote: str = 'origin', branch: str = 'main',
+                              emitter: Callable[[dict], Any] | None = None) -> dict[str, dict[str, Any]]:
+    """Claim and finish a set of Worker wakes with two shared Git transactions.
+
+    Git remains the canonical authority. The first transaction durably records
+    exact CLAIMED wakes before any emit side effect; the second transaction
+    records DONE/UNKNOWN outcomes after emission. Per-request identity/fencing
+    validation is unchanged, but N wakes no longer require 2*N fetch/worktree/
+    commit/push cycles.
+    """
+    if not records:
+        return {}
+    if any(record.get('kind') != 'worker_wake' for record in records):
+        raise ValueError('worker wake batch accepts only worker_wake records')
+
+    def prepare(root: Path, head: str) -> tuple[dict, list[str]]:
+        items = []
+        changed = []
+        for record in records:
+            receipt_ref = receipt_path(record)
+            try:
+                old = load(root, receipt_ref)
+            except FileNotFoundError:
+                old = {}
+            if receipt_matches(record, old) and old.get('phase') in FINAL:
+                items.append({'record': record, 'receipt': old})
+                continue
+            if old.get('retry_after', 0) > time.time():
+                items.append({'record': record, 'receipt': old})
+                continue
+
+            current = run_git(root, 'rev-parse', f'{head}:{record["path"]}', check=False)
+            if current.returncode or current.stdout.strip() != record['blob_oid']:
+                items.append({
+                    'record': record,
+                    'receipt': {'phase': 'SUPERSEDED', 'request_key': record['request_key']},
+                })
+                continue
+
+            receipt = {k: record[k] for k in ('v', 'kind', 'path', 'source_commit', 'blob_oid', 'request_key')}
+            receipt.update(attempts=int(old.get('attempts', 0)) + 1, updated_at=time.time())
+            try:
+                if not record['valid']:
+                    receipt.update(phase='REJECTED', error=record.get('error'))
+                else:
+                    phase, wake = wake_decision(root, record['payload'])
+                    if phase == 'CLAIMED' and receipt_matches(record, old) and isinstance(old.get('wake'), dict):
+                        wake = old['wake']
+                    receipt.update(phase=phase, wake=wake)
+            except (ValueError, OSError, SystemExit, subprocess.SubprocessError) as exc:
+                # Worker-wake validation is read-only until the receipt write, so
+                # one bad neighbor cannot roll back another wake in this batch.
+                receipt.update(phase='NEEDS_RECONCILE', error=str(exc)[:300], retry_after=time.time() + 60)
+
+            write(root, receipt_ref, receipt)
+            changed.append(receipt_ref)
+            items.append({'record': record, 'receipt': receipt})
+        return {'items': items}, changed
+
+    prepared = transaction(repo, prepare, remote=remote, branch=branch)
+    items = prepared.get('items') or []
+    results = {
+        item['record']['request_key']: {
+            'phase': (item.get('receipt') or {}).get('phase'),
+            'outcome': (item.get('receipt') or {}).get('outcome'),
+            'error': (item.get('receipt') or {}).get('error'),
+        }
+        for item in items
+    }
+    claimed = [
+        item for item in items
+        if (item.get('receipt') or {}).get('phase') == 'CLAIMED'
+        and isinstance((item.get('receipt') or {}).get('wake'), dict)
+    ]
+    if emitter is None or not claimed:
+        return results
+
+    emit_errors: dict[str, str | None] = {}
+    for item in claimed:
+        record = item['record']
+        wake = item['receipt']['wake']
+        error = None
+        try:
+            emitted = emitter(wake)
+            if not isinstance(emitted, dict) or emitted.get('ok') is not True or emitted.get('wake_id') != wake['wake_id']:
+                raise RuntimeError('emitter did not acknowledge the exact wake')
+        except Exception as exc:
+            error = str(exc)[:300]
+        emit_errors[record['request_key']] = error
+
+    def finish(root: Path, head: str) -> tuple[dict, list[str]]:
+        finished = {}
+        changed = []
+        for item in claimed:
+            record = item['record']
+            receipt_ref = receipt_path(record)
+            receipt = load(root, receipt_ref)
+            if not receipt_matches(record, receipt) or receipt.get('wake') != item['receipt']['wake']:
+                raise ValueError('wake receipt identity changed')
+            if receipt.get('phase') not in FINAL:
+                error = emit_errors.get(record['request_key'])
+                receipt.update(
+                    phase='UNKNOWN' if error else 'DONE',
+                    last_error=error,
+                    retry_after=time.time() + 30 if error else 0,
+                    updated_at=time.time(),
+                )
+                write(root, receipt_ref, receipt)
+                changed.append(receipt_ref)
+            finished[record['request_key']] = receipt
+        return {'finished': finished}, changed
+
+    finalized = transaction(repo, finish, remote=remote, branch=branch)
+    for request_key, receipt in (finalized.get('finished') or {}).items():
+        results[request_key] = {
+            'phase': receipt.get('phase'),
+            'outcome': receipt.get('outcome'),
+            'error': receipt.get('error') or receipt.get('last_error'),
+        }
+    return results
+
 def drain(repo: Path, *, kinds: list[str], remote: str = 'origin', branch: str = 'main',
           emitter: Callable[[dict], Any] | None = None, max_requests: int = 100,
           max_seconds: float = 240) -> dict[str, Any]:
@@ -255,7 +408,11 @@ def drain(repo: Path, *, kinds: list[str], remote: str = 'origin', branch: str =
     skipped = 0
     for record in records:
         previous = receipts.get(record['request_key'], {})
-        if receipt_matches(record, previous) and (previous.get('phase') in FINAL or previous.get('retry_after', 0) > time.time()):
+        if receipt_matches(record, previous) and (
+            previous.get('phase') in FINAL
+            or previous.get('phase') in HOLD
+            or previous.get('retry_after', 0) > time.time()
+        ):
             skipped += 1
             continue
         eligible.append((int(previous.get('attempts', 0)), record))
@@ -263,15 +420,48 @@ def drain(repo: Path, *, kinds: list[str], remote: str = 'origin', branch: str =
     selected = [record for _, record in eligible[:max_requests]] if time.monotonic() < deadline else []
     hydrate(repo, selected)
     discovery_ms = round((time.monotonic() - started) * 1000, 3)
+
+    results_by_key: dict[str, dict[str, Any]] = {}
+    worker_records = [record for record in selected if record.get('kind') == 'worker_wake']
+    if worker_records and time.monotonic() < deadline:
+        try:
+            results_by_key.update(process_worker_wake_batch(
+                repo, worker_records, remote=remote, branch=branch, emitter=emitter
+            ))
+        except Exception as exc:
+            for record in worker_records:
+                results_by_key[record['request_key']] = {
+                    'phase': 'NEEDS_RECONCILE',
+                    'error': str(exc)[:300],
+                }
+
     for record in selected:
-        if len(output) >= max_requests or time.monotonic() >= deadline:
+        if record.get('kind') == 'worker_wake':
+            continue
+        if time.monotonic() >= deadline:
             break
         try:
-            out = process(repo, record, remote=remote, branch=branch, emitter=emitter)
+            results_by_key[record['request_key']] = process(
+                repo, record, remote=remote, branch=branch, emitter=emitter
+            )
         except Exception as exc:
-            out = {'phase': 'NEEDS_RECONCILE', 'error': str(exc)[:300]}
-        output.append({'path': record['path'], 'request_key': record['request_key'],
-                       'phase': out.get('phase'), 'outcome': out.get('outcome'), 'error': out.get('error')})
+            results_by_key[record['request_key']] = {
+                'phase': 'NEEDS_RECONCILE',
+                'error': str(exc)[:300],
+            }
+
+    for record in selected:
+        result = results_by_key.get(record['request_key'])
+        if result is None:
+            continue
+        output.append({
+            'path': record['path'],
+            'request_key': record['request_key'],
+            'phase': result.get('phase'),
+            'outcome': result.get('outcome'),
+            'error': result.get('error'),
+        })
+
     return {'v': 1, 'source_commit': head, 'discovered': len(records), 'processed': len(output),
             'results': output, 'discovery_ms': discovery_ms, 'payloads_read': sum(not r.get('error') for r in selected),
             'already_recorded_or_backoff': skipped, 'deferred': len(eligible) - len(output), 'non_idempotent_actions_executed': 0}

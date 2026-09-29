@@ -1,0 +1,7 @@
+{
+  "v": 1,
+  "enabled": false,
+  "repository": "CAH_OWNER/CAH_RECORD_REPOSITORY",
+  "index_ref": "INDEX.json",
+  "note": "Optional; configure and authorize separately. No old records copied."
+}

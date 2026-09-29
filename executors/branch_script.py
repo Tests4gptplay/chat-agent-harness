@@ -312,7 +312,7 @@ def execute(action: dict[str, Any]) -> dict[str, Any]:
                     raise RuntimeError("failed to push branch evidence: " + (push.stderr or push.stdout)[-2000:])
                 pushed = True
 
-        durable_refs = [f"github://example-owner/cah-private/{branch}/{rel}" for rel in existing_evidence]
+        durable_refs = [f"github://CAH_OWNER/CAH_OPERATIONAL_REPOSITORY/{branch}/{rel}" for rel in existing_evidence]
         completed_at = utc_now()
         if return_code == 0 and not missing_evidence:
             status = "PASS"

@@ -1,21 +1,19 @@
 {
   "v": 1,
   "agent": "chatgpt",
-  "updated": "2026-09-20",
+  "updated": "UNCONFIGURED",
   "phase": "IDLE",
-  "current": [
-    "Git is canonical. Use the shortest sufficient route; do not load historical showcases for normal tasks."
-  ],
+  "current": [],
   "verified": [],
-  "unresolved": [
-    "Configure your own private deployment before starting."
-  ],
-  "fault_boundary": "none",
-  "next_reads": [],
-  "next_action": "Complete docs/INSTALL_WINDOWS.md once, then await explicit tasks.",
-  "writeback_reason": "Public distribution: no live task or personal state.",
-  "control_request": null,
+  "unresolved": [],
   "active_task": null,
   "active_action": null,
-  "last_result": null
+  "active_dispatch_ref": null,
+  "handoff_packet_ref": null,
+  "fault_boundary": "none",
+  "last_result": null,
+  "next_reads": [],
+  "next_action": "Complete installation before assigning work.",
+  "control_request": null,
+  "writeback_reason": "clean-template"
 }

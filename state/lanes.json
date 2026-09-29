@@ -1,7 +1,27 @@
 {
   "v": 1,
-  "topology_version": 0,
-  "registered_count": 0,
+  "topology_version": 1,
+  "updated_at": "UNCONFIGURED",
+  "registered_count": 2,
   "enabled_count": 0,
-  "lanes": []
+  "lanes": [
+    {
+      "lane_id": "lane-00",
+      "display_name": "CAH Sandbox0",
+      "project_key": "g-p-CAHLANE00PLACEHOLDER",
+      "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+      "enabled": false,
+      "status": "DISABLED",
+      "task_pools": {}
+    },
+    {
+      "lane_id": "lane-01",
+      "display_name": "CAH Sandbox1",
+      "project_key": "g-p-CAHLANE01PLACEHOLDER",
+      "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01PLACEHOLDER-cah-sandbox1/project",
+      "enabled": false,
+      "status": "DISABLED",
+      "task_pools": {}
+    }
+  ]
 }

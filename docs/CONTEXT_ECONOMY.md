@@ -61,6 +61,7 @@ HISTORY / PROOF
       what happened, why a capability is believed, reproducible proof
 
 COLD
+  design references / future memos
       architecture ideas that should never be normal startup context
 ```
 
@@ -116,7 +117,7 @@ Create or extend a focused `docs/*.md` contract when knowledge is:
 Examples:
 
 ```text
-INSTALL_WINDOWS.md
+installation/README.md
   first-time deployment/onboarding
 
 LIFECYCLE_MAINTENANCE.md

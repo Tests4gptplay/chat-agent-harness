@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_WORK_ROOT = Path(os.environ.get("GAH_WORK_ROOT", str(Path.home() / "CAH" / "Workloads")))
+DEFAULT_WORK_ROOT = Path(r"__CAH_WORK_ROOT__")
 REQUIRED_STAGES = (
     "01_blockout.png",
     "02_lens.png",

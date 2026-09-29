@@ -1,9 +1,32 @@
-# Foreground supervision
+# Foreground contract
 
-The Foreground owns the user's confirmed task and delivers its result. Backend Workers perform explicitly dispatched work; the Task Cell provides coordination when useful.
+Foreground is the human-facing owner of a CAH task.
 
-`extension/foreground_monitor.js` can display the configured foreground task's progress and terminal state. A foreground CL can reference one or more backend results. Neither a transport acknowledgment nor a displayed status is a substitute for reading the result artifact.
+## Direct bounded work
 
-A small task does not need another model approval turn. Use one useful Worker result and deliver it. Substantial coordinated tasks use their declared branch, reduction and acceptance conditions. The foreground does not take ownership of backend lanes merely to observe them.
+Foreground may dispatch or complete a small, clear task directly and report its durable result.
 
-Keep current summaries small, retain evidence by reference and preserve paused work. See `docs/NORMAL_TASK_PATH.md`, `docs/SCHEDULER_MODEL.md` and `harness/cl.schema.json` for implemented task and dispatch contracts.
+## Managed Task Cell work
+
+Foreground records the Task Contract and hands it to the current Planner. After durable Planner takeover, routine phase-to-phase coordination belongs to Planner.
+
+Foreground re-enters for:
+- changed user intent;
+- WAIT_USER / NEED_USER;
+- explicit override or cancellation;
+- final user-facing delivery;
+- control-plane repair when the managed path is unavailable.
+
+Foreground presence is not a scheduler heartbeat.
+
+## Durable state
+
+Git remains authoritative. Foreground reports progress and completion from canonical task/CL/result evidence.
+
+Worker/executor transport ACK and semantic task completion are separate. A delivered wake is transport evidence; accepted result/CL state is task evidence.
+
+## Final delivery
+
+Managed work reaches Foreground after Planner produces a durable final delivery event. Foreground reads the final result/evidence and reports it to the user.
+
+Browser foreground notification is a convenience/recovery transport, not task truth.

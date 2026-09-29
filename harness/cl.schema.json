@@ -326,6 +326,13 @@
           ],
           "maxLength": 128
         },
+        "predecessor_worker_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
         "recovered_from": {
           "type": [
             "object",

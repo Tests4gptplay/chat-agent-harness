@@ -1,0 +1,82 @@
+{
+  "v": 1,
+  "edition": "clean-2026-09-29",
+  "publication_date": "2026-09-29",
+  "scope": "Public unconfigured source distribution; never a live operational repository",
+  "reviewed_input_tree": "db969c35eb6d90c8faee45f86dfd8f9736db6071",
+  "previous_public_main": "604e4ff26757d3738e4ee4aaa0d8457953a98db7",
+  "historical_tag": "archive/pre-clean-20260929",
+  "source_tag": "clean-2026-09-29",
+  "replacement_mode": "Whole tracked tree replaced in one normal descendant commit; no empty-main intermediate or force-push",
+  "private_history_imported": false,
+  "private_control_material_imported": false,
+  "runtime_code_changed_from_reviewed_template": false,
+  "test_code_changed_from_reviewed_template": false,
+  "executable_source_files_compared": 106,
+  "excluded_payloads": [
+    "personal Skills/imports",
+    "supplied workflows/toolbox",
+    "live task state and evidence",
+    "showcases",
+    "private migration controls"
+  ],
+  "offline_publication_tests": {
+    "platform": "linux",
+    "tests_run": 306,
+    "passed": 296,
+    "failures": [],
+    "errors": [],
+    "skipped": [
+      {
+        "test": "test_foreground_terminal.PackagingContractTests.test_stage0_false_continuation_never_wakes_worker",
+        "reason": "Workflow payload intentionally omitted from this source distribution."
+      },
+      {
+        "test": "test_playwright_mcp_live.LivePlaywrightToolsTests.test_official_mcp_and_cli_share_native_cdp",
+        "reason": "Live browser integration is opt-in and was not enabled."
+      },
+      {
+        "test": "test_semantic_finalize.SemanticFinalizeTests.test_workflow_publishes_business_projection_before_reporting_red_outcome",
+        "reason": "Workflow payload intentionally omitted from this source distribution."
+      },
+      {
+        "test": "test_startup_wiring.NativeStartupTests.test_existing_host_without_cdp_is_not_healthy",
+        "reason": "Windows-specific test is not applicable to this Linux test environment."
+      },
+      {
+        "test": "test_startup_wiring.NativeStartupTests.test_missing_host_starts_native_launcher_even_with_an_existing_browser",
+        "reason": "Windows-specific test is not applicable to this Linux test environment."
+      },
+      {
+        "test": "test_startup_wiring.NativeStartupTests.test_no_browser_does_not_claim_readiness_without_cdp",
+        "reason": "Windows-specific test is not applicable to this Linux test environment."
+      },
+      {
+        "test": "test_startup_wiring.NativeStartupTests.test_process_match_excludes_unrelated_python_and_other_runtime",
+        "reason": "Windows-specific test is not applicable to this Linux test environment."
+      },
+      {
+        "test": "test_startup_wiring.NativeStartupTests.test_running_native_and_cdp_are_reused",
+        "reason": "Windows-specific test is not applicable to this Linux test environment."
+      },
+      {
+        "test": "test_workflow_git_transactions.WorkflowGitTransactionTests.test_no_workflow_local_rebase_push_sequence",
+        "reason": "Workflow payload intentionally omitted from this source distribution."
+      },
+      {
+        "test": "test_workflow_git_transactions.WorkflowGitTransactionTests.test_shared_helper_is_used_by_maintained_writers",
+        "reason": "Workflow payload intentionally omitted from this source distribution."
+      }
+    ],
+    "expected_failures": 0,
+    "unexpected_successes": 0,
+    "all_green": true,
+    "elapsed_seconds": 65.109
+  },
+  "not_claimed": [
+    "fresh-machine installation acceptance",
+    "independent third-party security certification",
+    "live browser/Runner/showcase rerun during publication"
+  ],
+  "historical_release_assets": "Preserved as historical artifacts; not relabeled or rebuilt"
+}

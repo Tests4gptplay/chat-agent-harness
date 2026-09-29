@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from harness.git_process import run_git
 from harness.request_scan import scan
-from harness.request_drain import drain, process, latest, receipt_path, transaction
+from harness.request_drain import drain, process, latest, receipt_path, transaction, wake_decision
 import test_semantic_finalize as semantic_fixtures
 import test_parallel_branch_finalize as parallel_fixtures
 
@@ -31,9 +31,10 @@ class DrainTests(unittest.TestCase):
         h=latest(self.repo,'origin','main');run_git(self.repo,'reset','--hard',h)
     def wake(self, key='a', state='READY'):
         t='t-'+key; d='dispatch-'+key; f='fence-'+key+'-long'; w='wake-'+key+'-long'
-        self.put('tasks/'+t+'.json', {'task_id':t,'backend_cl':'cl/'+t+'.json','lane_id':'lane-00','worker_project_key':'g-p-test'})
-        self.put('cl/'+t+'.json', {'task_id':t,'dispatch':{'dispatch_id':d,'generation':1,'fence_token':f,'wake_id':w,'state':state}})
-        self.put('requests/worker-wake/'+key+'.json', {'task_id':t,'backend_cl':'cl/'+t+'.json','dispatch_id':d,'dispatch_generation':1,'fence_token':f,'wake_id':w,'lane_id':'lane-00','worker_project_key':'g-p-test','state':'NEED_AGENT','result_ref':'tasks/'+t+'.json'})
+        owner='owner-'+key; epoch=2
+        self.put('tasks/'+t+'.json', {'task_id':t,'backend_cl':'cl/'+t+'.json','lane_id':'lane-00','worker_project_key':'g-p-test','owner_task_id':owner,'owner_control_epoch':epoch})
+        self.put('cl/'+t+'.json', {'task_id':t,'dispatch':{'dispatch_id':d,'generation':1,'fence_token':f,'wake_id':w,'state':state},'scheduling':{'owner_task_id':owner,'owner_control_epoch':epoch}})
+        self.put('requests/worker-wake/'+key+'.json', {'task_id':t,'backend_cl':'cl/'+t+'.json','dispatch_id':d,'dispatch_generation':1,'fence_token':f,'wake_id':w,'lane_id':'lane-00','worker_project_key':'g-p-test','owner_task_id':owner,'owner_control_epoch':epoch,'state':'NEED_AGENT','result_ref':'tasks/'+t+'.json'})
         self.publish()
     def emit(self, wake):
         self.emitted.add(wake['wake_id']);return {'ok':True,'wake_id':wake['wake_id']}
@@ -44,6 +45,46 @@ class DrainTests(unittest.TestCase):
         self.assertEqual(out['results'][0]['phase'],'DONE');self.assertEqual(len(self.emitted),1)
         out=drain(self.repo,kinds=['worker_wake'],emitter=self.emit)
         self.assertEqual(out['processed'],0);self.assertEqual(len(self.emitted),1)
+
+    def test_worker_wakes_share_two_batch_transactions(self):
+        self.wake('a'); self.sync(); self.wake('b')
+        with patch('harness.request_drain.transaction', wraps=transaction) as tx:
+            out=drain(self.repo,kinds=['worker_wake'],emitter=self.emit)
+        self.assertEqual([r['phase'] for r in out['results']],['DONE','DONE'])
+        self.assertEqual(len(self.emitted),2)
+        self.assertEqual(tx.call_count,2)
+
+    def test_worker_wake_batch_preserves_per_request_emit_failure(self):
+        self.wake('a'); self.sync(); self.wake('b')
+        def mixed(wake):
+            if wake['wake_id'].startswith('wake-a-'):
+                raise TimeoutError('a failed')
+            return self.emit(wake)
+        out=drain(self.repo,kinds=['worker_wake'],emitter=mixed)
+        phases={r['path']:r['phase'] for r in out['results']}
+        self.assertEqual(phases['requests/worker-wake/a.json'],'UNKNOWN')
+        self.assertEqual(phases['requests/worker-wake/b.json'],'DONE')
+        self.assertEqual(self.emitted,{'wake-b-long'})
+
+    def test_worker_owner_identity_survives_reconstruction(self):
+        self.wake()
+        record=scan(self.repo,after=latest(self.repo,'origin','main'),kinds=['worker_wake'])[0]
+        phase,wake=wake_decision(self.repo,record['payload'])
+        self.assertEqual(phase,'CLAIMED')
+        self.assertEqual(wake['owner_task_id'],'owner-a')
+        self.assertEqual(wake['owner_control_epoch'],2)
+
+    def test_wrong_worker_owner_is_superseded(self):
+        self.wake()
+        self.sync()
+        req=json.loads((self.repo/'requests/worker-wake/a.json').read_text())
+        req['owner_task_id']='wrong-owner'
+        self.put('requests/worker-wake/a.json',req)
+        self.publish()
+        record=scan(self.repo,after=latest(self.repo,'origin','main'),kinds=['worker_wake'])[0]
+        phase,wake=wake_decision(self.repo,record['payload'])
+        self.assertEqual(phase,'SUPERSEDED')
+        self.assertIsNone(wake)
     def test_claim_then_crash_replays_exact_idempotent_wake(self):
         self.wake(); record=scan(self.repo,after=latest(self.repo,'origin','main'),kinds=['worker_wake'])[0]
         prepared=process(self.repo,record)
@@ -138,6 +179,39 @@ class DrainTests(unittest.TestCase):
             result=drain(self.repo,kinds=['semantic_finalize'])
         self.assertEqual(result['results'][0]['phase'],'NEEDS_RECONCILE')
         self.assertEqual(self.read('cl/t-a.json'),before)
+    def test_stale_canonical_semantic_is_superseded(self):
+        semantic_fixtures.SemanticFinalizeTests()._fixture(
+            self.repo, status='ERROR', active_task='another-task'
+        )
+        self.publish()
+        out=drain(self.repo,kinds=['semantic_finalize'])
+        self.assertEqual(out['results'][0]['phase'],'SUPERSEDED')
+
+    def test_invalid_immutable_semantic_artifact_is_rejected(self):
+        semantic_fixtures.SemanticFinalizeTests()._fixture(self.repo,status='ERROR')
+        self.publish()
+        rejected = {
+            'projected': False,
+            'idempotent': False,
+            'rejection_kind': 'invalid_semantic_artifact',
+            'outcome': 'REJECTED',
+        }
+        with patch('harness.request_drain.finalize',return_value=rejected):
+            out=drain(self.repo,kinds=['semantic_finalize'])
+        self.assertEqual(out['results'][0]['phase'],'REJECTED')
+
+    def test_needs_reconcile_is_held_for_explicit_resolution(self):
+        self.wake();self.sync()
+        self.put('results/bad.analysis.json',{'task_id':'t-a'});self.publish()
+        def broken(path,root):
+            raise ValueError('manual reconciliation required')
+        with patch('harness.request_drain.finalize',broken):
+            first=drain(self.repo,kinds=['semantic_finalize'])
+        self.assertEqual(first['results'][0]['phase'],'NEEDS_RECONCILE')
+        with patch('harness.request_drain.time.time',return_value=10**20):
+            second=drain(self.repo,kinds=['semantic_finalize'])
+        self.assertEqual(second['processed'],0)
+
     def test_wrong_wake_ack_is_unknown(self):
         self.wake()
         result=drain(self.repo,kinds=['worker_wake'],emitter=lambda w:{'ok':True,'wake_id':'other'})

@@ -80,18 +80,48 @@
               "REMOVING"
             ]
           },
-          "last_pool_takeover_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "maxLength": 128
-          },
-          "worker_rollover_request": {
-            "type": [
-              "object",
-              "null"
-            ]
+          "task_pools": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "owner_task_id",
+                "owner_control_epoch",
+                "last_pool_takeover_id",
+                "worker_rollover_request"
+              ],
+              "properties": {
+                "owner_task_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{3,128}$"
+                },
+                "owner_control_epoch": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "last_pool_takeover_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128
+                },
+                "worker_rollover_request": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128
+                }
+              },
+              "additionalProperties": false
+            }
           }
         },
         "additionalProperties": false
