@@ -365,7 +365,6 @@ That gives a post-Hotfix-2.0 autonomous interval of:
 
 with no further human recovery intervention and no second Helper incident.
 
-G20 occurred inside this healthy period, but it does not need to be singled out as a separate recovery event. It is simply one normal example of the restored main path: Worker work, external execution, durable handoff, canonical reduction and Planner continuation all functioning again.
 
 ## Overall task endurance before the final physical-page failure
 
