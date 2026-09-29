@@ -90,6 +90,28 @@ e0486f3cbab4048ce7d76260d1e42f2d34177e64152f4c70dd7877825e191305
 
 The exact native-capture byte sizes and SHA-256 hashes are preserved in [evidence.json](evidence.json).
 
+### Accepted Phase-1 native captures
+
+These are the actual four native Lit screenshots accepted by Planner in the 2026-09-28 rerun.
+
+**Perspective**
+
+![Accepted Phase-1 perspective Lit capture](images/phase1-perspective-lit.png)
+
+**Front**
+
+![Accepted Phase-1 front Lit capture](images/phase1-front-lit.png)
+
+**Right**
+
+![Accepted Phase-1 right Lit capture](images/phase1-right-lit.png)
+
+**Below**
+
+![Accepted Phase-1 below Lit capture](images/phase1-below-lit.png)
+
+The images above are the exact rerun bytes whose sizes and SHA-256 hashes are recorded in [evidence.json](evidence.json).
+
 One visible limitation is intentionally preserved: the accepted rerun background was black, not white. The camera itself was bright/readable and the below view was unobstructed, so the Phase-1 acceptance condition was satisfied without rewriting the pixels into a cleaner story.
 
 ## Why Part 1 is a useful success case
