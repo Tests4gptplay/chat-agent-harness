@@ -9,7 +9,14 @@
 - [evidence.json](evidence.json) — sanitized terminal evidence for the 2026-09-28 rerun.
 - [Rerun record](records/2026-09-28-rerun-record.md) — curated timeline derived from the private working draft.
 
-The public Git history also preserves the original native Viewer screenshots from the earlier public case. The four newer Phase-1 rerun captures are represented in evidence.json by exact byte sizes and SHA-256 hashes.
+The four accepted 2026-09-28 Phase-1 native Lit captures are published directly in this showcase:
+
+- [Front](images/phase1-front-lit.png)
+- [Perspective](images/phase1-perspective-lit.png)
+- [Right](images/phase1-right-lit.png)
+- [Below](images/phase1-below-lit.png)
+
+Their exact byte sizes and SHA-256 hashes remain recorded in [evidence.json](evidence.json). The public Git history also preserves the older Viewer screenshots from the earlier public case for historical comparison.
 
 ## Not included
 
