@@ -35,6 +35,53 @@ Those workstreams then joined in a third line:
 
 This was therefore not one model turn trying one command. It was a long-running managed task with **multiple work lines, repeated execution/inspection cycles, and an explicit join condition**.
 
+## How this differs from the historical Viewer
+
+Part 1 did not copy an old Viewer binary or replay an old accepted project.
+
+The original Phase-1B contract explicitly constrained historical GAHQuickLook to **source/design reference only**. Old binaries, captures, Cook output and PASS labels were not allowed to count as current evidence.
+
+The P1 path was therefore a **fresh reconstruction**:
+
+- create a new Viewer source/build tree for this run;
+- build it again against the installed UE 5.6.1 environment;
+- reuse only useful historical concepts where appropriate — package-group resolution, staged mount/catalog/preview reporting, loopback API, native viewport, and explicit shader/dependency diagnostics;
+- reimplement and verify the required input state machine for this run: held-drag orbit, Shift+drag pan, immediate capture release on mouse-up, Esc release, wheel zoom, and normal idle cursor freedom;
+- recreate inspection-oriented scene defaults with unobstructed low/bottom viewing;
+- integrate the **fresh Cook produced by this run**, rather than an old package, placeholder or historical PASS.
+
+The integration phase then showed that even the older loading approach could not simply be carried forward.
+
+The initial dynamic-loader path hit a Pak mount/package-discovery boundary on the fresh Cook. A second attempt — staging the container set into `Content/Paks` and launching through the older assumption — still failed to expose the intended asset. The runtime path was therefore changed again.
+
+The accepted P1 path ultimately used a **fresh packaged Viewer in Pak-only / no-IoStore mode**, opened the real external camera shader library, selected the actual camera mesh, and then passed native-pixel and interaction acceptance.
+
+So the lineage is better represented as:
+
+```text
+historical Viewer
+    ↓
+source / UI / API / architecture reference only
+    ↓
+fresh source/build tree
+    ↓
+fresh interaction + inspection implementation
+    ↓
+fresh UE5.6.1 build and smoke
+    ↓
+fresh Cook integration
+    ↓
+older loader assumptions fail
+    ↓
+runtime path reconstructed
+    ↓
+Pak-only fresh Viewer + real external PAK
+    ↓
+native pixel + interaction acceptance
+```
+
+This was not “invent every concept from zero”; prior engineering knowledge was intentionally reused. But the accepted P1 Viewer was **not** an old binary reuse, an old-result replay, or a simple project copy-and-rebuild. Its source/build tree, integration evidence and final runtime path were reconstructed and revalidated for the rerun.
+
 ## The run did not follow a happy path
 
 The fresh Cook first hit a Windows path-length problem. The task did not discard the accepted Blender source or restart the whole project. Only the task-owned UE working location was shortened, and the Cook continued from the useful frontier.
