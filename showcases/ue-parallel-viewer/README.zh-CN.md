@@ -450,12 +450,6 @@ Helper 从“事故诊断者”被强化成可以：
 - 后续 Worker generation 正常继续；
 - 到 G32 之前没有再记录新的 `WAIT_HELPER` / Helper failure。
 
-所以不能说“G20 又验证了一次 Helper”。
-
-G20 只是 Hotfix 2.0 之后正常主路径中的一个漂亮样本：Worker、外部 Build/Cook、durable handoff、canonical finalize 和 Planner review 都正常工作。
-
-它说明系统恢复后确实重新进入了健康运行，但 **G20 本身没有启动 Helper**。
-
 整个因果链更准确地是：
 
 ```text
