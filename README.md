@@ -310,21 +310,15 @@ A missing workflow therefore means **WORKFLOW_NOT_PROVISIONED** — not that a p
 
 CAH is intended to be demonstrated through complete end-to-end workloads rather than isolated synthetic commands.
 
-### Upcoming showcases
+### Viewer/Cook rerun — one task across many AI conversations
 
-New sanitized showcases will be added here.
+[Read the case study](showcases/ue-parallel-viewer/README.md) · [中文](showcases/ue-parallel-viewer/README.zh-CN.md) · [Evidence](showcases/ue-parallel-viewer/evidence.json)
 
-Planned examples will cover combinations of:
+The 2026-09-28 rerun follows one managed task across fresh Cook, native Viewer acceptance, package/dependency reconnaissance, Planner handoff, many Worker generations, external Build/Cook jobs, backup Runner use, Helper recovery, and an explicit user stop at an incomplete Phase-2B boundary.
 
-- long-running managed execution;
-- Planner → Worker iteration;
-- local application control;
-- external build / Cook / render operations;
-- Worker generation handoff;
-- operational recovery;
-- final artifact verification.
+The case deliberately keeps the non-happy-path result: **Phase 1 accepted, Phase 2A accepted, Phase 2B stopped incomplete.** It is primarily a continuity and recovery showcase rather than a claim that every planned Viewer capability finished.
 
-> Showcase material is intentionally separate from the clean runtime source. The current source edition was published first; refreshed showcases will follow.
+More sanitized showcases can be added here as complete end-to-end records become suitable for public release.
 
 ---
 
