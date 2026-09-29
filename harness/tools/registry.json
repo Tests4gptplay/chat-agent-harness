@@ -1,0 +1,341 @@
+{
+  "v": 1,
+  "tools": [
+    {
+      "v": 1,
+      "tool_id": "browser.tabs",
+      "title": "List shared CDP browser tabs",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Lists all tabs in the shared CDP browser. Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "enum": [
+              "chatgpt"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.read",
+      "title": "Read loaded browser page text",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Uses browser_evaluate for bounded visible DOM text. Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50000
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.read_conversation",
+      "title": "Read loaded ChatGPT conversation messages",
+      "status": "ACTIVE",
+      "summary": "Read role-tagged messages from the currently loaded DOM of an exact ChatGPT conversation tab in the background, without changing tab focus or page state.",
+      "provider": "playwright_host",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          },
+          "last_n": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/runtime.py",
+        "playwright_host/worker.py",
+        "playwright_host/ui.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.snapshot",
+      "title": "Read AI page snapshot",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Uses browser_snapshot; its references are usable by browser.mcp.call. Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.console",
+      "title": "Read recent page console messages",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Uses browser_console_messages at info level. Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.errors",
+      "title": "Read recent page errors",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Uses browser_console_messages at error level (includes console errors, not only exceptions). Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.network",
+      "title": "Read recent page request metadata",
+      "status": "ACTIVE",
+      "summary": "Official Playwright MCP compatibility alias. Uses browser_network_requests. Returns MCP content, not the former native JSON shape. Target selection may focus the tab; no navigation is performed.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "properties": {
+          "target": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.mcp.list",
+      "title": "Discover official Playwright MCP tools",
+      "status": "ACTIVE",
+      "summary": "List the complete installed official tool catalog. Default is compact; name returns one exact input schema; schemas=true returns all schemas.",
+      "provider": "playwright_mcp",
+      "mutating": false,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "schemas": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.mcp.call",
+      "title": "Call official Playwright MCP",
+      "status": "ACTIVE",
+      "summary": "Pass an official tool name and its arguments unchanged. Page operations require an exact CAH target (self, url, or conversation_id); tab list/new and explicit tab indices are global. The selected tab is not shared implicit authority. All official vision/pdf/devtools tools are enabled. Results return to the invoking role; images are attached.",
+      "provider": "playwright_mcp",
+      "mutating": true,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "name",
+          "arguments"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "object"
+          },
+          "target": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "playwright_host/mcp.py"
+      ]
+    },
+    {
+      "v": 1,
+      "tool_id": "browser.cli",
+      "title": "Run official Playwright CLI on the existing Runner",
+      "status": "ACTIVE",
+      "summary": "Runner capability: invoke host/playwright_cli.ps1 with Session and CliArgs through the existing host command workflow. Not a CAH_TOOL_CALL chat provider. Use Attach for the existing CDP browser and detach afterward; no second profile or scheduler. This package supplies no host workflow; provision an authorized execution channel in the new private instance first.",
+      "provider": "host_runner",
+      "mutating": true,
+      "result_scope": "ephemeral",
+      "roles": [
+        "worker",
+        "planner",
+        "helper",
+        "foreground"
+      ],
+      "args_schema": {
+        "type": "object",
+        "required": [
+          "session",
+          "args"
+        ],
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "implementation_refs": [
+        "host/playwright_cli.ps1"
+      ]
+    }
+  ]
+}

@@ -37,12 +37,17 @@ class RequestScanTests(unittest.TestCase):
         self.write('requests/worker-wake/a.json','{broken');self.write('requests/worker-wake/b.json','{}')
         rs=self.read(self.save());self.assertEqual([r['valid'] for r in rs],[False,True])
     def test_symlink_never_dereferenced(self):
-        # Exercise a real mode-120000 Git object without Windows symlink privileges.
-        oid=git(self.root,'hash-object','-w','--stdin',input=b'../../README.md').decode().strip()
-        git(self.root,'update-index','--add','--cacheinfo',f'120000,{oid},requests/worker-wake/link.json')
-        git(self.root,'commit','-m','symlink fixture')
-        head=git(self.root,'rev-parse','HEAD').decode().strip()
-        r=self.read(head)[0];self.assertEqual(r['error'],'REQUEST_NOT_REGULAR_FILE')
+        # Scanner consumes Git tree modes; no host symlink privilege is needed.
+        path = 'requests/worker-wake/link.json'
+        p = self.root / path
+        p.parent.mkdir(parents=True)
+        p.write_text('../../README.md', encoding='utf-8')
+        blob = git(self.root, 'hash-object', '-w', str(p)).decode().strip()
+        git(self.root, 'update-index', '--add', '--cacheinfo', '120000', blob, path)
+        git(self.root, 'commit', '-m', 'symlink tree fixture')
+        head = git(self.root, 'rev-parse', 'HEAD').decode().strip()
+        r = self.read(head)[0]
+        self.assertEqual(r['error'], 'REQUEST_NOT_REGULAR_FILE')
     def test_deletion_and_nested_paths_not_dispatched(self):
         self.write('requests/worker-wake/a.json','{}');before=self.save()
         (self.root/'requests/worker-wake/a.json').unlink();self.write('requests/worker-wake/nested/b.json','{}')

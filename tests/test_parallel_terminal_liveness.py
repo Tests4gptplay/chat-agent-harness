@@ -27,7 +27,7 @@ class ParallelTerminalLivenessTests(unittest.TestCase):
             subprocess.check_call(["git", "-C", str(work), "config", "user.name", "test"])
             subprocess.check_call(["git", "-C", str(work), "config", "user.email", "test@example.invalid"])
 
-            for rel in ("tasks", "cl"):
+            for rel in ("tasks", "cl", "state"):
                 (work / rel).mkdir(parents=True, exist_ok=True)
 
             task = {
@@ -99,7 +99,24 @@ class ParallelTerminalLivenessTests(unittest.TestCase):
             (work / "tasks/parallel-lane00.json").write_text(json.dumps(task), encoding="utf-8")
             (work / "cl/parallel-lane00.backend.json").write_text(json.dumps(bg), encoding="utf-8")
             (work / "cl/parallel.foreground.json").write_text(json.dumps(fg), encoding="utf-8")
-            subprocess.check_call(["git", "-C", str(work), "add", "tasks", "cl"])
+            lanes = {
+                "v": 1,
+                "lanes": [{
+                    "lane_id": "lane-00",
+                    "project_key": "g-p-test00",
+                    "enabled": True,
+                    "task_pools": {
+                        "parallel-lane00::1": {
+                            "owner_task_id": "parallel-lane00",
+                            "owner_control_epoch": 1,
+                            "last_pool_takeover_id": "pool-parallel-worker",
+                            "worker_rollover_request": None,
+                        },
+                    },
+                }],
+            }
+            (work / "state/lanes.json").write_text(json.dumps(lanes), encoding="utf-8")
+            subprocess.check_call(["git", "-C", str(work), "add", "tasks", "cl", "state"])
             subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed main"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

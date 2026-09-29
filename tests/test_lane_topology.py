@@ -13,10 +13,10 @@ class LaneTopologyTests(unittest.TestCase):
     def test_lane_addressed_wake(self):
         wake = make_wake(
             "git-agent-harness",
-            repo="example-owner/cah-private",
+            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
             result_ref="state/topology_request.json",
             lane_id="lane-00",
-            worker_project_key="g-p-examplelane00",
+            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
             kind="topology_reconcile",
         )
         validate_wake(wake)
@@ -56,12 +56,11 @@ class LaneTopologyTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-examplelane00",
-                    "project_root_url": "https://chatgpt.com/g/g-p-examplelane00-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
                     "enabled": True,
                     "status": "IDLE",
-                    "last_pool_takeover_id": None,
-                    "worker_rollover_request": None,
+                    "task_pools": {},
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
@@ -75,20 +74,20 @@ class LaneTopologyTests(unittest.TestCase):
                 "request_id": "topo-12345678",
                 "desired_version": 2,
                 "control_lane_id": "lane-00",
-                "worker_project_key": "g-p-examplelane00",
+                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
                 "lanes": [
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-examplelane00",
-                        "project_root_url": "https://chatgpt.com/g/g-p-examplelane00-cah-sandbox0/project",
+                        "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
                         "enabled": True,
                     },
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-examplelane01",
-                        "project_root_url": "https://chatgpt.com/g/g-p-examplelane01-cah-sandbox1/project",
+                        "project_key": "g-p-CAHLANE01PLACEHOLDER",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01PLACEHOLDER-cah-sandbox1/project",
                         "enabled": True,
                     },
                 ],
@@ -131,22 +130,27 @@ class LaneTopologyTests(unittest.TestCase):
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-examplelane00",
-                        "project_root_url": "https://chatgpt.com/g/g-p-examplelane00-cah-sandbox0/project",
+                        "project_key": "g-p-CAHLANE00PLACEHOLDER",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
                         "enabled": True,
                         "status": "IDLE",
-                        "last_pool_takeover_id": "pool-12345678-abcd",
-                        "worker_rollover_request": None,
+                        "task_pools": {
+                            "topology-task::1": {
+                                "owner_task_id": "topology-task",
+                                "owner_control_epoch": 1,
+                                "last_pool_takeover_id": "pool-12345678-abcd",
+                                "worker_rollover_request": None,
+                            },
+                        },
                     },
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-examplelane01",
-                        "project_root_url": "https://chatgpt.com/g/g-p-examplelane01-cah-sandbox1/project",
+                        "project_key": "g-p-CAHLANE01PLACEHOLDER",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01PLACEHOLDER-cah-sandbox1/project",
                         "enabled": True,
                         "status": "IDLE",
-                        "last_pool_takeover_id": None,
-                        "worker_rollover_request": None,
+                        "task_pools": {},
                     },
                 ],
             }
@@ -170,125 +174,6 @@ class LaneTopologyTests(unittest.TestCase):
             self.assertEqual(final_state["phase"], "DONE")
             self.assertEqual(final_state["next_action"], "resume-me")
             self.assertEqual(final_state["next_reads"], [])
-
-    def test_extension_runtime_reports_sanitized_lane_summary(self):
-        with tempfile.TemporaryDirectory() as td:
-            store = WakeStore(Path(td))
-            hello = store.extension_runtime_hello({
-                "client_id": "client-test-001",
-                "project_id": "git-agent-harness",
-                "version": "0.7.0",
-                "extension_id": "extension-test-id",
-                "desired_version": 3,
-                "desired_lane_count": 2,
-                "desired_enabled_count": 2,
-                "bootstrap_parallel_status": "WORKERS",
-                "lane_runtime": [
-                    {
-                        "lane_id": "lane-00",
-                        "project_key": "g-p-examplelane00",
-                        "enabled": True,
-                        "current_verified": True,
-                        "managed_count": 1,
-                        "handoff_status": "verified",
-                    },
-                    {
-                        "lane_id": "lane-01",
-                        "project_key": "g-p-examplelane01",
-                        "enabled": True,
-                        "current_verified": False,
-                        "managed_count": 1,
-                        "handoff_status": "awaiting_git_takeover",
-                    },
-                ],
-            })
-            self.assertTrue(hello["ok"])
-            status = store.extension_runtime_status({
-                "client_id": "client-test-001",
-                "project_id": "git-agent-harness",
-            })
-            self.assertEqual(status["status"]["desired_lane_count"], 2)
-            self.assertEqual(status["status"]["bootstrap_parallel_status"], "WORKERS")
-            self.assertEqual([x["lane_id"] for x in status["status"]["lane_runtime"]], ["lane-00", "lane-01"])
-            self.assertNotIn("conversation_id", json.dumps(status["status"]))
-
-    def test_extension_manifest_uses_lane_runtime(self):
-        root = Path(__file__).resolve().parents[1]
-        chromium = json.loads((root / "extension" / "manifest.chromium.json").read_text(encoding="utf-8"))
-        firefox = json.loads((root / "extension" / "manifest.firefox.json").read_text(encoding="utf-8"))
-        self.assertEqual(chromium["version"], "1.0.4")
-        self.assertEqual(chromium["name"], "CAH Wake Bridge")
-        self.assertEqual(firefox["name"], "CAH Wake Bridge")
-        self.assertIn("lane_registry.js", firefox["background"]["scripts"])
-        self.assertIn("task_cell_registry.js", firefox["background"]["scripts"])
-        self.assertIn("lane_worker_runtime.js", firefox["background"]["scripts"])
-        self.assertIn("lane_clear_runtime.js", firefox["background"]["scripts"])
-        self.assertIn("ui_recovery_runtime.js", firefox["background"]["scripts"])
-        self.assertNotIn("worker_runtime_v2.js", firefox["background"]["scripts"])
-        self.assertNotIn("foreground_monitor.js", firefox["background"]["scripts"])
-        bundle = (root / "extension" / "background_bundle.js").read_text(encoding="utf-8")
-        self.assertIn("task_cell_registry.js", bundle)
-        self.assertIn("ui_recovery_runtime.js", bundle)
-        self.assertIn("lane_worker_runtime.js", bundle)
-        self.assertIn("lane_clear_runtime.js", bundle)
-        self.assertNotIn("foreground_monitor.js", bundle)
-        lane_clear = (root / "extension" / "lane_clear_runtime.js").read_text(encoding="utf-8")
-        self.assertIn("async function waitForProjectRoot", lane_clear)
-        self.assertIn("project_conversation_list", lane_clear)
-        self.assertIn("task_cell_prompt", lane_clear)
-        self.assertIn("async function processTaskCellPrompt", lane_clear)
-        self.assertIn("task_cell_prompt_complete", lane_clear)
-        self.assertIn("async function processLanePoolReset", lane_clear)
-        self.assertIn("async function processTaskCellClear", lane_clear)
-        self.assertIn("lane_pool_reset_complete", lane_clear)
-        self.assertIn("task_cell_clear_complete", lane_clear)
-        self.assertIn("const target = discovered[0]", lane_clear)
-        self.assertNotIn("[...discovered, ...poolTargets(lane)]", lane_clear)
-        background = (root / "extension" / "background.js").read_text(encoding="utf-8")
-        self.assertIn("wake.deferred_for_worker_handoff", background)
-        self.assertIn("async function pollEnabledLanes()", background)
-        self.assertIn("lane_id: laneId", background)
-        self.assertIn("worker_takeover_status", background)
-        self.assertIn("Expected exactly one visible enabled send button, found 0", background)
-        lane_runtime = (root / "extension" / "lane_worker_runtime.js").read_text(encoding="utf-8")
-        ui_recovery = (root / "extension" / "ui_recovery_runtime.js").read_text(encoding="utf-8")
-        self.assertIn("globalThis.CAHUiRecovery", ui_recovery)
-        self.assertIn("background_managed_tab_maintenance", ui_recovery)
-        self.assertIn("semantic_stall", lane_runtime)
-        worker_content = (root / "extension" / "worker_content.js").read_text(encoding="utf-8")
-        self.assertIn("GAH_TAKEOVER mode=bootstrap-only", worker_content)
-        self.assertIn("do not author task artifacts", worker_content)
-        registry_source = (root / "extension" / "lane_registry.js").read_text(encoding="utf-8")
-        self.assertIn("const RUNTIME_EPOCH = 3", registry_source)
-        self.assertIn("CAH Sandbox1", registry_source)
-        self.assertIn("g-p-examplelane01", registry_source)
-        self.assertIn("project_root_url", registry_source)
-        self.assertIn("bootstrap_parallel", registry_source)
-        self.assertNotIn("g-p-exampletaskcell", registry_source)
-        task_cell_source = (root / "extension" / "task_cell_registry.js").read_text(encoding="utf-8")
-        self.assertIn("g-p-exampletaskcell", task_cell_source)
-        self.assertIn("CAH Task Cell", task_cell_source)
-        self.assertIn("parsed.project_key === DEFAULT_TASK_CELL.project_key", task_cell_source)
-        self.assertIn("project_root_url", task_cell_source)
-        self.assertIn("foreground_result_delivered", task_cell_source)
-        self.assertIn("worker_pool: false", task_cell_source)
-        self.assertIn("Task Cell Project must not also be an execution lane", task_cell_source)
-        background = (root / "extension" / "background.js").read_text(encoding="utf-8")
-        self.assertIn("maintainParallelBootstrap", background)
-        self.assertIn("runtimeTopologySummary", background)
-        self.assertIn("gah-task-cell-status", background)
-        self.assertIn("gah-task-cell-open", background)
-        host_update = (root / "host" / "host_update.ps1").read_text(encoding="utf-8")
-        self.assertIn("ExpectedExtensionVersion = '1.0.4'", host_update)
-        installer = (root / "tools" / "configure_install.py").read_text(encoding="utf-8")
-        self.assertIn("--runner-root", installer)
-        self.assertIn("--task-cell", installer)
-        self.assertIn("state/lanes.json", installer)
-        popup = (root / "extension" / "popup.html").read_text(encoding="utf-8")
-        self.assertIn("Task Cell", popup)
-        self.assertIn("task_cell_registry.js", popup)
-        self.assertNotIn("conversationUrl", popup)
-        self.assertNotIn("Bind current foreground", popup)
 
 
 if __name__ == "__main__":

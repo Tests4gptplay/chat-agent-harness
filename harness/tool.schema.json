@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAHToolDefinition",
+  "type": "object",
+  "required": [
+    "v",
+    "tool_id",
+    "title",
+    "status",
+    "summary",
+    "provider",
+    "mutating",
+    "result_scope",
+    "roles",
+    "args_schema",
+    "implementation_refs"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "tool_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z0-9_-]+)+$",
+      "maxLength": 96
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "status": {
+      "enum": [
+        "ACTIVE",
+        "EXPERIMENTAL",
+        "DEPRECATED"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "provider": {
+      "enum": [
+        "playwright_host",
+        "local_bridge",
+        "host_runner",
+        "git",
+        "playwright_mcp"
+      ]
+    },
+    "mutating": {
+      "type": "boolean"
+    },
+    "result_scope": {
+      "enum": [
+        "ephemeral",
+        "durable"
+      ]
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "worker",
+          "planner",
+          "helper",
+          "foreground"
+        ]
+      }
+    },
+    "args_schema": {
+      "type": "object"
+    },
+    "implementation_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false
+}

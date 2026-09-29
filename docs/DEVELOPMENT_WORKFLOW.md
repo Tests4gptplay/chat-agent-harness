@@ -2,6 +2,8 @@
 
 CAH uses lightweight Git discipline for routine maintenance and a tracked workflow for defects whose blast radius or recovery cost justifies durable coordination.
 
+Repository intake for brainstorming, feature suggestions, external platform constraints, and accepted design decisions is governed by [CHANGE_INTAKE_POLICY.md](CHANGE_INTAKE_POLICY.md). A chat discussion does not automatically become an Issue, task, document, or main-branch change.
+
 The goal is to avoid two bad extremes:
 
 - opening an Issue for every typo or obvious local repair;
@@ -61,7 +63,7 @@ review / required checks
         ↓
 merge
         ↓
-close only when acceptance evidence is durable
+close only when acceptance evidence is durable and issue-owned repository runtime records are archived/cleaned
 ~~~
 
 The Issue should contain enough information for another Worker to resume without raw chat history:
@@ -75,6 +77,8 @@ The Issue should contain enough information for another Worker to resume without
 - proposed acceptance criteria.
 
 Do not require a complete root-cause theory before opening an Issue. Facts and reproduction come first; diagnosis can evolve in comments or the PR.
+
+Closing an Issue does not copy the GitHub Issue itself into the record repository. Before closure, archive or clean the repository runtime records owned by that tracked work. Only artifacts explicitly retained as an active baseline, LKG, current Skill dependency, current/paused task continuity, or another still-active required asset may remain in active `main`.
 
 ## Branch and PR discipline
 

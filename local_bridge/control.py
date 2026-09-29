@@ -387,3 +387,34 @@ def complete_task_cell_clear(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             "deleted_conversation_id": deleted_conversation_id,
         },
     )
+
+
+def complete_task_cell_project_clear(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+    project_key = str(req.get("task_cell_project_key") or "").strip()
+    deleted_count = int(req.get("deleted_count") or 0)
+    remaining_count = int(req.get("remaining_count") or 0)
+    cleared_role_bindings = int(req.get("cleared_role_bindings") or 0)
+    cleared_planner_successors = int(req.get("cleared_planner_successors") or 0)
+    scope = str(req.get("scope") or "all_project_conversations").strip()
+    composer_cleared = bool(req.get("composer_cleared"))
+    if not project_key.startswith("g-p-"):
+        raise ValueError("task_cell_project_key required")
+    if deleted_count < 0 or remaining_count < 0 or cleared_role_bindings < 0 or cleared_planner_successors < 0:
+        raise ValueError("invalid Task Cell Project clear counts")
+    if remaining_count != 0:
+        return {"ok": False, "error": "TASK_CELL_PROJECT_CLEAR_NOT_EMPTY", "remaining_count": remaining_count}
+    return _complete_simple_control(
+        store,
+        req,
+        expected_kind="task_cell_project_clear",
+        result={
+            "task_cell_project_key": project_key,
+            "deleted_count": deleted_count,
+            "remaining_count": 0,
+            "cleared_role_bindings": cleared_role_bindings,
+            "cleared_planner_successors": cleared_planner_successors,
+            "scope": scope,
+            "composer_cleared": composer_cleared,
+            "project_registration_preserved": True,
+        },
+    )

@@ -92,6 +92,16 @@
       "minLength": 1,
       "maxLength": 512,
       "pattern": "^[A-Za-z0-9._/-]+$"
+    },
+    "owner_task_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "owner_control_epoch": {
+      "type": "integer",
+      "minimum": 1
     }
   },
   "additionalProperties": false

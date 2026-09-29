@@ -1,69 +1,456 @@
 {
   "v": 1,
-  "purpose": "On-demand routing; do not read this map on every normal wake.",
+  "purpose": "Machine-readable routing map for minimal-context CAH maintenance. Advisory only; state/chatgpt.json remains canonical.",
   "authority": {
     "canonical_state": "state/chatgpt.json",
     "agent_contract": "AGENTS.md",
     "human_entrypoint": "README.md"
   },
-  "read_sets": {
-    "normal_task": {
-      "primary": [
-        "docs/NORMAL_TASK_PATH.md"
+  "routing_rules": [
+    "Managed Worker hot path: read canonical state first and act from state when hot_start.mode=state_only and next_action is concrete.",
+    "Do not read this repo map on the normal state-only success path; state.hot_start.router points here only for conditional expansion.",
+    "If expansion is required, use state.hot_start.expand_read_set or the smallest matching read_set.",
+    "Read expand_on_failure only when evidence, a failing execution/smoke, or a contract change requires it.",
+    "Do not full-scan the repository merely to orient.",
+    "Shared contracts may be read by parallel workers; overlapping write domains require planner coordination."
+  ],
+  "modules": {
+    "protocol": {
+      "owns": [
+        "harness/"
+      ],
+      "contracts": [
+        "harness/action.schema.json",
+        "harness/result.schema.json",
+        "harness/state.schema.json",
+        "harness/wake.schema.json"
+      ],
+      "tests": [
+        "tests/test_wake_protocol.py"
       ]
     },
     "continuity": {
-      "primary": [
-        "docs/CONTINUITY.md",
-        "harness/state.schema.json"
+      "owns": [
+        "state/"
+      ],
+      "contracts": [
+        "AGENTS.md",
+        "docs/CONTINUITY.md"
+      ],
+      "note": "Canonical resume/task continuity state; not an append-only history."
+    },
+    "worker_pool": {
+      "owns": [
+        "playwright_host/worker.py",
+        "playwright_host/ui.py"
+      ],
+      "contracts": [
+        "docs/CONVERSATION_POOL.md"
+      ],
+      "shared": [
+        "local_bridge/server.py"
       ]
     },
-    "scheduling": {
-      "primary": [
-        "docs/SCHEDULER_MODEL.md",
-        "harness/dispatch.py",
+    "foreground_monitor": {
+      "owns": [
+        "playwright_host/runtime.py",
+        "playwright_host/ui.py"
+      ],
+      "contracts": [
+        "docs/FOREGROUND_MONITOR.md"
+      ],
+      "shared": [
+        "local_bridge/server.py"
+      ],
+      "note": "Foreground delivery/recovery transport; managed task progression belongs to Planner after takeover."
+    },
+    "wake_transport": {
+      "owns": [
+        "harness/wake.py",
+        "local_bridge/emit_wake.py",
+        "playwright_host/runtime.py",
+        "playwright_host/ui.py"
+      ],
+      "contracts": [
+        "docs/WAKE_BRIDGE.md"
+      ],
+      "shared": [
+        "local_bridge/server.py"
+      ]
+    },
+    "executors": {
+      "owns": [
+        "executors/"
+      ],
+      "contracts": [
+        "harness/capabilities.schema.json",
+        "docs/STORAGE_POLICY.md"
+      ],
+      "tests": [
+        "tests/test_wake_protocol.py"
+      ]
+    },
+    "packaging": {
+      "owns": [
+        "host/install_playwright_tools.ps1",
+        "host/playwright-tools/package.json",
+        "host/playwright-tools/package-lock.json",
+        "host/start_playwright_host.ps1"
+      ],
+      "contracts": [
+        "browser/playwright/README.md"
+      ],
+      "tests": []
+    },
+    "design_reference": {
+      "owns": [
+        "docs/UPSTREAM_PATTERNS.md",
+        "docs/REFERENCES.md",
+        "docs/FUTURE_DISTRIBUTED_AGENT_MEMO.md"
+      ],
+      "note": "Read only for architecture/design work; never part of ordinary operational startup."
+    },
+    "parallel_scheduler": {
+      "owns": [
         "harness/parallel.py"
-      ]
+      ],
+      "contracts": [
+        "harness/parallel_task.schema.json",
+        "docs/PARALLEL_STAGE1.md"
+      ],
+      "tests": [
+        "tests/test_parallel_scheduler.py"
+      ],
+      "note": "Stage 1 bounded semantic DAG scheduling core. Deterministic smoke only until live multi-lane transport is explicitly activated."
     },
-    "worker_lifecycle": {
-      "primary": [
-        "docs/CONVERSATION_POOL.md",
-        "docs/LIFECYCLE_MAINTENANCE.md"
-      ]
-    },
-    "skills": {
-      "primary": [
-        "skills/index.json",
-        "docs/SKILL_SYSTEM.md"
-      ]
-    },
-    "installation": {
-      "primary": [
-        "docs/INSTALL_WINDOWS.md"
-      ]
-    },
-    "host_capability": {
-      "primary": [
-        "docs/HOST_CAPABILITIES.md",
-        "host/capabilities.py"
-      ]
-    },
-    "maintenance": {
-      "primary": [
-        "docs/WAKE_BRIDGE.md",
-        "host/host_update.ps1"
-      ]
-    }
-  },
-  "modules": {
-    "skills": {
+    "skill_registry": {
       "owns": [
         "skills/",
         "harness/skills.py"
       ],
       "contracts": [
-        "harness/skill.schema.json"
+        "harness/skill.schema.json",
+        "docs/SKILL_SYSTEM.md"
+      ],
+      "tests": [
+        "tests/test_skill_registry.py"
+      ],
+      "note": "Evidence-backed reusable procedural knowledge. Read compact skills/index.json first; load only selected Skill refs."
+    },
+    "codex_skill_import": {
+      "owns": [
+        "executors/codex_skill_import.py"
+      ],
+      "contracts": [
+        "docs/CODEX_SKILL_IMPORT.md",
+        "docs/SKILL_SYSTEM.md"
+      ],
+      "tests": [
+        "tests/test_codex_skill_import.py"
+      ],
+      "note": "Low-frequency incremental reconcile of local Codex user Skills; .system excluded; imported records remain CANDIDATE until normal evidence-backed promotion."
+    },
+    "public_export_contract": {
+      "owns": [
+        "harness/public_export_required.json",
+        "docs/PUBLIC_EXPORT_CONTRACT.md"
+      ],
+      "contracts": [
+        "AGENTS.md"
+      ],
+      "tests": [
+        "tests/test_public_export_contract.py"
+      ],
+      "note": "Public/clean-room export must preserve listed core capabilities. Private content may be sanitized; Skill functionality may not be removed."
+    },
+    "windows_installation": {
+      "owns": [
+        "Start_CAH.bat",
+        "Start_CAH.ps1",
+        "installation/README.md"
+      ],
+      "contracts": [
+        "browser/playwright/README.md",
+        "docs/PUBLIC_EXPORT_CONTRACT.md"
+      ],
+      "shared": [
+        "host/bridge_supervisor.ps1",
+        "host/install_playwright_tools.ps1",
+        "host/playwright-tools/package.json"
+      ],
+      "note": "AI-led Windows onboarding and native Host startup. Public export parameterizes private paths and ChatGPT Project identities."
+    },
+    "lane_maintenance": {
+      "owns": [
+        "playwright_host/runtime.py",
+        "local_bridge/control.py"
+      ],
+      "contracts": [
+        "docs/LIFECYCLE_MAINTENANCE.md"
+      ],
+      "shared": [
+        "local_bridge/server.py",
+        "state/chatgpt.json",
+        "state/lanes.json"
+      ],
+      "note": "Low-frequency lifecycle/control plane for explicit lane reset and related maintenance. Not part of ordinary Worker hot-start context."
+    },
+    "context_economy": {
+      "owns": [
+        "docs/CONTEXT_ECONOMY.md"
+      ],
+      "contracts": [
+        "docs/CONTINUITY.md",
+        "docs/SKILL_SYSTEM.md"
+      ],
+      "note": "Low-frequency development guidance for context budgeting, document placement, Skill promotion, and cold-path routing. Never part of ordinary Worker startup."
+    },
+    "host_capabilities": {
+      "owns": [
+        "host/capabilities.py",
+        "executors/host_capability.py",
+        "harness/resource_wait.py"
+      ],
+      "contracts": [
+        "harness/host_capability.schema.json",
+        "harness/cl.schema.json",
+        "docs/HOST_CAPABILITIES.md"
+      ],
+      "tests": [
+        "tests/test_host_capabilities.py"
+      ],
+      "note": "Machine-local verified tool configuration plus sanitized scheduler-visible projection. Missing configurable tools map to recoverable WAIT_RESOURCE/NEED_HOST_CONFIG."
+    },
+    "record_archive": {
+      "owns": [
+        "state/record-store.json",
+        "docs/RECORD_ARCHIVE.md"
+      ],
+      "contracts": [
+        "docs/CLEANER_RULES.md"
+      ],
+      "note": "Cold historical archive. Read only for explicit history, audit, recovery or user-requested archive work."
+    },
+    "tool_runtime": {
+      "owns": [
+        "harness/tools/",
+        "harness/tool_runtime.py",
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py",
+        "playwright_host/runtime.py",
+        "host/playwright_cli.ps1"
+      ],
+      "contracts": [
+        "harness/tool.schema.json",
+        "docs/TOOL_SYSTEM.md"
+      ],
+      "tests": [
+        "tests/test_tool_runtime.py",
+        "tests/test_playwright_mcp.py"
+      ],
+      "note": "Reusable execution capabilities. Read compact harness/tools/registry.json only when a task needs a Tool; provider internals are cold-path. New reusable implementation paths must be registered here rather than left as ad-hoc task/role knowledge."
+    }
+  },
+  "read_sets": {
+    "worker_pool_debug": {
+      "primary": [
+        "docs/CONVERSATION_POOL.md"
+      ],
+      "expand_on_failure": [
+        "playwright_host/worker.py",
+        "playwright_host/ui.py",
+        "local_bridge/server.py"
+      ]
+    },
+    "wake_transport_debug": {
+      "primary": [
+        "docs/WAKE_BRIDGE.md"
+      ],
+      "expand_on_failure": [
+        "harness/wake.py",
+        "local_bridge/server.py",
+        "local_bridge/emit_wake.py",
+        "playwright_host/runtime.py",
+        "playwright_host/ui.py"
+      ]
+    },
+    "executor_capability": {
+      "primary": [
+        "harness/capabilities.schema.json",
+        "executors/probe_capabilities.py",
+        "docs/HOST_CAPABILITIES.md"
+      ],
+      "expand_on_failure": [
+        "host/capabilities.py",
+        "executors/host_capability.py",
+        "harness/resource_wait.py",
+        "docs/STORAGE_POLICY.md"
+      ]
+    },
+    "architecture_design": {
+      "primary": [
+        "docs/CONTEXT_ECONOMY.md"
+      ],
+      "expand_on_failure": [
+        "docs/UPSTREAM_PATTERNS.md",
+        "docs/REFERENCES.md",
+        "docs/FUTURE_DISTRIBUTED_AGENT_MEMO.md"
+      ]
+    },
+    "parallel_scheduler": {
+      "primary": [
+        "docs/PARALLEL_STAGE1.md",
+        "harness/parallel_task.schema.json"
+      ],
+      "expand_on_failure": [
+        "harness/parallel.py",
+        "tests/test_parallel_scheduler.py",
+        "harness/lanes.schema.json",
+        "docs/SCHEDULER_MODEL.md"
+      ]
+    },
+    "skill_registry": {
+      "primary": [
+        "skills/index.json",
+        "docs/SKILL_SYSTEM.md"
+      ],
+      "expand_on_failure": [
+        "harness/skill.schema.json",
+        "harness/skills.py",
+        "tests/test_skill_registry.py"
+      ]
+    },
+    "codex_skill_import": {
+      "primary": [
+        "docs/CODEX_SKILL_IMPORT.md",
+        "skills/index.json"
+      ],
+      "expand_on_failure": [
+        "executors/codex_skill_import.py",
+        "tests/test_codex_skill_import.py",
+        "docs/SKILL_SYSTEM.md"
+      ]
+    },
+    "public_export": {
+      "primary": [
+        "docs/PUBLIC_EXPORT_CONTRACT.md",
+        "harness/public_export_required.json"
+      ],
+      "expand_on_failure": [
+        "tests/test_public_export_contract.py",
+        "docs/SKILL_SYSTEM.md",
+        "AGENTS.md"
+      ]
+    },
+    "windows_installation": {
+      "primary": [
+        "installation/README.md",
+        "Start_CAH.bat",
+        "browser/playwright/README.md"
+      ],
+      "expand_on_failure": [
+        "Start_CAH.ps1",
+        "host/bridge_supervisor.ps1",
+        "host/install_playwright_tools.ps1",
+        "host/playwright-tools/package.json",
+        "docs/PUBLIC_EXPORT_CONTRACT.md"
+      ]
+    },
+    "lane_maintenance": {
+      "primary": [
+        "docs/LIFECYCLE_MAINTENANCE.md"
+      ],
+      "expand_on_failure": [
+        "playwright_host/runtime.py",
+        "local_bridge/control.py",
+        "local_bridge/server.py",
+        "docs/CONVERSATION_POOL.md"
+      ]
+    },
+    "context_economy": {
+      "primary": [
+        "docs/CONTEXT_ECONOMY.md"
+      ],
+      "expand_on_failure": [
+        "docs/CONTINUITY.md",
+        "docs/SKILL_SYSTEM.md",
+        "docs/PUBLIC_EXPORT_CONTRACT.md",
+        "ai/repo-map.json"
+      ]
+    },
+    "host_capabilities": {
+      "primary": [
+        "docs/HOST_CAPABILITIES.md",
+        "harness/host_capability.schema.json"
+      ],
+      "expand_on_failure": [
+        "host/capabilities.py",
+        "executors/host_capability.py",
+        "harness/resource_wait.py",
+        "harness/cl.schema.json",
+        "tests/test_host_capabilities.py"
+      ]
+    },
+    "foreground_delivery_debug": {
+      "primary": [
+        "docs/FOREGROUND_MONITOR.md",
+        "browser/playwright/README.md"
+      ],
+      "expand_on_failure": [
+        "playwright_host/runtime.py",
+        "playwright_host/ui.py",
+        "local_bridge/server.py",
+        "playwright_host/worker.py",
+        "host/start_playwright_host.ps1"
+      ]
+    },
+    "record_archive": {
+      "primary": [
+        "state/record-store.json",
+        "docs/RECORD_ARCHIVE.md"
+      ],
+      "expand_on_failure": [
+        "docs/CLEANER_RULES.md"
+      ]
+    },
+    "tool_runtime": {
+      "primary": [
+        "harness/tools/registry.json",
+        "docs/TOOL_SYSTEM.md"
+      ],
+      "expand_on_failure": [
+        "harness/tool.schema.json",
+        "harness/tool_runtime.py",
+        "playwright_host/mcp.py",
+        "playwright_host/worker.py",
+        "playwright_host/runtime.py",
+        "tests/test_tool_runtime.py",
+        "tests/test_playwright_mcp.py"
       ]
     }
+  },
+  "parallelism": {
+    "safe_examples": [
+      [
+        "harness/",
+        "executors/"
+      ],
+      [
+        "playwright_host/runtime.py",
+        "executors/"
+      ],
+      [
+        "docs/",
+        "tests/"
+      ]
+    ],
+    "coordination_required": [
+      "state/chatgpt.json",
+      "AGENTS.md",
+      "harness/*.schema.json",
+      "local_bridge/server.py",
+      "playwright_host/runtime.py",
+      "playwright_host/worker.py"
+    ]
   }
 }

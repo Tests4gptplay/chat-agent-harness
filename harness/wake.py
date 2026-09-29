@@ -32,6 +32,8 @@ def deterministic_wake_id(
     worker_project_key: str | None = None,
     kind: str | None = None,
     task_id: str | None = None,
+    owner_task_id: str | None = None,
+    owner_control_epoch: int | None = None,
     backend_cl: str | None = None,
     dispatch_id: str | None = None,
     dispatch_generation: int | None = None,
@@ -55,6 +57,8 @@ def deterministic_wake_id(
         "worker_project_key": worker_project_key or "",
         "kind": kind or "",
         "task_id": task_id or "",
+        "owner_task_id": owner_task_id or "",
+        "owner_control_epoch": "" if owner_control_epoch is None else int(owner_control_epoch),
         "backend_cl": backend_cl or "",
         "dispatch_id": dispatch_id or "",
         "dispatch_generation": "" if dispatch_generation is None else int(dispatch_generation),
@@ -77,6 +81,8 @@ def make_wake(
     worker_project_key: str | None = None,
     kind: str | None = None,
     task_id: str | None = None,
+    owner_task_id: str | None = None,
+    owner_control_epoch: int | None = None,
     backend_cl: str | None = None,
     dispatch_id: str | None = None,
     dispatch_generation: int | None = None,
@@ -104,6 +110,10 @@ def make_wake(
         wake["kind"] = kind
     if task_id:
         wake["task_id"] = task_id
+    if owner_task_id:
+        wake["owner_task_id"] = owner_task_id
+    if owner_control_epoch is not None:
+        wake["owner_control_epoch"] = int(owner_control_epoch)
     if backend_cl:
         wake["backend_cl"] = backend_cl
     if dispatch_id:
@@ -140,6 +150,15 @@ def validate_wake(wake: dict[str, Any]) -> None:
     task_id = wake.get("task_id")
     if task_id is not None and (not isinstance(task_id, str) or not task_id or len(task_id) > 256):
         raise ValueError("task_id must be a non-empty string <=256 chars")
+    owner_task_id = wake.get("owner_task_id")
+    owner_control_epoch = wake.get("owner_control_epoch")
+    if (owner_task_id is None) != (owner_control_epoch is None):
+        raise ValueError("owner_task_id and owner_control_epoch must appear together")
+    if owner_task_id is not None:
+        if not isinstance(owner_task_id, str) or not re.fullmatch(r"[A-Za-z0-9._-]{3,128}", owner_task_id):
+            raise ValueError("owner_task_id must be 3-128 safe characters")
+        if isinstance(owner_control_epoch, bool) or not isinstance(owner_control_epoch, int) or owner_control_epoch < 1:
+            raise ValueError("owner_control_epoch must be a positive integer")
     dispatch_id = wake.get("dispatch_id")
     if dispatch_id is not None and (not isinstance(dispatch_id, str) or not _WAKE_ID_RE.fullmatch(dispatch_id)):
         raise ValueError("dispatch_id must be 8-128 safe characters")
@@ -194,6 +213,8 @@ def main() -> int:
     mk.add_argument("--worker-project-key")
     mk.add_argument("--kind")
     mk.add_argument("--task-id")
+    mk.add_argument("--owner-task-id")
+    mk.add_argument("--owner-control-epoch", type=int)
     mk.add_argument("--backend-cl")
     mk.add_argument("--dispatch-id")
     mk.add_argument("--dispatch-generation", type=int)
@@ -220,6 +241,8 @@ def main() -> int:
             worker_project_key=args.worker_project_key,
             kind=args.kind,
             task_id=args.task_id,
+            owner_task_id=args.owner_task_id,
+            owner_control_epoch=args.owner_control_epoch,
             backend_cl=args.backend_cl,
             dispatch_id=args.dispatch_id,
             dispatch_generation=args.dispatch_generation,

@@ -172,7 +172,7 @@ The provider accepts the root only when `Build.version` reports:
 
 A folder named `UE5.6` containing 5.5 is rejected.
 
-Configure your own engine root; machine-specific paths are not universal defaults.
+`X:\CAH_TEST\UnrealEngine` is a synthetic test-only path, not an installed engine. The installer must discover and verify the actual authorized engine location; no machine-specific path is a universal default.
 
 ## Workload rule
 
@@ -204,3 +204,7 @@ Core files:
 - `harness/resource_wait.py` — WAIT_RESOURCE enter/resume transitions;
 - `.github/workflows/host-capability-probe.yml` — self-hosted probe and recovery;
 - `tests/test_host_capabilities.py` — provider/cache/resource-wait regression tests.
+
+## Retired extension updater
+
+The legacy `host-self-update.yml` / `host/host_update.ps1` extension updater is retired. New `requests/host-update` files are not an executable update API. Do not submit those requests or treat old deployment evidence as a current native Playwright deployment check. Native-host maintenance requires an explicitly authorized operation against the current installation; this retirement does not install, restart, or change any host.

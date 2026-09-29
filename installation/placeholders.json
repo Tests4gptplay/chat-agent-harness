@@ -1,0 +1,565 @@
+{
+  "v": 1,
+  "tokens": {
+    "REPOSITORY": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+    "RECORD_REPOSITORY": "CAH_OWNER/CAH_RECORD_REPOSITORY",
+    "TRANSFER_REPOSITORY": "CAH_OWNER/CAH_TRANSFER_REPOSITORY",
+    "REPO_ROOT": "__CAH_REPO_ROOT__",
+    "BRIDGE_ROOT": "__CAH_BRIDGE_ROOT__",
+    "MANAGED_RUNNER_ROOT": "__CAH_MANAGED_RUNNER_ROOT__",
+    "SHOT_RUNNER_ROOT": "__CAH_SHOT_RUNNER_ROOT__",
+    "RUNNER_BASE": "__CAH_RUNNER_BASE__",
+    "BROWSER_BASE": "__CAH_BROWSER_BASE__",
+    "BROWSER_ROOT": "__CAH_BROWSER_ROOT__",
+    "TOOLS_ROOT": "__CAH_TOOLS_ROOT__",
+    "WORK_ROOT": "__CAH_WORK_ROOT__",
+    "DELIVERABLES_ROOT": "__CAH_DELIVERABLES_ROOT__",
+    "TEMP_ROOT": "__CAH_TEMP_ROOT__",
+    "CHROME_PATH": "__CAH_CHROME_PATH__",
+    "PROFILE_ROOT": "__CAH_PROFILE_ROOT__",
+    "TASK_CELL_KEY": "g-p-CAHTASKCELLPLACEHOLDER",
+    "LANE00_KEY": "g-p-CAHLANE00PLACEHOLDER",
+    "LANE01_KEY": "g-p-CAHLANE01PLACEHOLDER",
+    "FOREGROUND_URL": "https://chatgpt.com/c/CAHFOREGROUNDPLACEHOLDER"
+  },
+  "files": {
+    "Reset_CAH_Hot_State.bat": [
+      "BRIDGE_ROOT",
+      "BROWSER_ROOT"
+    ],
+    "Start_CAH.ps1": [
+      "BRIDGE_ROOT",
+      "MANAGED_RUNNER_ROOT",
+      "SHOT_RUNNER_ROOT",
+      "BROWSER_ROOT"
+    ],
+    "browser/playwright/README.md": [
+      "TOOLS_ROOT",
+      "WORK_ROOT"
+    ],
+    "docs/FUTURE_DISTRIBUTED_AGENT_MEMO.md": [
+      "LANE00_KEY",
+      "LANE01_KEY"
+    ],
+    "docs/RECORD_ARCHIVE.md": [
+      "RECORD_REPOSITORY"
+    ],
+    "docs/TOOL_SYSTEM.md": [
+      "REPO_ROOT"
+    ],
+    "docs/task-cell/FOREGROUND.md": [
+      "REPO_ROOT",
+      "RUNNER_BASE"
+    ],
+    "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md": [
+      "TRANSFER_REPOSITORY"
+    ],
+    "executors/blender_case.py": [
+      "WORK_ROOT"
+    ],
+    "executors/branch_script.py": [
+      "REPOSITORY"
+    ],
+    "harness/parallel_branch_finalize.py": [
+      "REPOSITORY"
+    ],
+    "host/bridge_supervisor.ps1": [
+      "REPO_ROOT",
+      "BRIDGE_ROOT"
+    ],
+    "host/capabilities.py": [
+      "BRIDGE_ROOT"
+    ],
+    "host/install_playwright_tools.ps1": [
+      "TOOLS_ROOT",
+      "WORK_ROOT"
+    ],
+    "host/playwright_cli.ps1": [
+      "TOOLS_ROOT"
+    ],
+    "host/reset_cah_semantics_cli.ps1": [
+      "TASK_CELL_KEY"
+    ],
+    "host/start_playwright_host.ps1": [
+      "BROWSER_ROOT",
+      "CHROME_PATH",
+      "PROFILE_ROOT"
+    ],
+    "installation/first_start.ps1": [
+      "REPO_ROOT",
+      "BROWSER_ROOT",
+      "CHROME_PATH",
+      "PROFILE_ROOT",
+      "FOREGROUND_URL"
+    ],
+    "local_bridge/planner_runtime.py": [
+      "REPOSITORY"
+    ],
+    "local_bridge/scheduler.py": [
+      "REPOSITORY"
+    ],
+    "local_bridge/server.py": [
+      "BRIDGE_ROOT"
+    ],
+    "local_bridge/topology.py": [
+      "REPOSITORY"
+    ],
+    "playwright_host/__main__.py": [
+      "BROWSER_ROOT"
+    ],
+    "playwright_host/config.py": [
+      "BROWSER_ROOT",
+      "TASK_CELL_KEY"
+    ],
+    "playwright_host/mcp.py": [
+      "BROWSER_ROOT",
+      "TOOLS_ROOT"
+    ],
+    "playwright_host/worker.py": [
+      "REPOSITORY"
+    ],
+    "state/lanes.json": [
+      "LANE00_KEY",
+      "LANE01_KEY"
+    ],
+    "state/record-store.json": [
+      "RECORD_REPOSITORY"
+    ],
+    "tests/test_action_submit_syscall.py": [
+      "LANE00_KEY"
+    ],
+    "tests/test_lane_topology.py": [
+      "REPOSITORY",
+      "LANE00_KEY",
+      "LANE01_KEY"
+    ],
+    "tests/test_parallel_branch_finalize.py": [
+      "REPOSITORY"
+    ],
+    "tests/test_planner_runtime_integration.py": [
+      "REPOSITORY"
+    ],
+    "tests/test_startup_wiring.py": [
+      "BROWSER_ROOT"
+    ],
+    "tests/test_wake_protocol.py": [
+      "REPOSITORY",
+      "LANE00_KEY"
+    ]
+  },
+  "locations": {
+    "BRIDGE_ROOT": [
+      {
+        "file": "Reset_CAH_Hot_State.bat",
+        "lines": [
+          11
+        ]
+      },
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          11
+        ]
+      },
+      {
+        "file": "host/bridge_supervisor.ps1",
+        "lines": [
+          3
+        ]
+      },
+      {
+        "file": "host/capabilities.py",
+        "lines": [
+          29
+        ]
+      },
+      {
+        "file": "local_bridge/server.py",
+        "lines": [
+          46
+        ]
+      }
+    ],
+    "BROWSER_ROOT": [
+      {
+        "file": "Reset_CAH_Hot_State.bat",
+        "lines": [
+          9,
+          10
+        ]
+      },
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          17
+        ]
+      },
+      {
+        "file": "host/start_playwright_host.ps1",
+        "lines": [
+          7
+        ]
+      },
+      {
+        "file": "installation/first_start.ps1",
+        "lines": [
+          6
+        ]
+      },
+      {
+        "file": "playwright_host/__main__.py",
+        "lines": [
+          15
+        ]
+      },
+      {
+        "file": "playwright_host/config.py",
+        "lines": [
+          11
+        ]
+      },
+      {
+        "file": "playwright_host/mcp.py",
+        "lines": [
+          19
+        ]
+      },
+      {
+        "file": "tests/test_startup_wiring.py",
+        "lines": [
+          24,
+          74
+        ]
+      }
+    ],
+    "MANAGED_RUNNER_ROOT": [
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          13
+        ]
+      }
+    ],
+    "SHOT_RUNNER_ROOT": [
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          14
+        ]
+      }
+    ],
+    "TOOLS_ROOT": [
+      {
+        "file": "browser/playwright/README.md",
+        "lines": [
+          18
+        ]
+      },
+      {
+        "file": "host/install_playwright_tools.ps1",
+        "lines": [
+          2
+        ]
+      },
+      {
+        "file": "host/playwright_cli.ps1",
+        "lines": [
+          3
+        ]
+      },
+      {
+        "file": "playwright_host/mcp.py",
+        "lines": [
+          16
+        ]
+      }
+    ],
+    "WORK_ROOT": [
+      {
+        "file": "browser/playwright/README.md",
+        "lines": [
+          19
+        ]
+      },
+      {
+        "file": "executors/blender_case.py",
+        "lines": [
+          28
+        ]
+      },
+      {
+        "file": "host/install_playwright_tools.ps1",
+        "lines": [
+          3
+        ]
+      }
+    ],
+    "LANE00_KEY": [
+      {
+        "file": "docs/FUTURE_DISTRIBUTED_AGENT_MEMO.md",
+        "lines": [
+          586
+        ]
+      },
+      {
+        "file": "state/lanes.json",
+        "lines": [
+          11,
+          12
+        ]
+      },
+      {
+        "file": "tests/test_action_submit_syscall.py",
+        "lines": [
+          67,
+          100,
+          114,
+          161
+        ]
+      },
+      {
+        "file": "tests/test_lane_topology.py",
+        "lines": [
+          19,
+          59,
+          60,
+          77,
+          82,
+          83,
+          133,
+          134
+        ]
+      },
+      {
+        "file": "tests/test_wake_protocol.py",
+        "lines": [
+          77,
+          257,
+          427,
+          428,
+          456,
+          474,
+          528,
+          529,
+          563,
+          577,
+          608,
+          609,
+          639,
+          651
+        ]
+      }
+    ],
+    "LANE01_KEY": [
+      {
+        "file": "docs/FUTURE_DISTRIBUTED_AGENT_MEMO.md",
+        "lines": [
+          590
+        ]
+      },
+      {
+        "file": "state/lanes.json",
+        "lines": [
+          20,
+          21
+        ]
+      },
+      {
+        "file": "tests/test_lane_topology.py",
+        "lines": [
+          89,
+          90,
+          149,
+          150
+        ]
+      }
+    ],
+    "RECORD_REPOSITORY": [
+      {
+        "file": "docs/RECORD_ARCHIVE.md",
+        "lines": [
+          21
+        ]
+      },
+      {
+        "file": "state/record-store.json",
+        "lines": [
+          4
+        ]
+      }
+    ],
+    "REPO_ROOT": [
+      {
+        "file": "docs/TOOL_SYSTEM.md",
+        "lines": [
+          170,
+          171,
+          172,
+          173,
+          174
+        ]
+      },
+      {
+        "file": "docs/task-cell/FOREGROUND.md",
+        "lines": [
+          171
+        ]
+      },
+      {
+        "file": "host/bridge_supervisor.ps1",
+        "lines": [
+          2
+        ]
+      },
+      {
+        "file": "installation/first_start.ps1",
+        "lines": [
+          1
+        ]
+      }
+    ],
+    "RUNNER_BASE": [
+      {
+        "file": "docs/task-cell/FOREGROUND.md",
+        "lines": [
+          131
+        ]
+      }
+    ],
+    "TRANSFER_REPOSITORY": [
+      {
+        "file": "docs/vision/SHARED_NOTHING_AGENT_FABRIC.md",
+        "lines": [
+          139,
+          151
+        ]
+      }
+    ],
+    "REPOSITORY": [
+      {
+        "file": "executors/branch_script.py",
+        "lines": [
+          315
+        ]
+      },
+      {
+        "file": "harness/parallel_branch_finalize.py",
+        "lines": [
+          14
+        ]
+      },
+      {
+        "file": "local_bridge/planner_runtime.py",
+        "lines": [
+          708,
+          818,
+          1531,
+          3848,
+          3951
+        ]
+      },
+      {
+        "file": "local_bridge/scheduler.py",
+        "lines": [
+          416
+        ]
+      },
+      {
+        "file": "local_bridge/topology.py",
+        "lines": [
+          295
+        ]
+      },
+      {
+        "file": "playwright_host/worker.py",
+        "lines": [
+          39
+        ]
+      },
+      {
+        "file": "tests/test_lane_topology.py",
+        "lines": [
+          16
+        ]
+      },
+      {
+        "file": "tests/test_parallel_branch_finalize.py",
+        "lines": [
+          122,
+          129,
+          135
+        ]
+      },
+      {
+        "file": "tests/test_planner_runtime_integration.py",
+        "lines": [
+          78,
+          91,
+          149,
+          178
+        ]
+      },
+      {
+        "file": "tests/test_wake_protocol.py",
+        "lines": [
+          27,
+          45,
+          75
+        ]
+      }
+    ],
+    "TASK_CELL_KEY": [
+      {
+        "file": "host/reset_cah_semantics_cli.ps1",
+        "lines": [
+          26,
+          27
+        ]
+      },
+      {
+        "file": "playwright_host/config.py",
+        "lines": [
+          15,
+          16
+        ]
+      }
+    ],
+    "CHROME_PATH": [
+      {
+        "file": "host/start_playwright_host.ps1",
+        "lines": [
+          3
+        ]
+      },
+      {
+        "file": "installation/first_start.ps1",
+        "lines": [
+          6
+        ]
+      }
+    ],
+    "PROFILE_ROOT": [
+      {
+        "file": "host/start_playwright_host.ps1",
+        "lines": [
+          4
+        ]
+      },
+      {
+        "file": "installation/first_start.ps1",
+        "lines": [
+          6
+        ]
+      }
+    ],
+    "FOREGROUND_URL": [
+      {
+        "file": "installation/first_start.ps1",
+        "lines": [
+          6
+        ]
+      }
+    ]
+  },
+  "policy": "Render into a NEW private operational copy only; original private values are not included."
+}

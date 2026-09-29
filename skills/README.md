@@ -1,10 +1,3 @@
-# GAH Skills
+# Empty Skill Registry
 
-This directory is GAH's durable reusable-procedure layer.
-
-- `index.json` — compact Planner retrieval index.
-- `active/` — evidence-backed Skills eligible for normal reuse.
-- `candidates/` — model-proposed procedures awaiting deterministic evidence validation/promotion.
-- `deprecated/` — retained historical Skills that should not be selected for new work.
-
-See `docs/SKILL_SYSTEM.md` for lifecycle and trust rules.
+No personal Skill content is shipped. Core lifecycle, import interface and tests are retained. Create new evidence-backed Skills only in your own instance. See docs/SKILL_SYSTEM.md.

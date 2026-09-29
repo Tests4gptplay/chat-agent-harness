@@ -147,12 +147,25 @@ class TransportResilienceTests(unittest.TestCase):
             "agent": "chatgpt",
             "last_pool_takeover_id": top_owner,
         }
+        pool = None
+        if lane_owner:
+            pool = {
+                "owner_task_id": "t-admit-001",
+                "owner_control_epoch": 1,
+                "last_pool_takeover_id": lane_owner,
+                "worker_rollover_request": None,
+            }
         lanes = {
             "v": 1,
             "lanes": [{
                 "lane_id": "lane-00",
                 "project_key": "g-p-testlane",
                 "last_pool_takeover_id": lane_owner,
+                "task_pools": (
+                    {"t-admit-001::1": pool}
+                    if pool is not None
+                    else {}
+                ),
             }],
         }
         write_json(fx.repo, "tasks/t-admit-001.json", task)
@@ -214,7 +227,29 @@ class TransportResilienceTests(unittest.TestCase):
             "task": git(fx.remote, "show", f"{head}:tasks/t-admit-001.json"),
         }
 
-    def test_dispatch_accept_lane_owner_beats_stale_legacy_mirror_both_directions(self):
+    def test_child_successor_admission_compares_durable_predecessor(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx, store = self._admission_repo(Path(td))
+            task = json.loads((fx.repo / "tasks/t-admit-001.json").read_text())
+            task["kind"] = "planner_worker_child"
+            cl = json.loads((fx.repo / "cl/t-admit-001.backend.json").read_text())
+            cl["dispatch"].update(generation=2, predecessor_worker_ref="pool-owner-0001")
+            write_json(fx.repo, "tasks/t-admit-001.json", task)
+            write_json(fx.repo, "cl/t-admit-001.backend.json", cl)
+            fx.commit_push("stage successor with exact predecessor")
+            req = {**self._admission_request("pool-successor-0002"), "dispatch_generation": 2}
+            before = fx.remote_head()
+            self.assertEqual(store.dispatch_accept({**req, "fence_token": "wrong-fence"})["error"], "DISPATCH_STALE")
+            self.assertEqual(fx.remote_head(), before)
+            accepted = store.dispatch_accept(req)
+            self.assertTrue(accepted["accepted"])
+            after = fx.remote_head()
+            duplicate = store.dispatch_accept(req)
+            self.assertEqual(duplicate["idle"], "already_accepted")
+            self.assertEqual(store.dispatch_accept({**req, "worker_ref": "pool-other-0003"})["error"], "DISPATCH_WORKER_MISMATCH")
+            self.assertEqual(fx.remote_head(), after)
+
+    def test_dispatch_accept_task_pool_owner_ignores_stale_legacy_mirrors(self):
         cases = [
             ("lane-new_top-old_old-rejected", "pool-owner-NEW1", "pool-owner-OLD1", "pool-owner-OLD1", False),
             ("lane-new_top-old_new-valid", "pool-owner-NEW1", "pool-owner-OLD1", "pool-owner-NEW1", True),
@@ -232,29 +267,33 @@ class TransportResilienceTests(unittest.TestCase):
                     self.assertTrue(result["ok"])
                     self.assertTrue(result["accepted"])
                     self.assertEqual(result["worker_ref"], claimant)
-                    self.assertEqual(result["owner_source"], "lane_owner")
-                    self.assertTrue(result["owner_mirror_conflict"])
+                    self.assertEqual(result["owner_source"], "task_pool_owner")
+                    self.assertFalse(result["owner_mirror_conflict"])
                     self.assertNotEqual(fx.remote_head(), before["head"])
                 else:
                     self.assertFalse(result["ok"])
                     self.assertEqual(result["error"], "DISPATCH_WORKER_MISMATCH")
                     self.assertEqual(result["canonical_owner"], lane_owner)
-                    self.assertEqual(result["owner_source"], "lane_owner")
-                    self.assertTrue(result["owner_mirror_conflict"])
+                    self.assertEqual(result["owner_source"], "task_pool_owner")
+                    self.assertFalse(result["owner_mirror_conflict"])
                     self.assertEqual(self._remote_projection(fx), before)
 
-    def test_dispatch_accept_explicit_lane00_legacy_owner_fallback_when_lane_owner_absent(self):
+    def test_dispatch_accept_missing_task_pool_binds_exact_response_start_owner(self):
         with tempfile.TemporaryDirectory() as td:
             fx, store = self._admission_repo(
                 Path(td), lane_owner="", top_owner="pool-owner-LEGACY1"
             )
-            result = store.dispatch_accept(self._admission_request("pool-owner-LEGACY1"))
+            result = store.dispatch_accept(self._admission_request("pool-owner-NEW1"))
             self.assertTrue(result["ok"])
             self.assertTrue(result["accepted"])
-            self.assertEqual(result["owner_source"], "legacy_lane00_mirror_fallback")
+            self.assertEqual(result["owner_source"], "task_pool_missing")
             self.assertFalse(result["owner_mirror_conflict"])
+            head = fx.remote_head()
+            lanes = json.loads(git(fx.remote, "show", f"{head}:state/lanes.json"))
+            pool = lanes["lanes"][0]["task_pools"]["t-admit-001::1"]
+            self.assertEqual(pool["last_pool_takeover_id"], "pool-owner-NEW1")
 
-    def test_scheduler_action_and_liveness_reject_stale_mirror_owner_without_mutation(self):
+    def test_scheduler_action_and_liveness_require_task_pool_owner_without_mutation(self):
         with tempfile.TemporaryDirectory() as td:
             fx, store = self._admission_repo(
                 Path(td), lane_owner="pool-owner-NEW1", top_owner="pool-owner-OLD1"
@@ -317,7 +356,7 @@ class TransportResilienceTests(unittest.TestCase):
             self.assertFalse(action_result["ok"])
             self.assertEqual(action_result["error"], "ACTION_SUBMIT_WORKER_MISMATCH")
             self.assertEqual(action_result["canonical_owner"], "pool-owner-NEW1")
-            self.assertTrue(action_result["owner_mirror_conflict"])
+            self.assertFalse(action_result["owner_mirror_conflict"])
 
             live_result = reconcile_dispatch_liveness(store, {
                 "client_id": "client-test",
@@ -337,7 +376,7 @@ class TransportResilienceTests(unittest.TestCase):
             self.assertFalse(live_result["recovered"])
             self.assertEqual(live_result["reason"], "canonical_worker_owner_mismatch")
             self.assertEqual(live_result["canonical_owner"], "pool-owner-NEW1")
-            self.assertTrue(live_result["owner_mirror_conflict"])
+            self.assertFalse(live_result["owner_mirror_conflict"])
 
             after = self._remote_projection(fx)
             after["foreground"] = git(
@@ -492,6 +531,22 @@ class TransportResilienceTests(unittest.TestCase):
             ("cl/t-semantic.backend.json", backend),
             ("cl/t-semantic.foreground.json", foreground),
             ("state/chatgpt.json", state),
+            ("state/lanes.json", {
+                "v": 1,
+                "lanes": [{
+                    "lane_id": "lane-00",
+                    "project_key": "g-p-testlane",
+                    "enabled": True,
+                    "task_pools": {
+                        "t-semantic::1": {
+                            "owner_task_id": "t-semantic",
+                            "owner_control_epoch": 1,
+                            "last_pool_takeover_id": "pool-owner-0001",
+                            "worker_rollover_request": None,
+                        },
+                    },
+                }],
+            }),
             ("actions/stage0/t-semantic.json", action),
             ("results/t-semantic.json", capture),
             ("evidence/t-semantic/review_packet.json", {"ok": True}),
@@ -559,18 +614,27 @@ class TransportResilienceTests(unittest.TestCase):
             self.assertEqual(backend["dispatch"]["state"], "DONE")
             self.assertEqual(backend["overall"], "GREEN")
 
-    def test_stale_or_malformed_nonparallel_artifact_does_not_suppress_redrive(self):
+    def test_stale_or_malformed_nonparallel_artifact_never_synthesizes_next_generation(self):
         for label, kwargs in [
             ("stale", {"stale": True}),
             ("malformed", {"malformed": True}),
         ]:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
-                _fx, store, req = self._semantic_repo(Path(td), **kwargs)
+                fx, store, req = self._semantic_repo(Path(td), **kwargs)
+                before = git(fx.remote, "rev-parse", "main")
                 result = reconcile_dispatch_liveness(store, req)
                 self.assertTrue(result["ok"])
-                self.assertTrue(result["recovered"])
-                self.assertEqual(result["dispatch"]["generation"], 2)
-                self.assertNotEqual(result["dispatch"]["fence_token"], req["fence_token"])
+                self.assertFalse(result["recovered"])
+                self.assertFalse(result["escalated"])
+                self.assertEqual(result["reason"], "liveness_fault_no_automatic_redrive")
+                self.assertEqual(result["dispatch_generation"], 1)
+                self.assertEqual(result["fence_token"], req["fence_token"])
+                self.assertEqual(git(fx.remote, "rev-parse", "main"), before)
+                store._git("fetch", "--quiet", "--no-tags", "origin", "main")
+                backend = json.loads(store._git("show", "FETCH_HEAD:cl/t-semantic.backend.json").stdout)
+                self.assertEqual(backend["dispatch"]["generation"], 1)
+                self.assertEqual(backend["dispatch"]["fence_token"], req["fence_token"])
+                self.assertEqual(backend["dispatch"]["state"], "RUNNING")
 
 
 if __name__ == "__main__":

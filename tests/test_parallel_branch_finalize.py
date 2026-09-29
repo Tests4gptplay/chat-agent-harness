@@ -119,20 +119,20 @@ def evidence_identity(lane=0, commit="a" * 40, fingerprint="1" * 64, artifact_bl
     artifact_ref = f"cases/test/work/lane-{lane:02d}/file.txt"
     return {
         "v": 1,
-        "repository": "example-owner/cah-private",
+        "repository": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
         "work_branch": f"showcase/test-{lane}",
         "validated_commit": commit,
         "content_fingerprint": fingerprint,
         "result": {
             "path": result_ref,
             "blob_oid": "3" * 40,
-            "immutable_ref": f"github://example-owner/cah-private/{commit}/{result_ref}",
+            "immutable_ref": f"github://CAH_OWNER/CAH_OPERATIONAL_REPOSITORY/{commit}/{result_ref}",
         },
         "artifacts": [
             {
                 "path": artifact_ref,
                 "blob_oid": artifact_blob,
-                "immutable_ref": f"github://example-owner/cah-private/{commit}/{artifact_ref}",
+                "immutable_ref": f"github://CAH_OWNER/CAH_OPERATIONAL_REPOSITORY/{commit}/{artifact_ref}",
             }
         ],
     }

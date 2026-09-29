@@ -1,0 +1,66 @@
+{
+  "v": 2,
+  "source_commit": "ca102b615ba9ecc2b8ade131df924387e6172b8f",
+  "scope": "Historical offline verification of the reviewed clean template before public promotion; see PUBLICATION.json for publication scope.",
+  "runtime_test_status": "PASS_CURRENT_APPLICABLE_TESTS",
+  "stage_gates_passed": true,
+  "obsolete_test_contracts": {
+    "count": 6,
+    "status": "RETIRED",
+    "open_count": 0
+  },
+  "production_code_changed": false,
+  "test_platform": "win32",
+  "offline_tests": {
+    "tests_run": 306,
+    "passed": 300,
+    "failures": [],
+    "errors": [],
+    "skipped": [
+      {
+        "test": "test_foreground_terminal.PackagingContractTests.test_stage0_false_continuation_never_wakes_worker",
+        "reason": "Workflow payload intentionally omitted from the clean template."
+      },
+      {
+        "test": "test_planner_hybrid_control.PlannerCleanupTests.test_symlink_escape_fails_closed_when_supported",
+        "reason": "Symlink creation unavailable under this test account; raw exception remains in private evidence."
+      },
+      {
+        "test": "test_playwright_mcp_live.LivePlaywrightToolsTests.test_official_mcp_and_cli_share_native_cdp",
+        "reason": "Live browser integration is opt-in and was not enabled."
+      },
+      {
+        "test": "test_semantic_finalize.SemanticFinalizeTests.test_workflow_publishes_business_projection_before_reporting_red_outcome",
+        "reason": "Workflow payload intentionally omitted from the clean template."
+      },
+      {
+        "test": "test_workflow_git_transactions.WorkflowGitTransactionTests.test_no_workflow_local_rebase_push_sequence",
+        "reason": "Workflow payload intentionally omitted from the clean template."
+      },
+      {
+        "test": "test_workflow_git_transactions.WorkflowGitTransactionTests.test_shared_helper_is_used_by_maintained_writers",
+        "reason": "Workflow payload intentionally omitted from the clean template."
+      }
+    ],
+    "all_green": true,
+    "elapsed_seconds": 493.145
+  },
+  "powershell_parser": {
+    "error_count": 0,
+    "files_checked": 10,
+    "errors": []
+  },
+  "syntax_files": {
+    "python": 93,
+    "json": 30
+  },
+  "broken_markdown_links": [],
+  "verification_report_sanitized": true,
+  "verification_basis": "Completed Windows full suite; deterministic reconstruction from the same baseline and cleanup, plus exact code-hash checks against independently tested cleanup sources.",
+  "not_performed": [
+    "fresh third-party machine installation",
+    "live browser/Runner/showcase rerun in this cleanup"
+  ],
+  "evidence_policy": "Only test identifiers, counts and allowlisted generic skip reasons enter this template. Raw exception text and host paths remain in private logs.",
+  "publication_record": "PUBLICATION.json"
+}

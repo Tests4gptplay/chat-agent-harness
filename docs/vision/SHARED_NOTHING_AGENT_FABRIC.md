@@ -136,7 +136,7 @@ The distributed fabric supplies heterogeneous capacity. Capability-centric sched
 <!-- CAH_STATIC_LANE_MULTI_HOST_V0_BEGIN -->
 ## 最小可实施方案：本机线程过滤、独立 clone 与 Git 检查点接管
 
-本方案替换先前补充的通用分布式准备案，改为一个小范围、可退出的实验：两台插件保留处理同一组线程的能力，各自在本机屏蔽一个线程；每个线程使用独立 clone；通过 `Tests4gptplay/temp` 交接已提交的资源。**worker 职责不变，不负责设备分配、修改其他线程或切换插件配置。** 以本节作为当前实施依据；动态节点注册、通用能力路由等不再列为首轮前置条件。文档前部保留的项目愿景仅是长期方向，不是本轮改造要求。
+本方案替换先前补充的通用分布式准备案，改为一个小范围、可退出的实验：两台插件保留处理同一组线程的能力，各自在本机屏蔽一个线程；每个线程使用独立 clone；通过 `CAH_OWNER/CAH_TRANSFER_REPOSITORY` 交接已提交的资源。**worker 职责不变，不负责设备分配、修改其他线程或切换插件配置。** 以本节作为当前实施依据；动态节点注册、通用能力路由等不再列为首轮前置条件。文档前部保留的项目愿景仅是长期方向，不是本轮改造要求。
 
 状态：方案已整理，代码尚未实现，未进行双机或断机实测。本文中的新增配置、命令入口和验收条目均为待实现设计，不是现有功能声明。
 
@@ -148,7 +148,7 @@ The distributed fabric supplies heterogeneous capacity. Capability-centric sched
   "runtime_changed": false,
   "multi_machine_tested": false,
   "control_plane": "existing_single_authority",
-  "data_repo": "Tests4gptplay/temp",
+  "data_repo": "CAH_OWNER/CAH_TRANSFER_REPOSITORY",
   "stages": ["P0", "P1", "P2", "P3", "P4"],
   "acceptance_cases": ["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09"]
 }

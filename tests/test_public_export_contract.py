@@ -33,7 +33,7 @@ class PublicExportContractTests(unittest.TestCase):
         required = set(manifest["required_install_capabilities"])
         self.assertTrue({
             "windows_one_click_launcher",
-            "chromium_extension_build_and_load",
+            "playwright_existing_browser_attachment",
             "self_hosted_runner_setup",
             "localhost_bridge_health_check",
             "user_owned_lane_project_onboarding",
@@ -41,15 +41,41 @@ class PublicExportContractTests(unittest.TestCase):
             "maintainer_specific_config_sanitization",
         }.issubset(required))
 
-        install = (ROOT / "docs/INSTALL_WINDOWS.md").read_text(encoding="utf-8")
+        install = (ROOT / "installation/README.md").read_text(encoding="utf-8")
         self.assertIn("Start_CAH.bat", install)
-        self.assertIn("chrome://extensions", install)
-        self.assertIn("Load unpacked", install)
-        self.assertIn("must not hard-code", install)
+        self.assertIn("install_playwright_tools.ps1", install)
+        self.assertIn("CAH Task Cell", install)
+        self.assertIn("CAH Sandbox0", install)
+        self.assertIn("AI-led onboarding", install)
+        self.assertIn("Playwright", install)
+        self.assertIn("PlaywrightChrome", install)
+        self.assertIn("cah-shot", install)
 
         contract = (ROOT / "docs/PUBLIC_EXPORT_CONTRACT.md").read_text(encoding="utf-8")
         self.assertIn("one-click Windows launcher", contract)
-        self.assertIn("Chromium extension", contract)
+        self.assertIn("Playwright existing-browser attachment", contract)
+
+    def test_export_retains_current_browser_provider_dependencies(self):
+        manifest = json.loads((ROOT / "harness/public_export_required.json").read_text(encoding="utf-8"))
+        self.assertTrue({
+            "installation/README.md", "Start_CAH.ps1", "playwright_host/mcp.py",
+            "host/install_playwright_tools.ps1", "host/playwright_cli.ps1",
+            "host/playwright-tools/package.json", "host/playwright-tools/package-lock.json",
+        }.issubset(manifest["required_paths"]))
+
+    def test_active_repo_map_resolves_to_existing_sources(self):
+        routing = json.loads((ROOT / "ai/repo-map.json").read_text(encoding="utf-8"))
+        def refs(value):
+            if isinstance(value, dict):
+                for item in value.values():
+                    yield from refs(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from refs(item)
+            elif isinstance(value, str) and "/" in value and " " not in value:
+                yield value
+        missing = [ref for ref in refs(routing) if not list(ROOT.glob(ref))]
+        self.assertEqual(missing, [])
 
     def test_lane_maintenance_is_explicit_core_capability(self):
         manifest = json.loads((ROOT / "harness/public_export_required.json").read_text(encoding="utf-8"))
@@ -110,10 +136,12 @@ class PublicExportContractTests(unittest.TestCase):
         self.assertIn("Host-local authority", host_contract)
         self.assertIn("Sanitized projection", host_contract)
 
-    def test_public_export_keeps_safe_skill_example(self):
-        active = ROOT / "skills/active"
-        candidates = list(active.glob("*.json")) if active.exists() else []
-        self.assertGreaterEqual(len(candidates), 1, "public-capable repository must retain at least one safe active Skill example")
+    def test_staging_omits_personal_skill_contents(self):
+        index = json.loads((ROOT / "skills/index.json").read_text(encoding="utf-8"))
+        self.assertEqual(index["skills"], [])
+        self.assertEqual(index["skill_count"], 0)
+        self.assertFalse(list((ROOT / "skills/active").glob("*.json")))
+
 
 
 if __name__ == "__main__":
