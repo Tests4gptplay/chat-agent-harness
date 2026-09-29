@@ -298,7 +298,7 @@ In particular, this edition excludes:
 - credentials or authentication material;
 - private Git history;
 - previous deployment-specific state;
-- historical showcase payloads.
+- raw private showcase histories and unreviewed case payloads.
 
 The underlying Skill, Tool, scheduler, browser, Planner, Worker, Helper, and execution architecture remains.
 
