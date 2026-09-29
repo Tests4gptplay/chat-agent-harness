@@ -229,6 +229,38 @@ Part 2A 在 **18:47:16 JST** 正式通过，距离 Parent 开始 **7 小时 21 �
 
 这一阶段仍然和 P1 类似：假设可以错，Worker 可以换代，只要错误没有摧毁执行基础设施，任务就能继续。
 
+## 先看稳定性数字：这不是 Dry Run
+
+在讲 G9 之前，先把最重要的前提说清楚：
+
+**这不是 soak test、dry run，也不是为了测稳定性专门写出来的假任务。**
+
+用户给下去的是一个具体工程任务，CAH 实际在做：
+
+- Blender / UE 资产链；
+- Fresh Cook；
+- Fresh Viewer 重构；
+- native Viewer 验收；
+- Build / Cook；
+- package / runtime 调查；
+- 后续 direct-preview 研究。
+
+也就是说，下面的时间不是“网页开着没死多久”，而是**一个真实工程任务在持续产生有效工作多久**。
+
+Parent Task 从 **2026-09-28 11:25:48 JST** 开始。
+
+直到 G9 在 **21:24:07 JST** 第一次制造系统级外部堵塞之前，没有记录到人工运维介入。
+
+这一段连续运行时间是：
+
+# **9 小时 58 分 19 秒**
+
+期间当然有普通工程失败、错误假设和 Worker 换代，但这些都由 Planner / Worker 正常循环自行吸收，不需要人去修 CAH 本身。
+
+这意味着：
+
+> **在没有系统级强干扰的情况下，这个真实任务第一次需要人工碰 Harness，已经接近连续运行 10 小时之后。**
+
 ## G9 — 第一次把 Recovery 薄弱点打出来
 
 Recovery 故事真正从 G9 开始。
@@ -300,6 +332,59 @@ G12 的 corrected hybrid-mode experiment 在 **00:21:01 JST** 启动，又出现
 → backup capacity 承接后续 Worker
 → semantic frontier 继续向前
 ```
+
+## 两次人工干预后的整体运行时长
+
+把整个 Parent Task 放在一起看，稳定性更直观。
+
+从最初 Parent Task 开始：
+
+**2026-09-28 11:25:48 JST**
+
+到 G31 正常写出 durable handoff：
+
+**2026-09-29 05:13:44 JST**
+
+同一个具体任务累计持续运行：
+
+# **17 小时 47 分 56 秒**
+
+这将近 18 小时里，真正需要人工去修 CAH recovery / infrastructure 的只有 **两次**：
+
+1. G9 事故后的第一次 recovery infrastructure hotfix；
+2. G15 之后 Helper recovery 无法闭环时的 Hotfix 2.0。
+
+而 Hotfix 2.0 完成后，从原 Planner 在 **02:00:32** 恢复，到 G31 在 **05:13:44** 正常 handoff，又连续运行了：
+
+# **3 小时 13 分 12 秒**
+
+期间没有再记录新的 Helper failure，也没有第三次人工 recovery 干预。
+
+最终 G32 页面物理卡死，把 Parent Task 的 wall-clock 生命周期延长到 **07:41:16 JST**，也就是从最初启动算：
+
+**20 小时 15 分 28 秒**
+
+但最后 G32 response-start 后的 **2 小时 26 分 05 秒** 是网页 busy / no-output 的死时间，所以不应该拿来冒充有效 uptime。
+
+因此更诚实、也更有意义的稳定性数字是：
+
+```text
+首次需要人工运维修复：
+9h58m19s
+
+到 G31 的有效任务连续生命周期：
+17h47m56s
+
+期间人工 recovery 干预：
+2 次
+
+Hotfix 2.0 后再次无人运维干预连续运行：
+3h13m12s
+```
+
+这就是这个 Showcase 最值得强调的地方之一：
+
+> **不是一个专门为稳定性测试设计的 Dry Run，而是一个真实复杂任务下去之后，系统自己连续工作了接近 10 小时才第一次需要人工修 Harness；经过两次现场修复后，同一个任务仍然继续推进到接近 18 小时的有效生命周期。**
 
 ## G15 之后 — 真正卡住的是 Helper recovery，而不是 G15 Worker
 
