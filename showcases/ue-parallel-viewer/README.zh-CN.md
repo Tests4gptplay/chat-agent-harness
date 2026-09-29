@@ -37,6 +37,51 @@ Planner 第一轮就把任务拆成两条可以独立推进的工作线：
 
 所以这不是“一个模型回合执行一个命令”，而是一个持续很久的 managed task：**多条任务线并行／交替推进，最终在明确 join condition 上汇合。**
 
+## 和历史 Viewer 的实现路径有什么不同
+
+P1 不是把旧 Viewer 二进制或旧工程目录复制过来重新跑一遍。
+
+这一点在原始 Phase-1B Child contract 里被明确写死：
+
+> historical GAHQuickLook 只能作为 source / design reference；旧 binary、旧 capture、旧 Cook output 和旧 PASS label 都不能作为本轮结果。
+
+所以 P1 的做法是 **fresh reconstruction**：
+
+- 新建这一轮独立的 Viewer source/build tree；
+- 重新针对当前安装的 UE 5.6.1 build；
+- 历史 Viewer 只保留值得复用的设计概念，例如 package group resolution、mount/catalog/preview 分层、loopback API、native viewport，以及 shader/dependency failure reporting；
+- 重新实现并实际验证本轮要求的交互状态机：按住拖动 orbit、Shift+拖动 pan、mouse-up 立即释放 capture、Esc 强制释放、wheel zoom，以及 idle 时鼠标可以正常离开 Viewer；
+- 重新建立适合检查模型的 floor-free scene 和 lighting/exposure 默认值；
+- 最终必须接入这一轮 **fresh Cook**，不能拿历史 camera placeholder、历史 package 或历史 Viewer PASS 顶替。
+
+更关键的是，P1C 后续证明“照搬旧加载路径”本身也走不通。
+
+旧式 dynamic loader 在真实 fresh Cook 上首先遇到 Pak mount delegate / package discovery 边界；随后“把旧式容器直接塞进 Content/Paks 再启动”的思路也被实际运行否定。Worker 因此继续重构 runtime 路线，最终把 Viewer 自身调整成 **Pak-only / no-IoStore** 的 fresh packaged runtime，并从真实外部 camera PAK 打开对应 shader library，再完成 native capture 和 interaction acceptance。
+
+所以更准确地说：
+
+```text
+历史 Viewer
+    ↓
+只提供 source / UI / API / architecture reference
+    ↓
+重新建立 fresh source/build tree
+    ↓
+重新实现本轮交互与 inspection defaults
+    ↓
+重新 build / smoke
+    ↓
+用本轮 fresh Cook 做真实 integration
+    ↓
+旧加载路线不成立 → runtime 路线继续重构
+    ↓
+Pak-only fresh Viewer + real external PAK
+    ↓
+native pixel + interaction acceptance
+```
+
+它不是“从零发明所有概念”，因为历史版本确实提供了设计参考；但 **通过验收的 P1 Viewer 不是旧 Viewer 的二进制复用、旧结果重放，也不是简单复制工程后重新编译，而是一条重新构建、重新集成、并在失败中改变 runtime 实现路径的 fresh reconstruction。**
+
 ## 过程并不顺
 
 Fresh Cook 首先遇到了 Windows 路径长度问题。
