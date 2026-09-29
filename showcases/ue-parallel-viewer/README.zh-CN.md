@@ -105,6 +105,28 @@ e0486f3cbab4048ce7d76260d1e42f2d34177e64152f4c70dd7877825e191305
 
 4 张 native capture 的精确大小与 SHA-256 记录在 [evidence.json](evidence.json)。
 
+### P1 实际验收截图
+
+下面四张就是 2026-09-28 rerun 中由 Planner 接受的实际 native Lit 截图，不是旧图替代品，也不是生成图。
+
+**Perspective**
+
+![P1 验收 Perspective Lit](images/phase1-perspective-lit.png)
+
+**Front**
+
+![P1 验收 Front Lit](images/phase1-front-lit.png)
+
+**Right**
+
+![P1 验收 Right Lit](images/phase1-right-lit.png)
+
+**Below**
+
+![P1 验收 Below Lit](images/phase1-below-lit.png)
+
+上面展示的就是 [evidence.json](evidence.json) 里记录 byte size 和 SHA-256 的那四个原始文件。
+
 一个视觉限制也原样保留：最终验收时背景是黑色，不是白色。模型本身清晰可读、below 视角无遮挡，因此 Phase 1 的实际验收条件满足。公开案例没有为了更漂亮而重写事实。
 
 ## 为什么 Part 1 可以单独成为成功 Showcase
