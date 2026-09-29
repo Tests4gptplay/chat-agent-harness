@@ -292,22 +292,63 @@ The Helper role was strengthened during the live incident into a more active rec
 
 This is exactly the kind of weakness Part 2 was useful for exposing.
 
-## The system recovered far enough to continue real work
+## G20 — a post-recovery mechanism success
 
-After recovery, the task did not merely idle.
+G20 is more than a timing sample.
 
-Later generations continued normally again.
+It is the first clean end-to-end proof, after the second human intervention, that the strengthened recovery path restored the **same Parent Task** to healthy operation.
 
-G20 provides a clean example:
+The sequence matters:
+
+```text
+G12 external execution wedges again
+→ G13 / G14 / G15 continue through backup capacity
+→ Planner escalates the blockage as an operational incident
+→ first Helper can diagnose but cannot close recovery
+→ second human intervention strengthens the Helper recovery contract
+→ Helper performs exact cleanup, durable closure and return-control
+→ original Planner resumes at 02:00:32
+→ G16 / G17 / G18 / G19 continue normally
+→ G20 completes a full healthy cycle
+```
+
+G20's observed timeline:
 
 - Worker response-start: **02:45:31**
-- independent Build/Cook launched: **02:47:58**
-- Worker durable handoff: **02:49:08**
-- external job terminal success: **02:50:18**
+- independent fresh standalone/cooked Game Build/Cook launched: **02:47:58**
+- Worker durable result: **02:49:08**
+- canonical Child finalize: **02:49:50**
+- Result enqueued to Planner: **02:50:04**
+- external archive records `BUILD SUCCESSFUL`: **02:50:07**
+- external workflow terminal success: **02:50:18**
+- Planner review response-start: **02:50:36**
 
-The Worker semantic interval was **3m37s**. The external job lasted **2m20s**, including **1m10s after Worker handoff**.
+The Worker semantic interval was **3m37s**.
 
-So the hotfix path did restore enough lifecycle continuity for real semantic and machine work to proceed.
+The external Build/Cook interval was **2m20s**, including **1m10s after the Worker had already durably handed off**.
+
+What this validates is not merely that “the Runner worked again”. The complete post-recovery control chain was functioning:
+
+```text
+Helper recovery
+→ Planner regains control
+→ successor Workers continue
+→ a Worker launches real external work
+→ the Worker does not need to wait for it
+→ durable handoff succeeds
+→ external work continues independently
+→ Build/Cook succeeds
+→ canonical finalize and Planner review continue normally
+```
+
+That is a strong **post-recovery mechanism success**.
+
+It shows that the second intervention and Helper/recovery hotfix did more than restore a status flag: they restored semantic progression, external execution, handoff, canonical reduction and Planner continuation on the same live task.
+
+Part 2 therefore contains both positive and negative recovery evidence:
+
+1. **G20:** some recovery mechanisms were successfully exercised after a real system-level blockage.
+2. **G32:** a later physical web-conversation failure still exceeded the then-current automatic recovery boundary.
 
 ## G32 — a second recovery class: the web conversation itself stopped producing output
 
