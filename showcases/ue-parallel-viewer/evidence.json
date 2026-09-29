@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "case": "ue-parallel-viewer-rerun-20260928",
+  "source": "Sanitized projection of the private CAH rerun record. Private task-state, account, conversation, host-path and raw-log fields are omitted.",
+  "started_jst": "2026-09-28T11:25:48+09:00",
+  "terminal_disposition": {
+    "phase1": "ACCEPTED",
+    "phase2a": "ACCEPTED",
+    "phase2b": "STOPPED_INCOMPLETE",
+    "phase2c": "NOT_REACHED",
+    "last_admitted_worker_generation": 32,
+    "note": "The user explicitly stopped further Phase-2B work after the G32 physical Worker attempt stalled without a durable semantic result. Native direct-preview acceptance is not claimed."
+  },
+  "phase1": {
+    "planner_accepted_jst": "2026-09-28T16:27:18+09:00",
+    "elapsed_from_parent_start": "5h01m30s",
+    "camera_pak_sha256": "e0486f3cbab4048ce7d76260d1e42f2d34177e64152f4c70dd7877825e191305",
+    "runtime": {
+      "package_format": {
+        "pak": 1,
+        "utoc": 0,
+        "ucas": 0
+      },
+      "source_opened": true,
+      "preview_loaded": true,
+      "source_shader_library_count": 1,
+      "selected_mesh": "/Game/RetroCamera/SM_RetroCamera.SM_RetroCamera",
+      "package_count": 443,
+      "mesh_count": 27,
+      "material_count": 64,
+      "texture_count": 70
+    },
+    "interaction_pass": true,
+    "semantic_pixel_qa": {
+      "pass": true,
+      "note": "The intended retro camera was clearly readable in native Lit captures. No severe missing-shader, checkerboard, placeholder, all-black, exploded, clipped or missing-geometry defect was accepted.",
+      "limitation": "The viewport background remained visibly black. Phase 1 was accepted because the model itself was readable and the low/bottom inspection path was floor-free."
+    },
+    "captures": [
+      {
+        "name": "phase1-front-lit.png",
+        "bytes": 158085,
+        "sha256": "93a2d4ef7ea5a2435c2188e2f5af2f9664aec3b35df40dbf70880f31d08b29a2"
+      },
+      {
+        "name": "phase1-perspective-lit.png",
+        "bytes": 179775,
+        "sha256": "0a1b2019fb9fe8161d8c1e4c65b74509f057e681ab17336d3a5f141f264826f2"
+      },
+      {
+        "name": "phase1-right-lit.png",
+        "bytes": 135419,
+        "sha256": "669fd638dd778882656d461f5c3ad5b51c9125675313882ac7103b2f3eee3d27"
+      },
+      {
+        "name": "phase1-below-lit.png",
+        "bytes": 143896,
+        "sha256": "0c670d9c9363ce398e1d12cd4a360ac55f190bac9cb063e4f162aa80ed0e7513"
+      }
+    ]
+  },
+  "phase2a": {
+    "planner_accepted_jst": "2026-09-28T18:47:16+09:00",
+    "elapsed_from_parent_start": "7h21m28s",
+    "accepted_findings": {
+      "combined_provider_asset_count": 698321,
+      "same_path_collision": "The default combined provider selected a base-game PatchPak candidate at an equal read order; successful logical-path export alone did not prove MOD provenance.",
+      "exact_mod_probe": {
+        "object_class": "USkeletalMesh",
+        "material_slots": 25,
+        "morph_targets": 26,
+        "lods": 1
+      }
+    },
+    "conclusion": "Phase 2A accepted package/dependency reconnaissance and established that later Viewer work must intentionally select the MOD member rather than trust default equal-order provider behavior."
+  },
+  "resilience_observations": {
+    "planner_handoff_preserved_task_state": true,
+    "worker_generation_turnover_preserved_child_frontier": true,
+    "backup_runner_carried_three_consecutive_worker_generations_during_primary_runner_blockage": true,
+    "helper_recovery_returned_control_to_planner": true,
+    "g20_timing": {
+      "worker_semantic_interval": "3m37s",
+      "external_build_cook_run": "2m20s",
+      "external_time_after_worker_handoff": "1m10s",
+      "interpretation": "The external job continued independently after the Worker had durably handed off."
+    }
+  },
+  "public_artifacts": {
+    "viewer_client_git_blob": "b1e026e18334910c090e006f09b557ed55804fab",
+    "historical_native_screenshots": {
+      "note": "The public README references previously published native Viewer screenshots from the preserved pre-clean public commit. The four 2026-09-28 Phase-1 rerun captures are represented here by exact byte sizes and SHA-256 hashes.",
+      "source_commit": "604e4ff26757d3738e4ee4aaa0d8457953a98db7"
+    }
+  },
+  "claims_not_made": [
+    "Phase 2B native direct-preview success",
+    "Phase 2C final visual/interaction acceptance",
+    "fully unattended arbitrary long-running autonomy",
+    "universal Unreal/game/IoStore compatibility",
+    "publication of the UE-linked Viewer module"
+  ]
+}
