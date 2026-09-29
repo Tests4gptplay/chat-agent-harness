@@ -316,7 +316,7 @@ CAH is intended to be demonstrated through complete end-to-end workloads rather 
 
 ![Accepted Phase-1 native Viewer perspective](showcases/ue-parallel-viewer/images/phase1-perspective-lit.png)
 
-**Part 1 is the success case:** one long-running managed task split into fresh Cook, fresh Viewer, and integration workstreams, then iterated for more than five hours until real native output passed the acceptance boundary.
+**Part 1 is the success case:** one long-running managed task split into fresh Cook, a freshly reconstructed Viewer, and integration workstreams, then iterated for more than five hours until real native output passed the acceptance boundary. The historical Viewer was source/design reference only; old binaries, captures, Cook output and PASS labels were not reused as the new result.
 
 **Part 2 is the recovery stress test:** after that successful baseline, heavier real-package/direct-preview work exposed two system-level failure classes — Worker-authored execution that could wedge shared Runner capacity, and a long-lived ChatGPT page that reached response-start but remained busy for more than two hours without producing semantic output. Backup capacity and several live recovery hotfixes got the task moving again after the first class; the second class became the explicit stop boundary at G32.
 
