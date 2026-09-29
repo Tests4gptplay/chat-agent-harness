@@ -57,7 +57,25 @@
         "bytes": 143896,
         "sha256": "0c670d9c9363ce398e1d12cd4a360ac55f190bac9cb063e4f162aa80ed0e7513"
       }
-    ]
+    ],
+    "reconstruction": {
+      "historical_viewer_role": "source/design reference only",
+      "old_artifacts_not_accepted_as_current_evidence": [
+        "historical binaries",
+        "historical captures",
+        "historical Cook output",
+        "historical PASS labels"
+      ],
+      "fresh_requirements": [
+        "new source/build tree for the rerun",
+        "fresh UE 5.6.1 build and runtime smoke",
+        "rerun-specific mouse capture/release state machine",
+        "floor-free inspection defaults",
+        "integration against the rerun's fresh Cook"
+      ],
+      "runtime_path_change": "Older dynamic-loader and simple Content/Paks staging assumptions failed on the fresh Cook; the accepted integration moved to a fresh packaged Viewer using Pak-only/no-IoStore mode and the real external camera shader library.",
+      "interpretation": "The accepted P1 Viewer is a fresh reconstruction informed by historical design/source knowledge, not an old binary reuse, old-result replay, or simple copy-and-rebuild."
+    }
   },
   "phase2a": {
     "planner_accepted_jst": "2026-09-28T18:47:16+09:00",
@@ -89,9 +107,15 @@
   "public_artifacts": {
     "viewer_client_git_blob": "b1e026e18334910c090e006f09b557ed55804fab",
     "historical_native_screenshots": {
-      "note": "The public README references previously published native Viewer screenshots from the preserved pre-clean public commit. The four 2026-09-28 Phase-1 rerun captures are represented here by exact byte sizes and SHA-256 hashes.",
+      "note": "Previously published Viewer screenshots remain preserved in the pre-clean public commit for historical comparison. The four 2026-09-28 accepted Phase-1 rerun captures are now published directly in this showcase under images/ and retain the exact identities recorded in phase1.captures.",
       "source_commit": "604e4ff26757d3738e4ee4aaa0d8457953a98db7"
-    }
+    },
+    "phase1_native_captures": [
+      "images/phase1-front-lit.png",
+      "images/phase1-perspective-lit.png",
+      "images/phase1-right-lit.png",
+      "images/phase1-below-lit.png"
+    ]
   },
   "claims_not_made": [
     "Phase 2B native direct-preview success",
