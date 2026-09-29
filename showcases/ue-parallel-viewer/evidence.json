@@ -99,5 +99,135 @@
     "fully unattended arbitrary long-running autonomy",
     "universal Unreal/game/IoStore compatibility",
     "publication of the UE-linked Viewer module"
-  ]
+  ],
+  "part_framing": {
+    "part1": "SUCCESSFUL_LONG_RUNNING_MULTI_WORKSTREAM_CASE",
+    "part2": "RECOVERY_STRESS_AND_PROBLEM_DISCOVERY_CASE",
+    "interpretation": "Part 1 is the positive stability case under non-catastrophic task failures. Part 2 begins after that accepted baseline and probes recovery from system-level external interference."
+  },
+  "recovery_stress_timeline": [
+    {
+      "event": "g9_worker_response_start",
+      "at_jst": "2026-09-28T21:19:20+09:00"
+    },
+    {
+      "event": "g9_external_wedge_start",
+      "at_jst": "2026-09-28T21:24:07+09:00",
+      "detail": "Worker-authored staged runtime wrapper synchronously nested the Viewer launcher without an outer watchdog/timeout and reliable cleanup."
+    },
+    {
+      "event": "g9_worker_durable_handoff",
+      "at_jst": "2026-09-28T21:25:42+09:00"
+    },
+    {
+      "event": "g10_dispatch_created",
+      "at_jst": "2026-09-28T21:26:37+09:00"
+    },
+    {
+      "event": "g10_response_start_after_transport_delay",
+      "at_jst": "2026-09-28T22:13:13+09:00",
+      "elapsed_from_dispatch": "46m36s"
+    },
+    {
+      "event": "g9_external_wedge_end",
+      "at_jst": "2026-09-28T22:24:45+09:00",
+      "elapsed": "1h00m38s"
+    },
+    {
+      "event": "g10_durable_result",
+      "at_jst": "2026-09-28T22:58:18+09:00"
+    },
+    {
+      "event": "g10_canonical_finalize_after_semantic_sync_hotfix",
+      "at_jst": "2026-09-28T23:18:11+09:00"
+    },
+    {
+      "event": "g11_dispatch_to_response_start_delay",
+      "start_jst": "2026-09-28T23:31:42+09:00",
+      "end_jst": "2026-09-29T00:01:31+09:00",
+      "elapsed": "29m49s",
+      "detail": "Worker retention/binding path was repaired while preserving the same semantic task."
+    },
+    {
+      "event": "g12_external_wedge",
+      "start_jst": "2026-09-29T00:21:01+09:00",
+      "end_jst": "2026-09-29T01:21:40+09:00",
+      "elapsed": "1h00m39s"
+    },
+    {
+      "event": "backup_capacity_continues_workers",
+      "workers": [
+        {
+          "generation": 13,
+          "response_start_jst": "2026-09-29T00:26:13+09:00",
+          "durable_result_jst": "2026-09-29T00:31:45+09:00"
+        },
+        {
+          "generation": 14,
+          "response_start_jst": "2026-09-29T00:32:43+09:00",
+          "durable_result_jst": "2026-09-29T00:39:25+09:00"
+        },
+        {
+          "generation": 15,
+          "response_start_jst": "2026-09-29T00:40:41+09:00",
+          "durable_result_jst": "2026-09-29T00:45:43+09:00"
+        }
+      ]
+    },
+    {
+      "event": "planner_escalates_to_helper",
+      "planner_response_start_jst": "2026-09-29T00:47:30+09:00",
+      "helper_response_start_jst": "2026-09-29T00:51:26+09:00"
+    },
+    {
+      "event": "helper_recovery_returns_control",
+      "planner_resumed_jst": "2026-09-29T02:00:32+09:00",
+      "detail": "The Helper recovery contract was strengthened during the live incident before the same Parent Task resumed."
+    },
+    {
+      "event": "g20_external_job_outlives_worker",
+      "worker_response_start_jst": "2026-09-29T02:45:31+09:00",
+      "external_start_jst": "2026-09-29T02:47:58+09:00",
+      "worker_durable_result_jst": "2026-09-29T02:49:08+09:00",
+      "external_terminal_success_jst": "2026-09-29T02:50:18+09:00",
+      "worker_semantic_interval": "3m37s",
+      "external_interval": "2m20s",
+      "external_after_worker_handoff": "1m10s"
+    },
+    {
+      "event": "g32_dispatch_requested",
+      "at_jst": "2026-09-29T05:14:51+09:00"
+    },
+    {
+      "event": "g32_response_start_ack",
+      "at_jst": "2026-09-29T05:15:11+09:00"
+    },
+    {
+      "event": "g32_physical_page_still_busy_without_assistant_output",
+      "at_jst": "2026-09-29T07:36:47+09:00",
+      "elapsed_after_response_start": "2h21m36s",
+      "observed": {
+        "assistant_message_count": 0,
+        "stop_control_present": true,
+        "durable_reply_present": false,
+        "durable_result_present": false
+      }
+    },
+    {
+      "event": "g32_backend_still_running",
+      "at_jst": "2026-09-29T07:41:16+09:00",
+      "elapsed_after_response_start": "2h26m05s"
+    }
+  ],
+  "recovery_development_direction": {
+    "status": "ACTIVE_DEBUGGING_AND_STRENGTHENING",
+    "areas": [
+      "physical Worker/Planner conversation watchdogs",
+      "same-generation physical retry",
+      "deterministic dead-conversation stop/delete/original-wake reinjection",
+      "clear semantic-vs-physical failure separation",
+      "stronger semantic Helper recovery ownership and return-control semantics",
+      "redundant execution capacity"
+    ]
+  }
 }
