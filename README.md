@@ -316,9 +316,9 @@ CAH is intended to be demonstrated through complete end-to-end workloads rather 
 
 **Part 1 is the success case:** one long-running managed task split into fresh Cook, fresh Viewer, and integration workstreams, then iterated for more than five hours until real native output passed the acceptance boundary.
 
-**Part 2 is the follow-up investigation:** after that successful baseline, the same task was pushed into harder real-package/direct-preview work. It uncovered provenance mistakes, deeper runtime boundaries, Runner/Helper recovery problems, and finally stopped at an explicitly incomplete Phase-2B boundary.
+**Part 2 is the recovery stress test:** after that successful baseline, heavier real-package/direct-preview work exposed two system-level failure classes — Worker-authored execution that could wedge shared Runner capacity, and a long-lived ChatGPT page that reached response-start but remained busy for more than two hours without producing semantic output. Backup capacity and several live recovery hotfixes got the task moving again after the first class; the second class became the explicit stop boundary at G32.
 
-The Part-2 stop does not retroactively dilute the completed Part-1 result; the two sections are intentionally presented as different kinds of evidence.
+The Part-2 stop does not retroactively dilute the completed Part-1 result. Instead, it identifies CAH's current reliability frontier: recovery after strong external interference. Physical watchdog/retry behavior and the semantic Helper recovery role are being actively strengthened around that boundary.
 
 More sanitized showcases can be added here as complete end-to-end records become suitable for public release.
 
