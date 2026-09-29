@@ -1,6 +1,6 @@
 # Planner
 
-> Clean staging package: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
+> Clean source distribution: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
 
 Planner is the task-level semantic controller for one managed Task Cell.
 

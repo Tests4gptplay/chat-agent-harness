@@ -1,6 +1,6 @@
 # Test contract cleanup — resolved
 
-Status: RESOLVED_OBSOLETE_TEST_CONTRACTS. These six previously reported anomalies are not open runtime defects of this staging snapshot.
+Status: RESOLVED_OBSOLETE_TEST_CONTRACTS. These six previously reported anomalies are not open runtime defects of this reviewed clean snapshot.
 
 The original five assertion failures and one test-side lookup error reproduced before sanitization. Targeted review identified obsolete expectations/mocks, not a need to restore the old runtime mechanisms. This cleanup changes tests and review metadata only; production runtime code is unchanged.
 

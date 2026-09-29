@@ -151,4 +151,4 @@ Cold-path references:
 - reusable execution tools: `harness/tools/registry.json`, `docs/TOOL_SYSTEM.md`
 - public/export: `docs/PUBLIC_EXPORT_CONTRACT.md`, `harness/public_export_required.json`
 
-This sanitized staging package does not authorize publication. See installation/README.md before deployment.
+This is an unconfigured public source distribution. Follow installation/README.md and verify a private operational repository before deployment.

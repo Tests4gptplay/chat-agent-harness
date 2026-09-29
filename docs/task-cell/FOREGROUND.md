@@ -1,6 +1,6 @@
 # Foreground
 
-> Clean staging package: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
+> Clean source distribution: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
 
 Foreground is CAH's persistent human-facing semantic boundary.
 
