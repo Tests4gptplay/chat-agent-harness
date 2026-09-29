@@ -318,11 +318,17 @@ CAH is intended to be demonstrated through complete end-to-end workloads rather 
 
 **Part 1 is the success case:** one long-running managed task split into fresh Cook, a freshly reconstructed Viewer, and integration workstreams, then iterated for more than five hours until real native output passed the acceptance boundary. The historical Viewer was source/design reference only; old binaries, captures, Cook output and PASS labels were not reused as the new result.
 
-**Part 2 is the recovery stress test:** after that successful baseline, heavier real-package/direct-preview work exposed two system-level failure classes — Worker-authored execution that could wedge shared Runner capacity, and a long-lived ChatGPT page that reached response-start but remained busy for more than two hours without producing semantic output.
+**Part 2 is the recovery stress test:** this was not a dry run. The same concrete engineering task kept doing real Viewer/Cook/runtime work until a Worker-authored execution wedge finally forced the first human recovery intervention almost ten hours after Parent start.
 
-The recovery story is not purely negative. After G12 and the second human intervention strengthened Helper/recovery behavior, **G20 became a clean post-recovery mechanism success**: the original Planner had regained control, successor Workers were advancing again, G20 launched a real independent Build/Cook, durably handed off before that external job finished, the Child finalized canonically, the external job reached `BUILD SUCCESSFUL`, and Planner review resumed on the same Parent Task. G32 later exposed a different physical-page failure class that the then-current recovery path still could not handle automatically.
+The stability numbers are the headline:
 
-The Part-2 stop therefore does not retroactively dilute Part 1, nor does it mean the recovery work was ineffective. Part 2 contains both proof that specific recovery mechanisms worked under real interference and evidence of the next uncovered boundary. Physical watchdog/retry behavior and the semantic Helper recovery role are being actively strengthened around that remaining gap.
+- **9h58m19s** of real-task operation before the first system-level failure required human operational recovery;
+- **17h47m56s** from Parent start through G31 durable handoff, with only **two** human recovery interventions;
+- **3h13m12s** of further unattended operation after Helper Hotfix 2.0, with no additional Helper failure before G31.
+
+The first intervention improved recovery infrastructure enough that when G12 later blocked primary execution, G13–G15 still continued on backup capacity. The second intervention upgraded Helper after the post-G15 recovery path failed to close. After that, the same Parent Task continued automatically through G31. G32 later exposed a different physical-page failure class: response-start occurred, but the web conversation stayed busy for more than two hours without producing semantic output.
+
+So Part 2 is evidence of both **substantial practical stability** and the next reliability frontier. Physical watchdog/retry behavior and the semantic Helper recovery role are being strengthened around that remaining gap.
 
 More sanitized showcases can be added here as complete end-to-end records become suitable for public release.
 

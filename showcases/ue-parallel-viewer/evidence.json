@@ -96,52 +96,7 @@
     "planner_handoff_preserved_task_state": true,
     "worker_generation_turnover_preserved_child_frontier": true,
     "backup_runner_carried_three_consecutive_worker_generations_during_primary_runner_blockage": true,
-    "helper_recovery_returned_control_to_planner": true,
-    "g20_timing": {
-      "worker_semantic_interval": "3m37s",
-      "external_build_cook_run": "2m20s",
-      "external_time_after_worker_handoff": "1m10s",
-      "interpretation": "The external job continued independently after the Worker had durably handed off."
-    },
-    "g20_post_recovery_success": {
-      "interpretation": "First clean end-to-end mechanism-level success after the second human intervention strengthened Helper/recovery behavior.",
-      "preconditions": [
-        "G12 external blockage",
-        "G13-G15 continued on backup capacity",
-        "Planner escalated an operational incident",
-        "first Helper behavior proved insufficient",
-        "second human intervention strengthened Helper recovery semantics",
-        "Helper completed cleanup, durable closure and return-control",
-        "original Planner resumed and G16-G19 continued"
-      ],
-      "timeline": {
-        "worker_response_start_jst": "2026-09-29T02:45:31+09:00",
-        "external_build_cook_start_jst": "2026-09-29T02:47:58+09:00",
-        "worker_durable_result_jst": "2026-09-29T02:49:08+09:00",
-        "canonical_child_finalize_jst": "2026-09-29T02:49:50+09:00",
-        "result_enqueued_to_planner_jst": "2026-09-29T02:50:04+09:00",
-        "external_build_success_marker_jst": "2026-09-29T02:50:07+09:00",
-        "external_terminal_success_jst": "2026-09-29T02:50:18+09:00",
-        "planner_review_response_start_jst": "2026-09-29T02:50:36+09:00"
-      },
-      "timing": {
-        "worker_semantic_interval": "3m37s",
-        "external_interval": "2m20s",
-        "external_after_worker_handoff": "1m10s"
-      },
-      "validated_chain": [
-        "Helper recovery returns control",
-        "Planner regains semantic ownership",
-        "successor Workers continue",
-        "Worker launches real external work",
-        "Worker durably hands off before external completion",
-        "canonical Child finalizes",
-        "Result routes to Planner",
-        "external Build/Cook succeeds",
-        "Planner review resumes"
-      ],
-      "conclusion": "The recovery hotfix restored actual semantic, external-execution, handoff and control-loop behavior on the same Parent Task; it did not merely restore a status flag."
-    }
+    "helper_recovery_returned_control_to_planner": true
   },
   "public_artifacts": {
     "viewer_client_git_blob": "b1e026e18334910c090e006f09b557ed55804fab",
@@ -166,7 +121,7 @@
   "part_framing": {
     "part1": "SUCCESSFUL_LONG_RUNNING_MULTI_WORKSTREAM_CASE",
     "part2": "RECOVERY_STRESS_AND_PROBLEM_DISCOVERY_CASE",
-    "interpretation": "Part 1 is the positive long-running stability case. Part 2 is a recovery stress test with both positive and negative evidence: G20 proves a repaired recovery path can restore healthy end-to-end task operation after system-level interference; G32 later exposes a different physical web-conversation failure still outside the then-current recovery boundary."
+    "interpretation": "Part 1 is the positive long-running stability case. Part 2 is a real-task recovery stress record: intervention #1 after G9 improves infrastructure resilience; that improvement is exercised when G12 wedges primary execution but G13-G15 continue on backup capacity; intervention #2 upgrades Helper after the post-G15 recovery path fails to close; the task then continues unattended through G31 before G32 exposes a different physical web-conversation failure."
   },
   "recovery_stress_timeline": [
     {
@@ -248,16 +203,6 @@
       "detail": "The Helper recovery contract was strengthened during the live incident before the same Parent Task resumed."
     },
     {
-      "event": "g20_external_job_outlives_worker",
-      "worker_response_start_jst": "2026-09-29T02:45:31+09:00",
-      "external_start_jst": "2026-09-29T02:47:58+09:00",
-      "worker_durable_result_jst": "2026-09-29T02:49:08+09:00",
-      "external_terminal_success_jst": "2026-09-29T02:50:18+09:00",
-      "worker_semantic_interval": "3m37s",
-      "external_interval": "2m20s",
-      "external_after_worker_handoff": "1m10s"
-    },
-    {
       "event": "g32_dispatch_requested",
       "at_jst": "2026-09-29T05:14:51+09:00"
     },
@@ -292,5 +237,48 @@
       "stronger semantic Helper recovery ownership and return-control semantics",
       "redundant execution capacity"
     ]
+  },
+  "stability_metrics": {
+    "not_a_dry_run": true,
+    "workload_description": "Concrete engineering task involving fresh Blender/UE work, Viewer reconstruction, native acceptance, Build/Cook, package/runtime investigation and direct-preview research.",
+    "parent_start_jst": "2026-09-28T11:25:48+09:00",
+    "first_system_level_wedge_jst": "2026-09-28T21:24:07+09:00",
+    "uninterrupted_before_first_human_operational_intervention": "9h58m19s",
+    "g31_durable_handoff_jst": "2026-09-29T05:13:44+09:00",
+    "productive_task_lifetime_to_g31": "17h47m56s",
+    "human_recovery_interventions_to_g31": 2,
+    "post_helper_hotfix2_planner_resume_jst": "2026-09-29T02:00:32+09:00",
+    "unattended_post_hotfix2_to_g31": "3h13m12s",
+    "g32_backend_still_running_stop_boundary_jst": "2026-09-29T07:41:16+09:00",
+    "total_wall_clock_to_final_stop_boundary": "20h15m28s",
+    "g32_nonproductive_stall_after_response_start": "2h26m05s",
+    "interpretation": "Nearly ten hours of real-task operation elapsed before the first system-level failure required human recovery. With only two human recovery interventions, the same Parent Task continued producing durable progress for 17h47m56s through G31. The later G32 physical-page stall is excluded from productive uptime."
+  },
+  "recovery_chronology": {
+    "intervention_1": {
+      "trigger": "G9 worker-authored external execution wedge",
+      "effect": "Recovery infrastructure hotfix around G10, including backup/redundant execution capacity, semantic-sync/durable-result reduction, retention/binding and lifecycle fixes."
+    },
+    "g12_validation_of_intervention_1": {
+      "primary_wedge": "1h00m39s",
+      "continued_generations": [
+        13,
+        14,
+        15
+      ],
+      "interpretation": "G12 again blocks primary execution, but G13-G15 continue on backup capacity, demonstrating that intervention #1 improved resilience."
+    },
+    "intervention_2": {
+      "trigger": "After G15 durable completion, Planner invokes Helper for the inherited G12 incident; first Helper behavior cannot complete recovery closure.",
+      "name": "Helper Hotfix 2.0",
+      "effect": "Helper becomes a closure-complete recovery owner capable of bounded mutation, cleanup verification, durable incident/result, canonical closure and return-control."
+    },
+    "after_intervention_2": {
+      "helper_result_jst": "2026-09-29T01:54:32+09:00",
+      "helper_canonical_completion_jst": "2026-09-29T01:59:54+09:00",
+      "planner_resume_jst": "2026-09-29T02:00:32+09:00",
+      "g16_response_start_jst": "2026-09-29T02:04:22+09:00",
+      "no_further_helper_failure_observed_through_g31": true
+    }
   }
 }

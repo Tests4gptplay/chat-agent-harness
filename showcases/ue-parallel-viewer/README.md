@@ -214,141 +214,188 @@ Part 2A was formally accepted at **18:47:16 JST**, **7h21m28s** after Parent sta
 
 This part still looked like Part 1: hypotheses could be wrong, Workers could be replaced, and the task could continue because the failures did not destroy the execution substrate.
 
-## G9 — a Worker-authored mistake blocked the system
+## Stability under a real task — not a dry run
 
-The recovery story changes at G9.
+Before the recovery failures, one point should be made explicit: this was **not a synthetic soak test, dry run, or scripted fault-injection benchmark**.
+
+One concrete engineering task was submitted and CAH kept working on it: fresh Blender/UE asset work, native Viewer reconstruction, real Build/Cook operations, package/runtime investigation, native validation and later direct-preview research.
+
+The useful stability metric is therefore not “the browser stayed open for N hours”. It is how long the system kept advancing a real task before human operational recovery was required.
+
+From Parent Task start at **11:25:48 JST** to the first system-level G9 wedge at **21:24:07 JST**:
+
+**9h58m19s**
+
+elapsed without a recorded human operational intervention.
+
+There were ordinary engineering failures during that span, but CAH handled them inside the normal Worker/Planner loop without requiring the user to step in and repair the Harness.
+
+## G9 — first system-level failure after almost ten hours unattended
 
 At **21:19:20 JST**, G9 reached Worker response-start. It launched an external staged runtime operation at **21:24:07** and wrote its own durable handoff at **21:25:42**.
 
-The problem was inside the Worker-authored task-local execution wrapper: it synchronously nested the Viewer launcher without an outer watchdog/timeout and without reliable finally-style cleanup.
-
-The result was not simply “this experiment failed”.
+The Worker-authored execution wrapper synchronously nested the Viewer launcher without an outer watchdog/timeout and reliable cleanup.
 
 The external run remained stuck from:
 
-**21:24:07 → 22:24:45 JST = 1h00m38s**
+**21:24:07 → 22:24:45 = 1h00m38s**
 
 and occupied the primary Runner.
 
-This is the important distinction:
+This was the first failure class that escaped the normal task/replanning envelope:
 
 ```text
 ordinary task failure
-    → Worker records failure
-    → next bounded decision
+→ Worker records evidence
+→ Planner / successor continues
 
-G9-class destructive failure
-    → Worker-created execution blocks shared infrastructure
-    → normal continuation path itself becomes impaired
+G9 system-level failure
+→ Worker-created execution blocks shared infrastructure
+→ normal continuation capacity is impaired
 ```
 
-G10 had already been dispatched at **21:26:37**, but did not reach response-start until **22:13:13** — a **46m36s** admission/transport delay — while the G9 external operation was still wedged.
+G10 had already been dispatched at **21:26:37**, but did not reach response-start until **22:13:13**, a **46m36s** admission/transport delay.
 
-That exposed a real weakness in the then-current CAH design: preserving semantic state was not enough if the physical execution/recovery path itself could be monopolized by a bad external action.
+## First human intervention — recovery infrastructure hotfix around G10
 
-## Hotfixes got the task moving again
+The first human operational intervention followed the G9 incident and was completed around the G10 cycle.
 
-The task was not restarted from zero.
+It strengthened recovery infrastructure rather than merely fixing one Viewer experiment. Changes made during that recovery period included mechanisms that later mattered directly:
 
-Several recovery changes were made while the same Parent Task remained alive.
+- backup / redundant Runner capacity;
+- semantic-sync and durable-result reduction;
+- Worker retention/binding repairs;
+- Host/lifecycle recovery fixes.
 
-G10 eventually completed its semantic work and wrote a durable result at **22:58:18**. During the semantic-sync hot upgrade, that already-durable result was recovered and canonically finalized at **23:18:11** without rerunning the Worker.
+G10 itself eventually produced a durable result at **22:58:18**, and the new semantic-sync path canonically finalized that already-existing result at **23:18:11** without rerunning the Worker.
 
-A later G11 dispatch exposed another lifecycle delay:
+The value of this first intervention became clearer when the system was stressed again.
 
-**23:31:42 → 00:01:31 JST = 29m49s**
-
-The Worker-retention/binding path was repaired and the same dispatch eventually continued.
-
-These are not Viewer achievements. They are evidence that Part 2 had turned into a live recovery-engineering exercise around CAH itself.
-
-## G12 — the same class of danger appeared again, but redundancy helped
+## G12 — another destructive blockage, but intervention #1 now paid off
 
 A later corrected hybrid-mode experiment launched at **00:21:01 JST** and again became stuck for roughly one hour:
 
 **00:21:01 → 01:21:40 = 1h00m39s**
 
-The difference this time was that backup execution capacity already existed.
+This time the Task Cell did not lose all forward motion.
 
-While the primary Runner remained occupied, three consecutive Worker generations still reached response-start and durable continuation on backup capacity:
+While the primary Runner remained occupied, three consecutive Worker generations continued on backup capacity:
 
 - **G13:** 00:26:13 → 00:31:45
 - **G14:** 00:32:43 → 00:39:25
 - **G15:** 00:40:41 → 00:45:43
 
-That was the first real proof that redundant Runner capacity could keep the Task Cell alive while one execution lane was blocked.
+This is the clearest proof that the first intervention had already improved resilience:
 
-## Helper recovery was still too weak
+> **G12 again blocked the primary execution resource, but G13–G15 still advanced the same Parent Task instead of the whole Task Cell stalling as it had around G9.**
 
-At **00:47:30 JST**, Planner reviewed the inherited blockage and correctly classified it as an operational incident rather than inventing another semantic experiment.
-
-Helper reached response-start at **00:51:26**.
-
-But the first Helper behavior still over-focused on diagnosis. It did not complete the full mutation → canonical closure → return-control sequence needed to restore the task automatically.
-
-That triggered another human operational intervention.
-
-The Helper role was strengthened during the live incident into a more active recovery owner. The resumed recovery completed the exact cleanup, persisted the incident result, and returned control to Planner. The original Planner reached response-start again at **02:00:32**, and later Workers continued from the preserved frontier.
-
-This is exactly the kind of weakness Part 2 was useful for exposing.
-
-## G20 — a post-recovery mechanism success
-
-G20 is more than a timing sample.
-
-It is the first clean end-to-end proof, after the second human intervention, that the strengthened recovery path restored the **same Parent Task** to healthy operation.
-
-The sequence matters:
+The system had moved from:
 
 ```text
-G12 external execution wedges again
-→ G13 / G14 / G15 continue through backup capacity
-→ Planner escalates the blockage as an operational incident
-→ first Helper can diagnose but cannot close recovery
-→ second human intervention strengthens the Helper recovery contract
-→ Helper performs exact cleanup, durable closure and return-control
-→ original Planner resumes at 02:00:32
-→ G16 / G17 / G18 / G19 continue normally
-→ G20 completes a full healthy cycle
+one blocked Runner
+→ Parent Task effectively loses forward progress
 ```
 
-G20's observed timeline:
-
-- Worker response-start: **02:45:31**
-- independent fresh standalone/cooked Game Build/Cook launched: **02:47:58**
-- Worker durable result: **02:49:08**
-- canonical Child finalize: **02:49:50**
-- Result enqueued to Planner: **02:50:04**
-- external archive records `BUILD SUCCESSFUL`: **02:50:07**
-- external workflow terminal success: **02:50:18**
-- Planner review response-start: **02:50:36**
-
-The Worker semantic interval was **3m37s**.
-
-The external Build/Cook interval was **2m20s**, including **1m10s after the Worker had already durably handed off**.
-
-What this validates is not merely that “the Runner worked again”. The complete post-recovery control chain was functioning:
+toward:
 
 ```text
-Helper recovery
-→ Planner regains control
-→ successor Workers continue
-→ a Worker launches real external work
-→ the Worker does not need to wait for it
-→ durable handoff succeeds
-→ external work continues independently
-→ Build/Cook succeeds
-→ canonical finalize and Planner review continue normally
+one blocked Runner
+→ backup capacity carries later Workers
+→ durable semantic frontier keeps moving
 ```
 
-That is a strong **post-recovery mechanism success**.
+## After G15 — the remaining weakness was Helper recovery, not the Worker
 
-It shows that the second intervention and Helper/recovery hotfix did more than restore a status flag: they restored semantic progression, external execution, handoff, canonical reduction and Planner continuation on the same live task.
+G15 itself did **not** stall.
 
-Part 2 therefore contains both positive and negative recovery evidence:
+It wrote its durable result normally at **00:45:43**.
 
-1. **G20:** some recovery mechanisms were successfully exercised after a real system-level blockage.
-2. **G32:** a later physical web-conversation failure still exceeded the then-current automatic recovery boundary.
+Then:
+
+- Planner response-start: **00:47:30**
+- Planner writes `WAIT_HELPER`: **00:50:48**
+- Helper request staged: **00:51:07**
+- Helper response-start: **00:51:26**
+
+The first Helper behavior could diagnose the inherited G12 operational incident, but it could not yet complete the full recovery loop:
+
+```text
+required mutation
+→ exact cleanup
+→ durable incident/result
+→ canonical closure
+→ return control
+```
+
+That was the trigger for the **second human intervention / Helper Hotfix 2.0**.
+
+## Second human intervention — Helper Hotfix 2.0
+
+The second intervention strengthened Helper from a diagnosis-heavy role into a closure-complete recovery owner.
+
+The resumed Helper could now:
+
+- execute bounded recovery mutations under Planner authority;
+- cancel/clean the exact incident-owned external work;
+- verify Runner cleanup;
+- persist the durable incident/result;
+- complete canonical closure;
+- explicitly return control to Planner.
+
+The same incident then completed:
+
+- Helper result: **01:54:32**
+- canonical Helper completion: **01:59:54**
+- `helper_result` enqueued: **02:00:04**
+- original Planner response-start again: **02:00:32**
+- Planner durable done: **02:02:47**
+- G16 response-start: **02:04:22**
+
+From there, G16 onward continued automatically.
+
+## Hotfix 2.0 → G31: another 3h13m12s without further Helper failure
+
+After the original Planner resumed at **02:00:32**, the task continued through G16, G17, G18, G19 and the later P2-B generations without another recorded Helper failure.
+
+G31 wrote its durable handoff at **05:13:44 JST**.
+
+That gives a post-Hotfix-2.0 autonomous interval of:
+
+**02:00:32 → 05:13:44 = 3h13m12s**
+
+with no further human recovery intervention and no second Helper incident.
+
+
+## Overall task endurance before the final physical-page failure
+
+The larger number is more important.
+
+From Parent start:
+
+**2026-09-28 11:25:48 JST**
+
+to G31 durable handoff:
+
+**2026-09-29 05:13:44 JST**
+
+the same concrete Parent Task remained alive and continued producing durable engineering progress for:
+
+# **17h47m56s**
+
+Across that entire period, only **two human operational interventions** were needed:
+
+1. recovery infrastructure hotfix after G9;
+2. Helper Hotfix 2.0 after the G15 → Helper recovery path failed to close.
+
+This was not 17+ hours of an idle browser staying open. It was a live engineering task continuously moving through real source inspection, builds, Cooks, runtime experiments, package analysis, Worker generations, Planner reviews and durable handoffs.
+
+That is the strongest stability claim this showcase can support.
+
+The final G32 physical-page failure extended the Parent Task wall-clock life to the **07:41:16 JST** stop boundary:
+
+**20h15m28s total wall-clock lifetime**
+
+but the final **2h26m05s** after G32 response-start was a stuck physical conversation, so it should not be counted as productive uptime.
 
 ## G32 — a second recovery class: the web conversation itself stopped producing output
 

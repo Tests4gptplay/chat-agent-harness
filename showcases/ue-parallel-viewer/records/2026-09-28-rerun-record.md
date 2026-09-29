@@ -45,71 +45,46 @@ This is the clean positive stability boundary. Failures occurred, but they staye
 
 Part 2A is an accepted investigation. It corrects a hidden assumption but does not yet exercise the later recovery limits.
 
-## Part 2B recovery-stress timeline — G9 to G32
+## Real-task stability metrics
 
-| Time | Event | What it exposed |
+This was not a synthetic soak test or dry run. The same Parent Task was doing real Blender/UE work, fresh Viewer reconstruction, native acceptance, Build/Cook, package/runtime diagnosis and direct-preview research.
+
+The two most useful endurance measurements are:
+
+| Metric | Duration |
+| --- | ---: |
+| Parent start → first system-level G9 wedge, before any recorded human operational recovery | **9h58m19s** |
+| Parent start → G31 durable handoff, with only two human recovery interventions | **17h47m56s** |
+| Planner resume after Helper Hotfix 2.0 → G31 durable handoff, with no further Helper failure | **3h13m12s** |
+| Parent start → final G32 stuck-page stop boundary, total wall clock | **20h15m28s** |
+
+The final **2h26m05s** after G32 response-start was a stuck physical-page interval and is not counted as productive uptime.
+
+## Recovery chronology — G9 to G31
+
+| Time | Event | Meaning |
 | --- | --- | --- |
-| **21:19:20** | G9 Worker response-start | Normal semantic work begins. |
-| **21:24:07** | G9 launches an external staged runtime operation | Worker-authored wrapper synchronously nests the Viewer launcher without an outer watchdog/timeout and reliable cleanup. |
-| **21:25:42** | G9 durable handoff | Semantic frontier is preserved even though the external operation remains alive. |
-| **21:24:07–22:24:45** | External G9 run remains stuck for **1h00m38s** | A Worker-created execution error can occupy shared Runner capacity and impair the normal continuation path. |
-| **21:26:37** | G10 dispatch created | The next semantic generation is already requested. |
-| **22:13:13** | G10 finally reaches response-start | **46m36s** dispatch→response-start delay while the G9 external blockage still exists. |
-| **22:58:18** | G10 durable result | Semantic work survives the incident. |
-| **23:18:11** | G10 canonically finalized through semantic-sync recovery | Hotfix recovers an already-durable result without rerunning the Worker. |
-| **23:31:42–00:01:31** | G11 dispatch→response-start delay: **29m49s** | Worker-retention/binding weakness is diagnosed and repaired while preserving the same task. |
-| **00:21:01–01:21:40** | G12 external run becomes stuck for **1h00m39s** | The same class of external execution danger appears again. |
-| **00:26:13–00:31:45** | G13 continues on backup capacity | Redundant execution capacity keeps the Task Cell alive. |
-| **00:32:43–00:39:25** | G14 continues on backup capacity | Same blocked Parent Task, no semantic restart. |
-| **00:40:41–00:45:43** | G15 continues on backup capacity | Third consecutive Worker generation survives while primary capacity is blocked. |
-| **00:47:30** | Planner response-start | Planner reviews the inherited operational blockage. |
-| **00:51:26** | Helper response-start | Incident is correctly routed to recovery rather than another semantic experiment. |
-| **00:51–02:00** | Helper behavior is hotfixed during the live incident | The first Helper was too diagnostic; the role is strengthened toward active mutation, durable closure and return-control. |
-| **02:00:32** | Original Planner resumes | Same Parent Task returns to semantic control after recovery. |
-| **02:45:31** | G20 Worker response-start | First clean post-recovery Worker cycle after the strengthened Helper/recovery path. |
-| **02:47:58** | G20 launches independent fresh standalone/cooked Game Build/Cook | Real external work is launched from the recovered Parent Task. |
-| **02:49:08** | G20 durable result | Worker semantic interval: **3m37s**; Worker hands off before the external job finishes. |
-| **02:49:50** | G20 canonical Child finalize | Same task reduces normally after the recovery episode. |
-| **02:50:04** | G20 Result enqueued to Planner | Planner-review path is restored. |
-| **02:50:07** | External archive records `BUILD SUCCESSFUL` | Machine work continues independently after Worker handoff. |
-| **02:50:18** | External workflow terminal success | **2m20s** external interval, including **1m10s after Worker handoff**. |
-| **02:50:36** | Planner review response-start | Full semantic control loop is healthy again. |
-| **05:14:51** | G32 requested | A new physical Worker attempt begins. |
-| **05:15:11** | G32 response-start / runtime ACK | CAH records the exact dispatch as RUNNING. |
-| **07:36:47** | Direct inspection of the exact G32 web page | More than **2h21m** after response-start: assistant message count is **0**, Stop control is present, page still appears busy, and no durable Reply/Result exists. |
-| **07:41:16** | Canonical backend still RUNNING | More than **2h26m** after response-start with no semantic output. |
-| later | User explicitly stops further P2-B work | No active external computation needs preserving; the unresolved blocker is the physical browser conversation itself. |
+| **21:24:07** | G9 external operation starts and wedges primary execution | First system-level failure after **9h58m19s** of real-task operation without recorded human recovery intervention. |
+| **21:24:07–22:24:45** | G9 external run stuck for **1h00m38s** | Worker-authored execution can block shared infrastructure. |
+| **~G10 cycle** | **Human intervention #1** | Recovery infrastructure is strengthened: backup capacity, semantic-sync/durable-result handling, retention/binding and lifecycle fixes. |
+| **22:58:18** | G10 durable result | Same Parent Task survives the first incident. |
+| **23:18:11** | G10 canonical finalize through semantic-sync recovery | Already-durable semantic work is recovered without rerunning the Worker. |
+| **00:21:01–01:21:40** | G12 external run stuck for **1h00m39s** | Similar destructive pressure appears again. |
+| **00:26:13–00:31:45** | G13 continues on backup capacity | Intervention #1 is now producing visible resilience. |
+| **00:32:43–00:39:25** | G14 continues on backup capacity | Same Parent Task keeps advancing. |
+| **00:40:41–00:45:43** | G15 continues and writes durable result | Third consecutive Worker continues despite primary blockage. |
+| **00:47:30** | Planner reviews inherited G12 incident | G15 itself was not stuck. |
+| **00:51:26** | Helper response-start | Remaining weakness moves into the recovery-role path. |
+| **00:51–01:43** | **Human intervention #2 / Helper Hotfix 2.0** | First Helper behavior is too diagnostic; Helper is upgraded into a closure-complete recovery owner. |
+| **01:54:32** | Helper durable result | Recovery mutation/cleanup is completed. |
+| **01:59:54** | Canonical Helper completion | Incident closes durably. |
+| **02:00:32** | Original Planner resumes | Control returns to normal semantic ownership. |
+| **02:04:22** | G16 response-start | Same Parent Task continues without restart. |
+| **05:13:44** | G31 durable handoff | **3h13m12s** after Planner resume with no further Helper failure and no third human recovery intervention. |
 
-## G20 is the positive recovery proof
+From the original Parent start at **2026-09-28 11:25:48 JST** to G31 durable handoff at **2026-09-29 05:13:44 JST**, the same concrete engineering task stayed alive and continued producing durable progress for **17h47m56s**, with only two human recovery interventions.
 
-The G20 sequence is the most important positive result inside Part 2.
-
-It occurs **after** the second human intervention had strengthened Helper from a diagnosis-heavy role into a recovery owner capable of completing cleanup, durable closure and return-control.
-
-By G20, the same Parent Task could once again perform the complete healthy sequence:
-
-```text
-Planner owns the frontier
-→ Worker response-start
-→ Worker launches a real external Build/Cook
-→ Worker writes a durable result
-→ Worker hands off before external completion
-→ Child finalizes canonically
-→ Result routes back to Planner
-→ external Build/Cook reaches real success
-→ Planner review begins
-```
-
-So G20 is not merely evidence that the system “eventually recovered”. It is an end-to-end demonstration that the newly repaired recovery/lifecycle machinery restored a real task to normal operation after system-level interference.
-
-That is why Part 2 should be read as:
-
-```text
-G9 / G12: reveal recovery weakness
-→ hotfix and stronger Helper/recovery semantics
-→ G20: prove the repaired mechanism can carry the task normally again
-→ G32: reveal a different, still-uncovered physical page failure
-```
+That is the strongest stability result in this showcase.
 
 ## Two different recovery failure classes
 
