@@ -66,15 +66,50 @@ Part 2A is an accepted investigation. It corrects a hidden assumption but does n
 | **00:51:26** | Helper response-start | Incident is correctly routed to recovery rather than another semantic experiment. |
 | **00:51–02:00** | Helper behavior is hotfixed during the live incident | The first Helper was too diagnostic; the role is strengthened toward active mutation, durable closure and return-control. |
 | **02:00:32** | Original Planner resumes | Same Parent Task returns to semantic control after recovery. |
-| **02:45:31** | G20 Worker response-start | Normal work is demonstrably running again. |
-| **02:47:58** | G20 launches independent Build/Cook | External execution is decoupled from Worker lifetime. |
-| **02:49:08** | G20 durable result | Worker semantic interval: **3m37s**. |
-| **02:50:18** | External Build/Cook terminal success | **2m20s** external interval, including **1m10s after Worker handoff**. |
+| **02:45:31** | G20 Worker response-start | First clean post-recovery Worker cycle after the strengthened Helper/recovery path. |
+| **02:47:58** | G20 launches independent fresh standalone/cooked Game Build/Cook | Real external work is launched from the recovered Parent Task. |
+| **02:49:08** | G20 durable result | Worker semantic interval: **3m37s**; Worker hands off before the external job finishes. |
+| **02:49:50** | G20 canonical Child finalize | Same task reduces normally after the recovery episode. |
+| **02:50:04** | G20 Result enqueued to Planner | Planner-review path is restored. |
+| **02:50:07** | External archive records `BUILD SUCCESSFUL` | Machine work continues independently after Worker handoff. |
+| **02:50:18** | External workflow terminal success | **2m20s** external interval, including **1m10s after Worker handoff**. |
+| **02:50:36** | Planner review response-start | Full semantic control loop is healthy again. |
 | **05:14:51** | G32 requested | A new physical Worker attempt begins. |
 | **05:15:11** | G32 response-start / runtime ACK | CAH records the exact dispatch as RUNNING. |
 | **07:36:47** | Direct inspection of the exact G32 web page | More than **2h21m** after response-start: assistant message count is **0**, Stop control is present, page still appears busy, and no durable Reply/Result exists. |
 | **07:41:16** | Canonical backend still RUNNING | More than **2h26m** after response-start with no semantic output. |
 | later | User explicitly stops further P2-B work | No active external computation needs preserving; the unresolved blocker is the physical browser conversation itself. |
+
+## G20 is the positive recovery proof
+
+The G20 sequence is the most important positive result inside Part 2.
+
+It occurs **after** the second human intervention had strengthened Helper from a diagnosis-heavy role into a recovery owner capable of completing cleanup, durable closure and return-control.
+
+By G20, the same Parent Task could once again perform the complete healthy sequence:
+
+```text
+Planner owns the frontier
+→ Worker response-start
+→ Worker launches a real external Build/Cook
+→ Worker writes a durable result
+→ Worker hands off before external completion
+→ Child finalizes canonically
+→ Result routes back to Planner
+→ external Build/Cook reaches real success
+→ Planner review begins
+```
+
+So G20 is not merely evidence that the system “eventually recovered”. It is an end-to-end demonstration that the newly repaired recovery/lifecycle machinery restored a real task to normal operation after system-level interference.
+
+That is why Part 2 should be read as:
+
+```text
+G9 / G12: reveal recovery weakness
+→ hotfix and stronger Helper/recovery semantics
+→ G20: prove the repaired mechanism can carry the task normally again
+→ G32: reveal a different, still-uncovered physical page failure
+```
 
 ## Two different recovery failure classes
 
