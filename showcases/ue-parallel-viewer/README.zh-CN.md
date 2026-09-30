@@ -37,6 +37,30 @@ Planner 第一轮就把任务拆成两条可以独立推进的工作线：
 
 所以这不是“一个模型回合执行一个命令”，而是一个持续很久的 managed task：**多条任务线并行／交替推进，最终在明确 join condition 上汇合。**
 
+## 两代 Viewer 并排对比
+
+旧版 Viewer Showcase 已经作为独立历史案例恢复：
+
+**[Historical Viewer Showcase — 2026-09-20](historical-2026-09-20/README.md)** · **[中文版](historical-2026-09-20/README.zh-CN.md)**
+
+保留旧版最有价值的地方就在这里：2026-09-28 的 P1 虽然仍然是“打开真实 Cook 并做 native 检查”这个用户目标，但底层 runtime / packaging 路线已经换了。
+
+| | 旧版 Viewer — 2026-09-20 | Fresh P1 Viewer — 2026-09-28 |
+| --- | --- | --- |
+| 代表性 native 画面 | ![旧版 Viewer Perspective](historical-2026-09-20/images/perspective.png) | ![Fresh P1 Perspective](images/phase1-perspective-lit.png) |
+| 起点 | 已有 paused Viewer / source 被继续复用、修复、集成和验收 | Historical GAHQuickLook 只允许作为 **source / design reference**，必须新建 source/build tree |
+| Runtime Host | 安装好的 UE 5.6.1 **Editor runtime + `-game`**，DX11/SM5 | Fresh packaged **`WITH_EDITOR=0` standalone Game runtime** |
+| 是否 standalone package | 否，旧版明确不是 standalone executable | 是，P1 验收路径切到了 packaged Game runtime |
+| Viewer 自身封装方式 | Editor-hosted project/runtime，在 `-game` 环境内补 Pak platform mount/catalog/shader-library | Viewer 最终改成 **Pak-only / no-IoStore**；外部 camera PAK 保持不变 |
+| 输入路径 | classic PAK fixture，在 Editor-hosted `-game` runtime 中动态 mount / catalogue | packaged Viewer 直接消费这一轮 fresh external camera PAK |
+| Shader 路线 | 在 Editor-hosted Viewer 里修 runtime shader-library support | packaged runtime 经过 platform-file / shader routing 排查后，直接打开真实 external monolithic camera shader library |
+| Evidence 来源 | 旧 source 被复用/修复；运行中包含 supervised fixes 和 synthetic turnover | 旧 binary / capture / Cook / PASS 明确禁止算本轮证据；必须 fresh build、fresh Cook integration、fresh native capture |
+| 这个案例证明什么 | 证明原始架构可以被修成可用 inspection tool | 证明**在完全不同 runtime / packaging 架构上重新构建并通过验收** |
+
+所以把两个 Showcase 并排放出来很重要：
+
+**2026-09-28 的 P1 不是旧 Viewer 换个截图，也不是把旧工程重新编译一次，而是在保留历史设计知识的前提下，重新建立 source/build、重新集成 fresh Cook，并把 runtime 从 Editor-hosted 路线改成 packaged standalone Game 路线。**
+
 ## 和历史 Viewer 的实现路径有什么不同
 
 P1 不是把旧 Viewer 二进制或旧工程目录复制过来重新跑一遍。
