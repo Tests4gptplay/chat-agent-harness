@@ -61,6 +61,51 @@ Planner 第一轮就把任务拆成两条可以独立推进的工作线：
 
 **2026-09-28 的 P1 不是旧 Viewer 换个截图，也不是把旧工程重新编译一次，而是在保留历史设计知识的前提下，重新建立 source/build、重新集成 fresh Cook，并把 runtime 从 Editor-hosted 路线改成 packaged standalone Game 路线。**
 
+### 这也展示了 AI 执行和传统固定程序之间一个很重要的差别
+
+这两个案例面对的是高度相同的用户目标：**把真实 Cook 打开，并提供可供人和 Agent 检查的 native Viewer。** 第二次运行甚至已经拥有第一版 Viewer 的源码、UI/API 设计和历史经验作为参考。
+
+如果这是一个传统的固定 procedural program，同一套代码在相同输入和环境条件下，通常意味着沿着预先写好的 control flow 执行；实现路径本身已经被程序员写死。
+
+CAH 这里表现出来的并不是这种关系。
+
+第二次运行没有把历史实现当成唯一答案，而是：
+
+```text
+同一个高层目标
++ 历史实现知识
++ 当前环境 / 当前失败证据
+        ↓
+AI 重新做架构判断
+        ↓
+旧 Editor-hosted 路线不再适合
+        ↓
+重新推导 packaged standalone Game 路线
+        ↓
+继续根据运行证据修改 platform-file / shader / packaging 设计
+```
+
+所以这组对照至少清楚展示了一件事：
+
+> **对 CAH 这样的 AI Agent 系统来说，任务目标和验收条件可以保持稳定，但实现路径并不是一个固定映射。AI 会根据当时看到的环境、失败和证据重新选择 decomposition、实验顺序和技术架构。**
+
+这和传统程序最本质的区别之一就在这里。
+
+CAH 并不试图把这种非固定性消掉；相反，它把“需要稳定的部分”放到外部 durable contract 中：
+
+- Git 里的 Task / Plan / Result；
+- 明确的 constraints；
+- acceptance criteria；
+- 输入与产物哈希；
+- native evidence；
+- 最终可验证结果。
+
+**实现过程可以变化，但验收边界不能漂移。**
+
+因此，旧 Viewer 和 Fresh P1 Viewer 的价值不只是“有两个版本”。它们共同说明：AI 面对相似目标时可以产生不同但都可验证的工程路径，而 Git-backed Harness 的作用，就是让这种开放式推理仍然受到稳定约束和可审计证据的控制。
+
+> 这并不意味着“字节级完全相同的输入一定会产生不同输出”，也不是说传统软件绝不会包含随机性或动态决策；这里展示的是更窄的工程事实：**AI reasoning layer 并不是一段预先固定好的实现算法，而验收与状态管理必须由 Harness 提供确定性。**
+
 ## 和历史 Viewer 的实现路径有什么不同
 
 P1 不是把旧 Viewer 二进制或旧工程目录复制过来重新跑一遍。
