@@ -1,3 +1,6 @@
+> **Historical implementation snapshot — 2026-09-20.**  
+> This page preserves the earlier Viewer showcase as a separate implementation lineage. It used the installed **UE 5.6.1 Editor runtime in `-game` mode** and is intentionally kept for comparison with the later [fresh packaged P1 Viewer](../README.md), which moved to a `WITH_EDITOR=0` standalone Game runtime and a Pak-only / no-IoStore Viewer package.
+
 # Parallel test: Blender → Unreal Cook + native Viewer
 
 [中文](README.zh-CN.md) · [Agent operation guide](AGENT_VIEWER.md) · [Evidence and timeline](evidence.json) · [Downloads](DOWNLOADS.md)
@@ -12,7 +15,7 @@
 
 The desired workflow was practical: make an asset in Blender, prepare its Unreal materials and Cook output, then inspect the result without opening the full Editor interface each time. The Viewer needed a human interface and an API for an agent to inspect the same native rendering, including screenshots in a silent mode.
 
-The camera already existed from the [earlier Blender case](../camera/README.md). There was also a paused Viewer implementation and fixture-preparation code. This was a fresh **orchestration and acceptance run**, not a claim that both applications were invented from scratch during a short parallel interval. Existing source was reused, repaired, integrated and tested.
+The camera already existed from the [earlier Blender case](https://github.com/Tests4gptplay/chat-agent-harness/blob/604e4ff26757d3738e4ee4aaa0d8457953a98db7/showcases/camera/README.md). There was also a paused Viewer implementation and fixture-preparation code. This was a fresh **orchestration and acceptance run**, not a claim that both applications were invented from scratch during a short parallel interval. Existing source was reused, repaired, integrated and tested.
 
 The acceptance target was a working local tool: real cooked model and materials, readable views, inspection of material slots and dependencies, useful camera controls, unchanged input-package hashes, and an entry point that opened the model. A blank window or an API returning `ok=true` alone was not sufficient.
 
