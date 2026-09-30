@@ -320,6 +320,8 @@ CAH is intended to be demonstrated through complete end-to-end workloads rather 
 
 The historical Viewer is preserved beside P1 because the implementation path is materially different: the 2026-09-20 case used the installed UE 5.6.1 **Editor runtime in `-game`**, while the fresh P1 run moved to a packaged **`WITH_EDITOR=0` standalone Game runtime** and ultimately a **Pak-only / no-IoStore** Viewer package consuming the real external camera PAK.
 
+The side-by-side cases also show that the later AI run did not mechanically replay the earlier implementation even though that implementation was available as reference. A highly similar Viewer objective produced a materially different runtime architecture.
+
 **Part 2 is the recovery stress test:** this was not a dry run. The same concrete engineering task kept doing real Viewer/Cook/runtime work until a Worker-authored execution wedge finally forced the first human recovery intervention almost ten hours after Parent start.
 
 The stability numbers are the headline:

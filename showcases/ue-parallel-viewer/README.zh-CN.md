@@ -61,6 +61,37 @@ Planner 第一轮就把任务拆成两条可以独立推进的工作线：
 
 **2026-09-28 的 P1 不是旧 Viewer 换个截图，也不是把旧工程重新编译一次，而是在保留历史设计知识的前提下，重新建立 source/build、重新集成 fresh Cook，并把 runtime 从 Editor-hosted 路线改成 packaged standalone Game 路线。**
 
+### 一个很有意思的结果：AI 并没有机械复现旧实现
+
+这两个案例面对的是高度相同的用户目标：**把真实 Cook 打开，并提供可供人和 Agent 检查的 native Viewer。** 第二次运行甚至已经拥有第一版 Viewer 的源码、UI/API 设计和历史经验作为参考。
+
+但第二次并没有沿着旧方案机械重放。
+
+最终得到的是一条明显不同的实现路线：
+
+```text
+相近的高层目标
++ 已知的历史实现
+        ↓
+重新分析当前环境和失败
+        ↓
+放弃旧 Editor-hosted runtime 路线
+        ↓
+转向 packaged standalone Game
+        ↓
+继续重新选择 platform-file / shader / packaging 路线
+```
+
+这组对照很直观地展示了 AI 工程执行和传统预先写死程序之间的一个差别：
+
+> **相近的任务输入和相同的目标，并不意味着 AI 只能给出一个固定实现。它可以重新推导问题，并产生完全不同、但仍然能够完成同一目标的工程路径。**
+
+旧版 Viewer 和 Fresh P1 Viewer 因此不只是“两个版本”。
+
+它们是同一个 Viewer 目标在两次真实执行里得到的两种明显不同的技术解法：一个走 **UE Editor-hosted `-game`**，另一个最终走 **packaged `WITH_EDITOR=0` standalone Game + Pak-only / no-IoStore**。
+
+这不是一个严格控制变量、字节级相同输入的实验，因此不应该把它解释成“相同 prompt 必然随机产生不同程序”。但它已经足以说明：**历史实现并没有把下一次 AI 的实现路径锁死。**
+
 ## 和历史 Viewer 的实现路径有什么不同
 
 P1 不是把旧 Viewer 二进制或旧工程目录复制过来重新跑一遍。
