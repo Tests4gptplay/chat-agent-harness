@@ -312,11 +312,13 @@ CAH is intended to be demonstrated through complete end-to-end workloads rather 
 
 ### Viewer/Cook showcase — two parts
 
-[Read the case study](showcases/ue-parallel-viewer/README.md) · [中文](showcases/ue-parallel-viewer/README.zh-CN.md) · [Evidence](showcases/ue-parallel-viewer/evidence.json)
+[Fresh P1 / Recovery case](showcases/ue-parallel-viewer/README.md) · [中文](showcases/ue-parallel-viewer/README.zh-CN.md) · [Historical Viewer — 2026-09-20](showcases/ue-parallel-viewer/historical-2026-09-20/README.md) · [Evidence](showcases/ue-parallel-viewer/evidence.json)
 
 ![Accepted Phase-1 native Viewer perspective](showcases/ue-parallel-viewer/images/phase1-perspective-lit.png)
 
 **Part 1 is the success case:** one long-running managed task split into fresh Cook, a freshly reconstructed Viewer, and integration workstreams, then iterated for more than five hours until real native output passed the acceptance boundary. The historical Viewer was source/design reference only; old binaries, captures, Cook output and PASS labels were not reused as the new result.
+
+The historical Viewer is preserved beside P1 because the implementation path is materially different: the 2026-09-20 case used the installed UE 5.6.1 **Editor runtime in `-game`**, while the fresh P1 run moved to a packaged **`WITH_EDITOR=0` standalone Game runtime** and ultimately a **Pak-only / no-IoStore** Viewer package consuming the real external camera PAK.
 
 **Part 2 is the recovery stress test:** this was not a dry run. The same concrete engineering task kept doing real Viewer/Cook/runtime work until a Worker-authored execution wedge finally forced the first human recovery intervention almost ten hours after Parent start.
 
