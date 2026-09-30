@@ -1,0 +1,243 @@
+{
+  "v": 1,
+  "case": "ue-parallel-viewer",
+  "date": "2026-09-20",
+  "timezone": "UTC",
+  "record_kind": "Sanitized projection of executed records, not raw logs or a new run.",
+  "parallelism": {
+    "worker_A_interval": [
+      "2026-09-20T08:35:16+00:00",
+      "2026-09-20T08:37:47Z"
+    ],
+    "worker_B_interval": [
+      "2026-09-20T08:34:49+00:00",
+      "2026-09-20T08:36:47.129Z"
+    ],
+    "overlap_seconds": 91.129,
+    "start_definition": "Runtime-observed response admission",
+    "end_definition": "Source-preparation completion record",
+    "native_runner_count": 1,
+    "native_jobs_serialized": true,
+    "existing_source_reused": true,
+    "end_to_end_speedup_measured": false
+  },
+  "timeline": [
+    {
+      "actor": "Worker A",
+      "phase": "semantic/source preparation",
+      "start": "2026-09-20T08:35:16+00:00",
+      "end": "2026-09-20T08:37:47Z",
+      "status": "DONE"
+    },
+    {
+      "actor": "Worker B",
+      "phase": "semantic/source preparation",
+      "start": "2026-09-20T08:34:49+00:00",
+      "end": "2026-09-20T08:36:47.129Z",
+      "status": "DONE"
+    },
+    {
+      "actor": "Worker B repair",
+      "phase": "semantic/source preparation",
+      "start": "2026-09-20T08:51:50+00:00",
+      "end": "2026-09-20T08:54:46.344Z",
+      "status": "DONE"
+    },
+    {
+      "actor": "Worker A successor",
+      "phase": "semantic/source preparation",
+      "start": "2026-09-20T08:55:50+00:00",
+      "end": "2026-09-20T08:59:00Z",
+      "status": "DONE"
+    },
+    {
+      "actor": "Task Cell",
+      "phase": "Initial planning",
+      "end": "2026-09-20T16:55:00+09:00",
+      "status": "PLAN_READY"
+    },
+    {
+      "actor": "Task Cell",
+      "phase": "Camera repair",
+      "end": "2026-09-20T17:48:16+09:00",
+      "status": "DECISION_READY"
+    },
+    {
+      "actor": "Task Cell",
+      "phase": "Preview resume",
+      "end": "2026-09-20T10:06:00Z",
+      "status": "DECISION_READY"
+    },
+    {
+      "actor": "Task Cell",
+      "phase": "Mount/display repair",
+      "end": "2026-09-20T10:21:00Z",
+      "status": "DECISION_READY"
+    },
+    {
+      "actor": "Task Cell",
+      "phase": "Outcome returned",
+      "end": "2026-09-20T20:11:00+09:00",
+      "status": "READY_FOR_FOREGROUND_DELIVERY"
+    },
+    {
+      "actor": "Native host",
+      "phase": "viewer-native-a1",
+      "start": "2026-09-20T08:47:25+00:00",
+      "end": "2026-09-20T08:48:45+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "camera-native-a1",
+      "start": null,
+      "end": "2026-09-20T08:41:58+00:00",
+      "status": "ERROR"
+    },
+    {
+      "actor": "Native host",
+      "phase": "camera-native-a2",
+      "start": "2026-09-20T10:03:27+00:00",
+      "end": "2026-09-20T10:04:54+00:00",
+      "status": "ERROR"
+    },
+    {
+      "actor": "Native host",
+      "phase": "camera-native-a3",
+      "start": "2026-09-20T10:10:16+00:00",
+      "end": "2026-09-20T10:11:31+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "integration-a1",
+      "start": "2026-09-20T10:13:22+00:00",
+      "end": "2026-09-20T10:13:43+00:00",
+      "status": "ERROR"
+    },
+    {
+      "actor": "Native host",
+      "phase": "integration-a2",
+      "start": "2026-09-20T10:23:05+00:00",
+      "end": "2026-09-20T10:23:50+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "display-a3",
+      "start": "2026-09-20T10:57:12+00:00",
+      "end": "2026-09-20T10:58:02+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "display-a4",
+      "start": "2026-09-20T11:04:20+00:00",
+      "end": "2026-09-20T11:05:10+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "launcher-a1",
+      "start": "2026-09-20T11:08:33+00:00",
+      "end": "2026-09-20T11:08:55+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "agent-silent-integration-a3",
+      "start": "2026-09-20T12:00:26+00:00",
+      "end": "2026-09-20T12:00:54+00:00",
+      "status": "PASS"
+    },
+    {
+      "actor": "Native host",
+      "phase": "launcher-consolefree-a3",
+      "start": "2026-09-20T12:33:37+00:00",
+      "end": "2026-09-20T12:34:08+00:00",
+      "status": "PASS"
+    }
+  ],
+  "native_acceptance": {
+    "primary_asset": "/Game/RetroCamera/SM_RetroCamera.SM_RetroCamera",
+    "material_slots": 9,
+    "dependency_count": 7,
+    "native_capture_count": 6,
+    "capture_presets": [
+      "perspective",
+      "front"
+    ],
+    "capture_modes": [
+      "lit",
+      "unlit",
+      "wireframe"
+    ],
+    "shader_library_opened": true,
+    "missing_shader_messages": 0,
+    "pak_sha256_before_after": "341cd11a4dcf9d8943cc12922a151047b55a13f52354c6ef7149266a199feeaa",
+    "pak_bytes": 150124353
+  },
+  "turnover": {
+    "synthetic": true,
+    "same_task_cell": true,
+    "successor_reused_completed_work": true,
+    "actual_compaction_observed": false,
+    "foreground_relay_required": true
+  },
+  "usability": {
+    "completed_at": "2026-09-20T12:26:56.0046112Z",
+    "no_floor": true,
+    "controls": "Normal-size English green text",
+    "capture_idle": false,
+    "capture_held": true,
+    "capture_released": false,
+    "capture_after_escape": false,
+    "cursor_outside": true,
+    "ctrl_q_exit_code": 0,
+    "method": "Windows SendInput and OS state readback"
+  },
+  "silent_mode": {
+    "completed_at": "2026-09-20T12:34:04.5237878Z",
+    "visible_viewer_at_readiness": false,
+    "api_and_capture_test": "PASS",
+    "console_free_vbs_helpers_added": true,
+    "test_invoked_powershell_directly": true,
+    "all_startup_frames_instrumented": false
+  },
+  "images": {
+    "perspective.png": {
+      "sha256": "d460ef615a810cfb2ff733d2deef98dbaf25e447c0f3c139e6f9b8db0f459874",
+      "pixels_changed": false
+    },
+    "below.png": {
+      "sha256": "d3417c481560936da8fa224d9d3b041ee173b3b7abf5a84637069c80d6999c61",
+      "pixels_changed": false
+    },
+    "bottom.png": {
+      "sha256": "5c6bf4c3f0d9c0a41c4d044b79a6882f379eb1f03db10c99e84ff20531c348eb",
+      "pixels_changed": false
+    }
+  },
+  "distribution": {
+    "ue_engine_bundled": false,
+    "viewer_module_public_download": "Awaiting owner licensing decision",
+    "caH_licenses_changed": false
+  },
+  "privacy": {
+    "omitted": [
+      "personal account/project/conversation IDs",
+      "machine names and personal paths",
+      "raw host logs",
+      "private repository history",
+      "unpublished development plans"
+    ],
+    "retained": [
+      "UTC timing",
+      "roles",
+      "specific failures and decisions",
+      "results",
+      "native viewport pixels",
+      "content hashes"
+    ]
+  }
+}
