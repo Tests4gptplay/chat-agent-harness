@@ -57,6 +57,35 @@ The historical case is valuable precisely because the accepted 2026-09-28 P1 Vie
 
 This is why keeping both cases is useful: the 2026-09-28 P1 result is not merely a newer screenshot from the same Viewer implementation. It reaches a similar user-facing goal through a materially different runtime architecture.
 
+### An interesting result: the AI did not mechanically replay the old implementation
+
+The two cases pursued a highly similar user-facing goal: **open the real Cook and provide a native Viewer that both a human and an Agent can inspect.** The later run even had the earlier Viewer's source, UI/API design and engineering history available as reference material.
+
+Yet the second run did not simply replay the earlier solution.
+
+It converged on a materially different implementation path:
+
+```text
+similar high-level goal
++ known historical implementation
+        ↓
+re-evaluate the current environment and failures
+        ↓
+leave the old Editor-hosted runtime path
+        ↓
+move to a packaged standalone Game runtime
+        ↓
+re-derive platform-file / shader / packaging choices
+```
+
+That comparison highlights a useful difference between AI-driven engineering execution and a traditional prewritten procedural program:
+
+> **A similar task and the same high-level objective do not force the AI into one fixed implementation. It can re-derive the problem and produce a materially different engineering path that still reaches the same user goal.**
+
+The historical Viewer and the Fresh P1 Viewer are therefore more than two versions of one program. They are two different technical solutions to the same Viewer objective: one built around **UE Editor-hosted `-game`**, the other ultimately around a **packaged `WITH_EDITOR=0` standalone Game runtime with Pak-only / no-IoStore packaging**.
+
+This is not a controlled experiment with byte-for-byte identical inputs, so it should not be read as “the same prompt must randomly produce different software.” The narrower result is enough: **the historical implementation did not lock the next AI run into the same implementation path.**
+
 ## How this differs from the historical Viewer
 
 Part 1 did not copy an old Viewer binary or replay an old accepted project.
