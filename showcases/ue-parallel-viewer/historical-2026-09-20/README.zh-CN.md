@@ -1,3 +1,6 @@
+> **历史实现快照 — 2026-09-20。**  
+> 本页保留早期 Viewer Showcase，作为一条独立实现路线。它使用已安装的 **UE 5.6.1 Editor runtime + `-game`**；后续 [Fresh P1 Viewer](../README.zh-CN.md) 则切换到 `WITH_EDITOR=0` standalone Game runtime，并最终采用 Pak-only / no-IoStore 的 Viewer packaging。两者并排保留，用于比较架构演进，而不是把旧结果混进新 P1 验收。
+
 # 并行测试：Blender 资产转 UE／Cook ＋ Viewer 编写
 
 [English](README.md) · [AI 操作说明](AGENT_VIEWER.md) · [证据与时间线](evidence.json) · [下载](DOWNLOADS.md)
@@ -12,7 +15,7 @@
 
 目标不是再造一个完整编辑器，而是打通一个实用流程：Blender 产出资产，转入 UE 配置材质并 Cook，再通过轻量查看入口检查真正的 UE 显示结果。人可以旋转观察；AI 可以在静默模式下通过接口选择视角、检查信息、获取截图。
 
-相机来自[前一轮 Blender 案例](../camera/README.md)，Viewer 和资产准备脚本也已有暂停的初版。因此，这轮是**复用成果后的全新调度与验收测试**，不是宣称两套软件都在短暂并行时间内从零写完。验收要求包括真实模型与材质、清晰画面、材质槽和依赖信息、可用交互、输入包哈希不变，以及实际可启动的交付入口。
+相机来自[前一轮 Blender 案例](https://github.com/Tests4gptplay/chat-agent-harness/blob/604e4ff26757d3738e4ee4aaa0d8457953a98db7/showcases/camera/README.md)，Viewer 和资产准备脚本也已有暂停的初版。因此，这轮是**复用成果后的全新调度与验收测试**，不是宣称两套软件都在短暂并行时间内从零写完。验收要求包括真实模型与材质、清晰画面、材质槽和依赖信息、可用交互、输入包哈希不变，以及实际可启动的交付入口。
 
 ## 如何分工，为什么值得并行
 
