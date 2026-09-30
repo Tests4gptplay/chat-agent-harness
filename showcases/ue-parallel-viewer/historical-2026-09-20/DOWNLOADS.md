@@ -1,3 +1,5 @@
+> Historical 2026-09-20 Viewer distribution notes. For the current fresh P1 implementation, return to [the current showcase](../README.md).
+
 # Downloads and dependencies
 
 [Case](README.md) · [中文案例](README.zh-CN.md) · [Agent operation guide](AGENT_VIEWER.md)
@@ -9,7 +11,7 @@
 | [Agent API client](viewer_client.py) | Python client for a running Viewer: camera presets, display modes and completed PNG retrieval. **Not the Viewer itself.** |
 | [Perspective](images/perspective.png) · [Below](images/below.png) · [Bottom](images/bottom.png) | Original native viewport images from the accepted run. |
 | [Evidence and timeline](evidence.json) | Sanitized roles, execution intervals, results and content hashes. |
-| [Blender camera](../camera/README.md) | Original camera case, procedural scripts and asset download. |
+| [Blender camera](https://github.com/Tests4gptplay/chat-agent-harness/blob/604e4ff26757d3738e4ee4aaa0d8457953a98db7/showcases/camera/README.md) | Original camera case, procedural scripts and asset download. |
 
 ## Viewer package status
 
