@@ -35,6 +35,28 @@ Those workstreams then joined in a third line:
 
 This was therefore not one model turn trying one command. It was a long-running managed task with **multiple work lines, repeated execution/inspection cycles, and an explicit join condition**.
 
+## Two Viewer implementations, side by side
+
+The earlier Viewer showcase is preserved as a separate historical case:
+
+**[Historical Viewer showcase — 2026-09-20](historical-2026-09-20/README.md)** · **[中文](historical-2026-09-20/README.zh-CN.md)**
+
+The historical case is valuable precisely because the accepted 2026-09-28 P1 Viewer did **not** follow the same runtime path.
+
+| | Historical Viewer — 2026-09-20 | Fresh P1 Viewer — 2026-09-28 |
+| --- | --- | --- |
+| Representative native view | ![Historical Viewer perspective](historical-2026-09-20/images/perspective.png) | ![Fresh P1 perspective](images/phase1-perspective-lit.png) |
+| Starting point | Existing paused Viewer/source was reused, repaired, integrated and tested | Historical GAHQuickLook was **reference-only**; a new source/build tree was mandatory |
+| Runtime host | Installed UE 5.6.1 **Editor runtime in `-game`**, DX11/SM5 | Fresh packaged **`WITH_EDITOR=0` standalone Game runtime** |
+| Standalone package | No — explicitly not a standalone executable | Yes — Viewer was packaged as a standalone Game runtime for the acceptance path |
+| Viewer packaging/runtime mode | Editor-hosted project/runtime with Pak platform mount/catalogue/shader-library repair | Viewer packaging was changed to **Pak-only / no-IoStore** while the external camera PAK remained unchanged |
+| Input path | Classic PAK fixture dynamically handled inside the Editor-hosted `-game` runtime | Real fresh external camera PAK consumed by the packaged Viewer |
+| Shader path | Runtime shader-library support repaired inside the Editor-hosted Viewer path | Packaged runtime opens the real external monolithic camera shader library after platform-file/shader-routing diagnosis |
+| Evidence provenance | Existing source reused/repaired; historical run included supervised fixes and a synthetic turnover test | Old binaries/captures/Cook/PASS labels were forbidden as current evidence; fresh source/build, fresh Cook integration and fresh native captures were required |
+| Acceptance meaning | Demonstrated that the original architecture could become a usable inspection tool | Demonstrated a **fresh reconstruction on a different runtime/packaging architecture** |
+
+This is why keeping both cases is useful: the 2026-09-28 P1 result is not merely a newer screenshot from the same Viewer implementation. It reaches a similar user-facing goal through a materially different runtime architecture.
+
 ## How this differs from the historical Viewer
 
 Part 1 did not copy an old Viewer binary or replay an old accepted project.
