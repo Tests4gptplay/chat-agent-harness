@@ -280,5 +280,16 @@
       "g16_response_start_jst": "2026-09-29T02:04:22+09:00",
       "no_further_helper_failure_observed_through_g31": true
     }
+  },
+  "historical_viewer_comparison": {
+    "historical_case_ref": "historical-2026-09-20/README.md",
+    "historical_date": "2026-09-20",
+    "historical_runtime": "Installed UE 5.6.1 Editor runtime in -game / DX11 / SM5; not a standalone executable.",
+    "historical_loading_path": "Editor-hosted -game runtime with Pak platform mount/catalogue handling and runtime shader-library support for a classic PAK fixture.",
+    "fresh_p1_runtime": "Fresh packaged WITH_EDITOR=0 standalone Game runtime.",
+    "fresh_p1_packaging": "Pak-only / no-IoStore Viewer packaging; accepted external camera PAK remained unchanged.",
+    "fresh_p1_loading_path": "Packaged Viewer consumes the real fresh external camera PAK and opens the external monolithic camera shader library after platform-file/shader-routing diagnosis.",
+    "provenance_difference": "Historical source was reused/repaired in the 2026-09-20 showcase. For 2026-09-28 P1, historical GAHQuickLook was reference-only; old binaries, captures, Cook output and PASS labels were forbidden as current evidence.",
+    "interpretation": "The two showcases reach a similar inspection goal through materially different runtime and packaging architectures; P1 is a fresh reconstruction, not a replay of the historical Viewer."
   }
 }
