@@ -21,7 +21,7 @@ class InstallationTemplateTests(unittest.TestCase):
         self.out=self.base/'operational'
         self.spec=json.loads((ROOT/'installation/placeholders.json').read_text(encoding='utf-8'))
         values={key:str(self.base/key.lower()) for key in self.spec['tokens']}
-        values.update(REPO_ROOT=str(self.out),REPOSITORY='example-owner/private-cah',RECORD_REPOSITORY='',TRANSFER_REPOSITORY='',TASK_CELL_KEY='g-p-SYNTHETICTASKCELL',LANE00_KEY='g-p-SYNTHETICLANE00',LANE01_KEY='',FOREGROUND_URL='https://chatgpt.com/c/synthetic-foreground')
+        values.update(REPO_ROOT=str(self.out),REPOSITORY='example-owner/private-cah',RECORD_REPOSITORY='',TRANSFER_REPOSITORY='',TASK_CELL_KEY='g-p-SYNTHETICTASKCELL',LANE00_KEY='g-p-SYNTHETICLANE00',LANE01_KEY='',FOREGROUND_URL='https://chatgpt.com/c/synthetic-foreground',COLD_RUNNER_NAME='CAH-TEST-COLD-02')
         self.config={'operational_repository_is_private':True,'projects_verified_in_authenticated_browser':True,'enabled_lanes':['lane-00'],'values':values}
 
     def run_config(self,config=None):
@@ -126,8 +126,11 @@ class InstallationTemplateTests(unittest.TestCase):
         result=subprocess.run([sys.executable,'-B',str(ROOT/'installation/audit.py')],capture_output=True,text=True,timeout=40)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertTrue(json.loads(result.stdout)['ok'])
-        for rel in ('.github/workflows','toolbox','showcases','imports','memory','tasks','evidence','results','requests','cl','actions','cases'):
+        # Public release CI and curated legacy showcase are approved distribution assets.
+        for rel in ('toolbox','imports','memory','tasks','evidence','results','requests','cl','actions','cases'):
             self.assertFalse((ROOT/rel).exists(),rel)
+        self.assertEqual({p.name for p in (ROOT/'.github/workflows').glob('*.yml')},{'public-source-release.yml'})
+        self.assertTrue((ROOT/'showcases/ue-parallel-viewer/README.md').is_file())
 
     def test_launcher_and_reset_preflight_precedes_git_mutation(self):
         text=(ROOT/'Start_CAH.ps1').read_text(encoding='utf-8')

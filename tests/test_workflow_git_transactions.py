@@ -37,6 +37,10 @@ class WorkflowGitTransactionTests(unittest.TestCase):
             "semantic-finalize.yml",
             "stage0-single-thread.yml",
         }
+        if not all((WORKFLOWS/name).is_file() for name in expected):
+            self.assertEqual({p.name for p in WORKFLOWS.glob('*.yml')}, {'public-source-release.yml'})
+            self.assertIn('harness/git_publish.py', (WORKFLOWS/'public-source-release.yml').read_text(encoding='utf-8'))
+            self.skipTest('Private production writers intentionally omitted; publication writer is checked')
         missing = []
         for name in sorted(expected):
             text = (WORKFLOWS / name).read_text(encoding="utf-8")

@@ -16,6 +16,7 @@ class ColdBurstRunnerContractTests(unittest.TestCase):
         for state in ("READY_OFF", "ACTIVE_IDLE", "ACTIVE_BUSY", "DIRTY", "MISSING"):
             self.assertIn(state, block)
 
+    @unittest.skipUnless((ROOT / '.github' / 'workflows' / 'managed-host-script-cold.yml').is_file(), 'Private Cold/Burst workflow intentionally omitted from public source')
     def test_cold_workflow_has_dedicated_runner_and_concurrency(self):
         text = (ROOT / ".github" / "workflows" / "managed-host-script-cold.yml").read_text(
             encoding="utf-8"

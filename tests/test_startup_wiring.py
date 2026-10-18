@@ -1,4 +1,5 @@
 import base64
+import os
 import shutil
 import subprocess
 import unittest
@@ -8,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHELL = shutil.which('powershell.exe') or shutil.which('pwsh')
 
 
-@unittest.skipUnless(SHELL, 'PowerShell is needed for the Windows launcher contract')
+@unittest.skipUnless(os.name == 'nt' and SHELL, 'Windows launcher behavior requires a Windows host')
 class NativeStartupTests(unittest.TestCase):
     def run_case(self, body):
         # Load only the real launcher functions through its AST; never run Git,

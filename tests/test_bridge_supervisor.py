@@ -94,7 +94,7 @@ class BridgeLivenessTests(unittest.TestCase):
         self.assertTrue(consumed["ok"])
 
 
-@unittest.skipUnless(POWERSHELL, "PowerShell is required for supervisor behavior tests")
+@unittest.skipUnless(os.name == "nt" and POWERSHELL, "Windows PowerShell supervisor integration requires Windows")
 class BridgeSupervisorLoopTests(unittest.TestCase):
     def test_real_powershell_loop_failure_count_and_exact_child_ownership(self):
         # Run the entire production script with only OS/HTTP/time boundaries mocked.

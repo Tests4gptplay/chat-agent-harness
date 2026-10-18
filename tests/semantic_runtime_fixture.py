@@ -125,6 +125,10 @@ class HarnessCase:
         self.git('checkout','-qb','main');self.git('remote','add','origin',str(self.origin))
         topology=json.loads((SOURCE/'state/lanes.json').read_text())
         topology['lanes']=topology['lanes'][:lanes];topology.update(registered_count=lanes,enabled_count=lanes)
+        # Release state is deliberately unconfigured; tests enable synthetic lanes only.
+        for lane in topology['lanes']:
+            lane['enabled']=True
+            lane['status']='IDLE'
         state={'v':1,'agent':'chatgpt','phase':'NEED_AGENT','active_task':None,'control_request':None}
         self.n=0;self.ops=[];self.ticks=[];self.writes=[];self.consume_fail=0;self.fail_message=None;self.fail_ops={}
         self.clock=Clock();self.clock.elapsed=0;ClockDate.clock=self.clock;self.patches=[]
