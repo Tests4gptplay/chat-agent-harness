@@ -117,3 +117,5 @@ jobs:
             --title "CAH 1.0.5 — sanitized Helper/Runner release (AGPL-3.0-only)" \
             --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease
           gh release view v1.0.5 --json url,tagName,isPrerelease --jq '.'
+
+# retry 1: privacy guard rejected a hardcoded tool-search drive; now generic drive discovery.
