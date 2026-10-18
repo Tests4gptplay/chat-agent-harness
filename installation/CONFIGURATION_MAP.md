@@ -41,3 +41,7 @@ ProgramFiles/ProgramData 等操作系统标准发现位置、Windows 驱动器�
 ## v1.0.5 脱敏后重新规划
 
 本文件只描述用途，不提供维护者的原始个人路径或账户值。三个 Runner 的重新部署、Cold/Burst 的根和名称、Browser/ChatGPT Project 身份、Tool/Workflow 缺省情况与用户私有资产隔离必须在目标 Windows 环境重新规划核验。阅读 [UPGRADE_AND_REDEPLOY_V1_0_5.md](UPGRADE_AND_REDEPLOY_V1_0_5.md)。
+
+## 1.0.5 部署检查：脱敏值不是可还原的默认值
+
+新用户必须重新确定 GitHub 私有运行库、目录布局、Runner/Cold-Burst 容量、专用 ChatGPT Project 与 Foreground 对话、浏览器 Profile、主机能力、日志与归档位置。所有 `__CAH_*`、`CAH_OWNER/*` 及示例标识符必须作为**未配置项**处理；不得使用维护者真实路径或从私人运行证据中还原值。先验证实际权限、连接和安全边界，确认无在途任务被覆盖，再做新的安装/迁移计划和小规模端到端测试。更多见 `installation/README.md`。

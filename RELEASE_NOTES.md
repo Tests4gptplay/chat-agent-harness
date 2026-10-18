@@ -43,3 +43,8 @@ Do not overlay this edition on a live configured instance. Preserve active tasks
 ## Verification and limits
 
 See `audit/PUBLICATION.json` for this candidate's recorded checks and `audit/verification.json` for the original reviewed-template validation. `audit/file-manifest.json` and `installation/audit.py` check the current file inventory and content. Source tests use synthetic/offline fixtures; they do not certify a new machine, browser account, Runner registration, or an independently performed security audit.
+
+
+## v1.0.5 preparation — not yet released
+
+Planned next release: synchronize the current private CAH engineering improvements after per-file clean-room review; preserve Helper/Worker recovery, Scheduler and Cold/Burst capabilities without exporting live records, individual identities, private task data or personal Skills. Public distribution license moves to AGPL-3.0-only, preserving earlier MIT grants for historical versions. Installation documentation now requires user-specific private-deployment replanning and explicit validation. A version tag/release requires remaining source reconciliation, privacy checks, tests and installer acceptance evidence.
