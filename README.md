@@ -22,7 +22,7 @@ CAH builds the lifecycle, scheduling, recovery, and execution machinery around t
 
 ## v1.0.5 upgrade candidate — what's new since v1.0.4
 
-**A substantial lifecycle/recovery upgrade, not just a new version number.** The sanitized v1.0.5 source candidate is staged on public `main`; a v1.0.5 GitHub Release is **not yet published**. The [v1.0.4 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) remains a historical release, not the operational configuration for this code.
+**A substantial lifecycle/recovery upgrade, not just a new version number.** Public `main` is the unconfigured source; the [v1.0.5 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.5) is its versioned, tested download only after CI passes. The [v1.0.4 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) remains a historical release, not the operational configuration for this code.
 
 | Area | v1.0.5 source candidate |
 |---|---|
@@ -370,7 +370,7 @@ More sanitized showcases can be added here as complete end-to-end records become
 
 ## Current status
 
-The `v1.0.5` source candidate is on `main` but has not been accepted as a published GitHub Release. Its new privacy, code and installation checks must be independently recorded; historical counts below must not be recycled as v1.0.5 test results.
+See the [v1.0.5 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.5) for the authoritative published artifact and current verification evidence. Public `main` is not a configured operational instance. Historical test totals below must not be used as v1.0.5 CI results.
 
 Historical clean source tag (2026-09-29; **not** a v1.0.5 Release):
 

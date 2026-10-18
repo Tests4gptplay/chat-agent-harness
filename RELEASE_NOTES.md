@@ -1,6 +1,6 @@
-# CAH v1.0.5 — major lifecycle/recovery update (source candidate, 2026-10-18)
+# CAH v1.0.5 — major lifecycle/recovery update (2026-10-19)
 
-> **Publication status:** sanitized code and documentation are staged on public `main`; **no v1.0.5 GitHub Release or tag is claimed here**. Publication remains gated on current-tree privacy, package integrity, syntax/unit test evidence and installation-contract checks. The historical [v1.0.4 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) is not overwritten.
+> **Release gate:** This source release is generated only after public-tree privacy, file inventory, applicable offline unit tests and SHA256 archive checks pass. The package remains an experimental unconfigured source distribution, not a live Windows/ChatGPT instance. [v1.0.4](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) remains historically unchanged.
 
 ## What changed compared with v1.0.4
 
@@ -31,10 +31,13 @@ Current project-owned CAH code/documentation: **GNU AGPL-3.0-only**, as declared
 
 ## Verification and release gate
 
+The public distribution omits private operational GitHub Actions workflows and Host/Runner payloads. Workflow-dependent integration tests must be explicitly marked as packaging skips, not falsely counted as executed; Windows-only launcher tests cannot pass as Windows acceptance on an Ubuntu Runner. Source-level Helper/Worker/Tool behavior uses synthetic fixtures for offline checks.
+
+
 - **Source present is not a tested installation.** The `v1.0.5` publication must have a *new* evidence record for the exact released file tree: privacy/inventory scanner, required export paths, Python/JSON/PowerShell syntax where applicable, source unit tests and updated install-placeholder mapping.
 - Independently confirm that the actual new target GitHub repository is private and that newly registered Runner/project/CDP/Bridge connections work. A full fresh-machine deployment under another user's account is **not** claimed unless separately demonstrated.
 - Missing private workflows, live fault-injection Helper acceptance, Windows host tests and any other unperformed checks must be identified accurately; do not reuse results recorded for the September source edition.
-- After these gates pass, create the `v1.0.5` tag/Release and any reproducible archive/checksums. Until then this is a candidate description, **not** a published release announcement.
+- Only a successful gate creates and publishes the `v1.0.5` tag and attached `CAH-1.0.5.zip` / `SHA256SUMS`. An unsuccessful CI run must leave the release unpublished.
 
 ## Previous clean source publication (historical)
 

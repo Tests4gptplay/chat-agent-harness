@@ -2,7 +2,7 @@
 
 Run `python installation/audit.py` on the unchanged template. Run `python -m unittest discover -s tests -v` for source tests. Windows/PowerShell and explicitly opt-in live tests must be reported separately. The manifest is an integrity/inventory record, not a signature or independent security certification.
 
-The package is an unconfigured template: launch/reset fail closed. Personal data are removed, source deployment values are mapped to placeholders, and workflows/showcases/personal Skills are intentionally absent. This reviewed snapshot is published as an unconfigured source distribution; never publish a configured private operational copy.
+The package is an unconfigured template: launch/reset fail closed. The only bundled GitHub Actions workflow builds and verifies a public-source release, not real CAH tasks. Current release verification is recorded in audit/v1.0.5-verification.json after the gated run succeeds. Personal data are removed, source deployment values are mapped to placeholders, and workflows/showcases/personal Skills are intentionally absent. This reviewed snapshot is published as an unconfigured source distribution; never publish a configured private operational copy.
 
 The audit does not claim to erase earlier repository history, inspect remote accounts, or prove a fresh installation. Original source inventory and build recipe remain outside this clean directory in private review scope.
 

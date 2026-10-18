@@ -9,7 +9,7 @@
 先读 `AGENTS.md`、本文件、`CONFIGURATION_MAP.md` 和 `OMITTED_COMPONENTS.md`。部署 AI 必须先确认目标操作系统、用户授权、已有软件与已有任务。Windows 是此版本启动脚本的参考平台；不要把文档存在当作全新 Windows/新账户安装已经实测成功。
 
 
-## v1.0.5 候选版：脱敏配置与重新部署规划（必读）
+## v1.0.5 发行源码：脱敏配置与重新部署规划（必读）
 
 本公开仓库是经过脱敏的**未配置发行源码**，不是维护者私人实例的可运行快照。发布时刻意移除了账户身份、本机绝对路径、GitHub Runner 注册信息、ChatGPT Project 和对话 ID、浏览器 Profile、凭据、运行状态、活动 Task/Planner/Worker/Helper、日志和证据、私人 Skills 与任务工作流 payload。这些删除并非软件缺陷，也不意味着应当从他人的私人仓库复制回来。
 

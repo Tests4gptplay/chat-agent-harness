@@ -93,7 +93,7 @@ jobs:
           git add installation/placeholders.json audit/file-manifest.json audit/v1.0.5-verification.json
           if ! git diff --cached --quiet; then
             git commit -m "audit: verify v1.0.5 public source release [skip ci]"
-            git push origin HEAD:main
+            python harness/git_publish.py --repo . --remote origin --branch main --attempts 3
           fi
       - name: Build source ZIP and hashes
         shell: bash
@@ -102,7 +102,7 @@ jobs:
           sha256sum CAH-1.0.5.zip > SHA256SUMS
           unzip -l CAH-1.0.5.zip | tail -2
           sha256sum -c SHA256SUMS
-      - name: Publish v1.0.5 prerelease with verified assets
+      - name: Publish v1.0.5 release with verified assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -115,7 +115,7 @@ jobs:
           gh release create v1.0.5 CAH-1.0.5.zip SHA256SUMS \
             --target "$(git rev-parse HEAD)" \
             --title "CAH 1.0.5 — sanitized Helper/Runner release (AGPL-3.0-only)" \
-            --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease
+            --notes-file "$RUNNER_TEMP/release-notes.md"
           gh release view v1.0.5 --json url,tagName,isPrerelease --jq '.'
 
-# retry 1: privacy guard rejected a hardcoded tool-search drive; now generic drive discovery.
+# Public release-only automation. No private operational workflow, user path, or Runner is bundled.

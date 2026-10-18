@@ -98,7 +98,8 @@
     ],
     "local_bridge/planner_runtime.py": [
       "REPOSITORY",
-      "COLD_RUNNER_NAME"
+      "COLD_RUNNER_NAME",
+      "COLD_RUNNER_ROOT"
     ],
     "local_bridge/scheduler.py": [
       "REPOSITORY"
