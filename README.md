@@ -16,6 +16,8 @@ ChatGPT handles semantic reasoning. Git holds durable state and coordinates work
 
 CAH builds the lifecycle, scheduling, recovery, and execution machinery around that connection.
 
+**Support / 赞助：** [Ko-fi](https://ko-fi.com/kou392350) · [Patreon](https://www.patreon.com/cw/Kou848) · [支付宝 / Alipay](SPONSOR.md)
+
 ---
 
 ## How CAH started
