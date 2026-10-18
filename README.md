@@ -255,6 +255,14 @@ Do not use this public repository as the canonical store for private runtime sta
 
 ---
 
+## Optional desktop monitor / 可选桌宠监控
+
+[CAH Sentinel](https://github.com/Tests4gptplay/cah-sentinel) is an optional Windows desktop pet and task-status monitor for **Chat Agent Harness (CAH)**. It reads CAH's already-synchronized local Git snapshot, displays task status and sends desktop notifications. Sentinel does not fetch from GitHub, modify CAH state, or execute tasks; CAH's own local synchronization must remain active. It is a separate companion application, not a required CAH component.
+
+[CAH Sentinel](https://github.com/Tests4gptplay/cah-sentinel) 是 **Chat Agent Harness（CAH）** 的可选 Windows 桌宠式任务状态监控工具：只读查看 CAH 已同步的本地 Git 快照，显示任务状态并发送桌面通知。它不主动 fetch、不修改 CAH 状态，也不代替 CAH 执行任务；仍依赖 CAH 自身的本地同步。它是独立配套工具，不是 CAH 必装组件。
+
+[Download / 下载](https://github.com/Tests4gptplay/cah-sentinel/releases) · [Installation / 安装指引](https://github.com/Tests4gptplay/cah-sentinel/blob/main/docs/INSTALL.zh-CN.md)
+
 ## Installation
 
 The current public edition is designed for **AI-assisted installation** rather than blind path replacement.
