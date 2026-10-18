@@ -334,7 +334,6 @@
         "additionalProperties": false
       },
       "implementation_refs": [
-        "host/playwright_cli.ps1",
         "host/playwright_cli.ps1"
       ]
     }

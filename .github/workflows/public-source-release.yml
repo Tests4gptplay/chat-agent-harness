@@ -51,6 +51,8 @@ jobs:
                   checked['json'] += 1
           print('Source syntax OK', checked)
           PY
+      - name: Validate public Tool Registry refs
+        run: python -m harness.tool_runtime validate-all
       - name: Offline unit suite
         shell: bash
         run: |
