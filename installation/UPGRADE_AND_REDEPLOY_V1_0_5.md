@@ -2,6 +2,19 @@
 
 IMPORTANT: This is a PUBLIC, UNCONFIGURED source distribution, not the maintainer's live operational CAH. 公开源码已脱敏：不可恢复或照抄维护者的真实本机路径、账户、Project ID、浏览器会话、Runner 身份、注册令牌、私人工作流、任务、记忆、证据、私人 Skill 或 Git 历史。
 
+## v1.0.4 → v1.0.5 changes installers must account for
+
+| Capability | Deployment check before claiming ready |
+|---|---|
+| Immediate Harness-error Helper | Verify a real bounded incident, owned repair evidence and exact cleanup without changing the user's Task direction |
+| Worker lifecycle and watchdog | Distinguish normal ~10-minute `continue` from 30-minute same-generation physical recovery; ensure durable Reply/Result and task-local ownership |
+| Git semantic completion | Ensure reconciler accepts the bound Result/Outcome and `turn_signal` as the last semantic write; do not configure a mandatory `semantic_sync` ack |
+| Cold/Burst Runner | Create a new, independent `backup` runner root/identity; default `READY_OFF` and explicitly authorize activation |
+| Removed private workflows | Provision auditable task-appropriate workflows in the user's separate private repository; test real Short Task and Managed/Helper paths |
+| Privacy and licensing | No original tokens, Project IDs, local paths, personal Skills, private work/evidence or runtime history; current code is AGPL-3.0-only |
+
+This guide is for a **source candidate** until the exact `v1.0.5` GitHub Release is published and verified. Refer to [release notes](../RELEASE_NOTES.md) for status and actual test limits. Code or protocol documentation being present is not proof of full live deployment.
+
 ## 1. 先重新规划所有私有绑定 / Re-plan all private bindings
 
 1. Choose a new/private operational GitHub repository and independently verify its visibility is PRIVATE from authoritative GitHub metadata. User must authorize repo writes and separately manage confidential credentials. Do not run managed tasks, personal data or real runner enrollment against the public source repository.

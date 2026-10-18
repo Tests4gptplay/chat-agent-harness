@@ -20,6 +20,22 @@ CAH builds the lifecycle, scheduling, recovery, and execution machinery around t
 
 ---
 
+## v1.0.5 upgrade candidate — what's new since v1.0.4
+
+**A substantial lifecycle/recovery upgrade, not just a new version number.** The sanitized v1.0.5 source candidate is staged on public `main`; a v1.0.5 GitHub Release is **not yet published**. The [v1.0.4 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) remains a historical release, not the operational configuration for this code.
+
+| Area | v1.0.5 source candidate |
+|---|---|
+| **Helper** | Immediate bounded recovery on reported Harness/Host/Bridge errors; exact ownership, incident evidence and safe cleanup. Other task-level recovery remains bounded by role authority. |
+| **Worker continuity** | About 10-minute healthy checkpoint/handoff guidance; distinct 30-minute hard watchdog for same-generation physical rebirth, preserving dispatch/fence and durable progress. |
+| **Completion** | Final semantic Result/Outcome is a canonical Git write with `turn_signal`; Harness reconciles that artifact without requiring `semantic_sync` or a chat-text ACK. |
+| **Capacity** | Primary Managed Runner, isolated `cah-shot` short-task/rescue capacity, and optional normally-off `backup` Cold/Burst Managed Runner. |
+| **Distribution** | Privacy-sanitized unconfigured source, AGPL-3.0-only for current project-owned material, explicit new-private-instance setup and per-capability workflow provisioning. |
+
+**Installers must re-plan their own private repository, paths, browser profile, ChatGPT Projects, Runner identities and missing workflow capabilities.** Source presence and offline checks alone do not prove a new operational installation. See [release notes](RELEASE_NOTES.md), [installation guide](installation/README.md) and [v1.0.5 privacy/redeployment checklist](installation/UPGRADE_AND_REDEPLOY_V1_0_5.md).
+
+---
+
 ## How CAH started
 
 CAH started from a fairly simple technical question.
@@ -106,20 +122,22 @@ Evidence references
 
 A model response is useful reasoning context. A durable Git write is the record that survives it.
 
-Current semantic completion uses a durable result followed by a lightweight synchronization signal:
+Current semantic completion is governed by the **last durable Git write**, not a second chat or syscall signal:
 
 ```text
-semantic work
+semantic work and evidence
     |
     v
-write Result / Outcome with turn_signal
+write bound Reply / Planner Memory
     |
     v
-semantic_sync
+write bound Result / Outcome + turn_signal LAST
     |
     v
-Harness verifies Git and advances the lifecycle
+Harness reconciles canonical Git and advances the lifecycle
 ```
+
+No `semantic_sync`, one-word chat ending, or browser response-end is required as completion authority.
 
 This allows a conversation to disappear without taking the task history with it.
 
@@ -344,7 +362,9 @@ More sanitized showcases can be added here as complete end-to-end records become
 
 ## Current status
 
-Current clean source tag:
+The `v1.0.5` source candidate is on `main` but has not been accepted as a published GitHub Release. Its new privacy, code and installation checks must be independently recorded; historical counts below must not be recycled as v1.0.5 test results.
+
+Historical clean source tag (2026-09-29; **not** a v1.0.5 Release):
 
 ```text
 clean-2026-09-29
@@ -358,9 +378,9 @@ archive/pre-clean-20260929
 
 The six obsolete test expectations found during migration were reviewed and retired as outdated test contracts rather than carried forward as current runtime defects.
 
-### Publication validation
+### Historical clean-template validation (not v1.0.5 evidence)
 
-Current applicable validation includes:
+The archived September clean-template checks reported:
 
 - **306** offline tests;
 - **0 failures**;

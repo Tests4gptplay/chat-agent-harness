@@ -9,7 +9,7 @@
 先读 `AGENTS.md`、本文件、`CONFIGURATION_MAP.md` 和 `OMITTED_COMPONENTS.md`。部署 AI 必须先确认目标操作系统、用户授权、已有软件与已有任务。Windows 是此版本启动脚本的参考平台；不要把文档存在当作全新 Windows/新账户安装已经实测成功。
 
 
-## v1.0.5 发布后的脱敏配置与重新部署规划（必读）
+## v1.0.5 候选版：脱敏配置与重新部署规划（必读）
 
 本公开仓库是经过脱敏的**未配置发行源码**，不是维护者私人实例的可运行快照。发布时刻意移除了账户身份、本机绝对路径、GitHub Runner 注册信息、ChatGPT Project 和对话 ID、浏览器 Profile、凭据、运行状态、活动 Task/Planner/Worker/Helper、日志和证据、私人 Skills 与任务工作流 payload。这些删除并非软件缺陷，也不意味着应当从他人的私人仓库复制回来。
 
@@ -61,6 +61,18 @@ AI 在新目录初始化 Git、连接用户批准的新 private remote，并确�
 
 ## 5. Runner 与缺省工作流
 
+### 与 v1.0.4 相比：部署时新增的验收重点
+
+| v1.0.5 功能变化 | 新私有实例必须检查 |
+|---|---|
+| 即时 Harness 错误 Helper | 主机错误事件能够触发有界 Helper；证据和精确清理有效，不把报错当修复成功 |
+| Worker 正常交接和异常 Watchdog | 区分约 10 分钟健康交接与 30 分钟同代物理恢复；检查持久化 Reply/Result、Generation/Fence 不串线 |
+| Git 语义完成 | 末次 Git Result/Outcome 的 `turn_signal` 可由 Harness 读回；不再依赖 `semantic_sync` |
+| 三类 Runner | 主 Managed、独立 `cah-shot`，以及默认不启动的 `backup` Cold/Burst；三者凭据、目录、标签重新配置 |
+| 运行能力缺省 | 源码不随附私有 workflow/toolbox；每个所需执行入口经授权独立配置并通过真实 Action/回执 |
+
+新用户应先读 [v1.0.5 隐私及重新部署验收](UPGRADE_AND_REDEPLOY_V1_0_5.md)，在 **自己的 PRIVATE 运行仓库**重新建立所有绑定。旧版安装截图、维护者私有目录或 GitHub Release 所附历史实例配置不是可以复制的默认值。
+
 新私有仓库 Settings → Actions → Runners 中取得当前官方注册说明，分别准备 Managed 与 Short Task Runner。令牌只在本机交互使用，不持久化。
 
 Managed 使用普通 self-hosted/Windows/X64 标签；Short Task 使用 `cah-shot` 且不带普通默认标签。每个 Runner 独立根目录、名称、工作区和凭据。`MANAGED_RUNNER_ROOT` 与 `SHOT_RUNNER_ROOT` 要指向包含 run.cmd/bin 的安装根，不是 `_work` 子目录。
@@ -71,9 +83,9 @@ Managed 使用普通 self-hosted/Windows/X64 标签；Short Task 使用 `cah-sho
 
 完成配置、Git 连接、依赖、授权与所需 workflow 后，使用 `Start_CAH.bat`。它调用 `Start_CAH.ps1`，执行前会拒绝未配置模板；之后保留原版的 main 快进、Bridge、Runner、原生 Host/CDP 检查。它不是一键安装器。
 
-AI 核验 Bridge `/health` 的源码目录/分支/runtime root、CDP `/json/version`、专用 Profile 登录、单一 Host 进程、两个 Runner 的真实名称/标签、规范 lane 与本机 Host `state.json` 一致。再次启动应复用而非重复创建。首次 Foreground 使用原生脚本参数持久化；总入口后续复用本机绑定。
+AI 核验 Bridge `/health` 的源码目录/分支/runtime root、CDP `/json/version`、专用 Profile 登录、单一 Host 进程、**Primary Managed 与 Shot 两个常驻 Runner** 的真实名称/标签、**独立 Cold/Burst Runner 的配置与默认 READY_OFF 状态**、规范 lane 与本机 Host `state.json` 一致。再次启动应复用而非重复创建。首次 Foreground 使用原生脚本参数持久化；总入口后续复用本机绑定。
 
-验收分开记录：离线源代码测试；依赖/进程启动；真实 Git 读写；最小 managed 任务；独立 Short Task；需要时的换代/Helper/清理。每项记录实际结果和证据，不把上一项 PASS 当下一项 PASS。角色以绑定 Reply/Result/Outcome 的 durable turn_signal 加 semantic_sync 结束，不使用旧文档的一词聊天结束作为主协议。
+验收分开记录：离线源代码测试；依赖/进程启动；真实 Git 读写；最小 managed 任务；独立 Short Task；需要时的换代/Helper/清理。每项记录实际结果和证据，不把上一项 PASS 当下一项 PASS。角色把语义进度写入绑定 Reply / Planner Memory，并将包含 `turn_signal` 的 Result / Outcome 作为最后一次 Git 写入；Harness 读取并核验该结果后推进，不再要求 `semantic_sync` 或一词聊天结束作为完成凭证。
 
 ## 7. 日志、停止与迁移
 
