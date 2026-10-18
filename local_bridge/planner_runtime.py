@@ -107,10 +107,14 @@ except ImportError:
 
 DEFAULT_MAX_PROMPTS_PER_GENERATION = 10
 DEFAULT_MAX_GENERATION_AGE_SECONDS = 2 * 60 * 60
-DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS = 8 * 60
 WORKER_REVIEW_INTERVAL = 5
 TASK_CELL_ROOT = "state/task_cells"
 ROLE_OUTPUT_ROOT = "evidence"
+
+
+from harness.worker_lineage_compat import (
+    WORKER_LINEAGES_KEY,
+)
 
 
 class PlannerRuntimeError(ValueError):
@@ -236,85 +240,6 @@ def _commit_push(store: Any, worktree: Path, paths: list[str], message: str) -> 
     return commit_sha
 
 
-def planner_git_cli_fallback(store: Any, req: dict[str, Any]) -> dict[str, Any]:
-    task_id = _safe_task_id(req.get("task_id"))
-    epoch = int(req.get("control_epoch") or 0)
-    generation = int(req.get("planner_generation") or 0)
-    fence = str(req.get("planner_fence_token") or "")
-    conversation_id = str(req.get("conversation_id") or "")
-    observed_conversation_id = str(req.get("observed_conversation_id") or "")
-    output_ref = str(req.get("output_ref") or "").replace("\\", "/").strip()
-    artifact = req.get("artifact")
-    if epoch < 1 or generation < 1 or len(fence) < 8 or not conversation_id:
-        return {"ok": False, "error": "PLANNER_GIT_CLI_IDENTITY_INVALID"}
-    if observed_conversation_id != conversation_id:
-        return {"ok": False, "error": "PLANNER_GIT_CLI_SENDER_MISMATCH"}
-    if not isinstance(artifact, dict):
-        return {"ok": False, "error": "PLANNER_GIT_CLI_ARTIFACT_INVALID"}
-    path = Path(output_ref)
-    if (
-        not output_ref.startswith(f"evidence/{task_id}/roles/planner/")
-        or path.is_absolute()
-        or ".." in path.parts
-    ):
-        return {"ok": False, "error": "PLANNER_GIT_CLI_SCOPE_MISMATCH"}
-
-    with store.git_lock:
-        try:
-            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
-            cell = _read_json(store, base_sha, _task_cell_path(task_id))
-        except (OSError, subprocess.SubprocessError, PlannerRuntimeError):
-            return {"ok": False, "error": "PLANNER_GIT_CLI_CANONICAL_READ_FAILED"}
-
-        if int(cell.get("control_epoch") or 0) != epoch:
-            return {"ok": False, "error": "PLANNER_GIT_CLI_EPOCH_MISMATCH"}
-        control = cell.get("planner_control")
-        runtime = control.get("runtime") if isinstance(control, dict) else None
-        pending = runtime.get("pending_output") if isinstance(runtime, dict) else None
-        if not isinstance(pending, dict) or str(pending.get("status") or "") != "WAITING":
-            return {"ok": False, "error": "PLANNER_GIT_CLI_OUTPUT_NOT_WAITING"}
-        if str(pending.get("ref") or "") != output_ref:
-            return {"ok": False, "error": "PLANNER_GIT_CLI_OUTPUT_REF_MISMATCH"}
-        pending_conversation = str(pending.get("conversation_id") or "")
-        if pending_conversation and pending_conversation != conversation_id:
-            return {"ok": False, "error": "PLANNER_GIT_CLI_CONVERSATION_MISMATCH"}
-
-        authority = control.get("authority") if isinstance(control, dict) else None
-        authority_ok = isinstance(authority, dict) and (
-            int(authority.get("planner_generation") or 0) == generation
-            and str(authority.get("planner_fence_token") or "") == fence
-            and str(authority.get("conversation_id") or "") == conversation_id
-        )
-        if not authority_ok:
-            return {"ok": False, "error": "PLANNER_GIT_CLI_AUTHORITY_MISMATCH"}
-
-        if _artifact_exists(store, base_sha, output_ref):
-            try:
-                existing = _read_json(store, base_sha, output_ref)
-            except PlannerRuntimeError:
-                return {"ok": False, "error": "PLANNER_GIT_CLI_OUTPUT_CONFLICT"}
-            if existing == artifact:
-                return {"ok": True, "duplicate": True, "output_ref": output_ref, "commit_sha": base_sha}
-            return {"ok": False, "error": "PLANNER_GIT_CLI_OUTPUT_CONFLICT"}
-
-        worktree = _prepare_worktree(store, base_sha, f"planner-git-cli-{task_id}")
-        try:
-            _write_json(worktree, output_ref, artifact)
-            try:
-                commit_sha = _commit_push(
-                    store,
-                    worktree,
-                    [output_ref],
-                    f"Planner durable output for {task_id} [skip ci]",
-                )
-            except subprocess.SubprocessError:
-                return {"ok": False, "error": "PLANNER_GIT_CLI_PUSH_FAILED"}
-        finally:
-            _drop_worktree(store, worktree)
-        return {"ok": True, "duplicate": False, "output_ref": output_ref, "commit_sha": commit_sha}
-
-
 def _task_contract_ref(task_id: str) -> str:
     return f"tasks/{_safe_task_id(task_id)}.json"
 
@@ -366,7 +291,6 @@ def _runtime(control: dict[str, Any]) -> dict[str, Any]:
     runtime.setdefault("browser_promotion_complete", False)
     runtime.setdefault("max_prompts_per_generation", DEFAULT_MAX_PROMPTS_PER_GENERATION)
     runtime.setdefault("max_generation_age_seconds", DEFAULT_MAX_GENERATION_AGE_SECONDS)
-    runtime.setdefault("semantic_output_timeout_seconds", DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS)
     return runtime
 
 
@@ -395,21 +319,24 @@ def _stage_pending_helper_request(
     pending_requests = list(result.get("pending_role_requests") or [])
     role_kind = str(role_request.get("kind") or "helper_result")
     worker_helper = role_kind == "worker_helper_result"
-    control_kind = "task_cell_worker_helper_prompt" if worker_helper else "task_cell_role_prompt"
-    semantic_output_kind = "WORKER_HELPER_RESULT" if worker_helper else "HELPER_RESULT"
-    helper_prompt = (
-        _worker_helper_prompt(
+    if worker_helper:
+        control_kind = "task_cell_worker_helper_prompt"
+        semantic_output_kind = "WORKER_HELPER_RESULT"
+        helper_source = "worker_watchdog"
+        helper_prompt = _worker_helper_prompt(
             str(role_request.get("prompt") or ""),
             str(role_request.get("artifact_ref") or ""),
             git_branch,
         )
-        if worker_helper
-        else _planner_helper_prompt(
+    else:
+        control_kind = "task_cell_role_prompt"
+        semantic_output_kind = "HELPER_RESULT"
+        helper_source = "planner"
+        helper_prompt = _planner_helper_prompt(
             str(role_request.get("prompt") or ""),
             str(role_request.get("artifact_ref") or ""),
             git_branch,
         )
-    )
     _set_control_request(
         state,
         kind=control_kind,
@@ -424,7 +351,7 @@ def _stage_pending_helper_request(
             "required_output_ref": str(role_request.get("artifact_ref") or ""),
             "planner_decision_ref": str(role_request.get("decision_ref") or ""),
             "semantic_output_kind": semantic_output_kind,
-            "helper_source": "worker_watchdog" if worker_helper else "planner",
+            "helper_source": helper_source,
         },
     )
     pending_requests[index] = {
@@ -447,7 +374,8 @@ def _stage_pending_helper_request(
             "artifact_ref": str(role_request.get("artifact_ref") or ""),
             "state": "WAITING",
             "decision_ref": str(role_request.get("decision_ref") or ""),
-            "helper_source": "worker_watchdog" if worker_helper else "planner",
+            "helper_source": helper_source,
+            "recovery": copy.deepcopy(role_request.get("recovery") or {}),
         })
     result["pending_role_outputs"] = pending_outputs
     return result, True
@@ -465,6 +393,8 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
     worker_ref = _safe_id(req.get("worker_ref"), "WORKER_WATCHDOG_WORKER_REF_INVALID")
     lane_id = _safe_id(req.get("lane_id"), "WORKER_WATCHDOG_LANE_INVALID")
     worker_project_key = _safe_id(req.get("worker_project_key"), "WORKER_WATCHDOG_PROJECT_INVALID")
+    conversation_id = _safe_id(req.get("conversation_id"), "WORKER_WATCHDOG_CONVERSATION_INVALID")
+    wake_id = _safe_id(req.get("wake_id"), "WORKER_WATCHDOG_WAKE_INVALID")
     reason = str(req.get("reason") or "worker_watchdog_30m").strip()
     observed_at = str(req.get("observed_at") or utc_now()).strip()
     if parent_control_epoch < 1 or generation < 1 or not backend_cl:
@@ -478,8 +408,12 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
         "dispatch_generation": generation,
         "fence_token": fence_token,
         "worker_ref": worker_ref,
+        "conversation_id": conversation_id,
+        "wake_id": wake_id,
         "reason": reason,
     }
+    if req.get("watchdog_started_at"):
+        identity["watchdog_started_at"] = str(req["watchdog_started_at"])
     evidence_ref = (
         f"evidence/{parent_task_id}/recovery/"
         f"{_stable_token('worker-watchdog', identity)}.json"
@@ -510,6 +444,11 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
                 return {"ok": False, "error": "WORKER_WATCHDOG_PARENT_TERMINAL"}
 
             child_backend = _try_read_json(store, base_sha, backend_cl)
+            child_task = _try_read_json(store, base_sha, f"tasks/{child_task_id}.json")
+            child_reply_ref = str(
+                (child_task or {}).get("child_reply_ref")
+                or worker_child_reply_path(child_task_id)
+            )
             child_dispatch = (
                 child_backend.get("dispatch")
                 if isinstance(child_backend, dict) and isinstance(child_backend.get("dispatch"), dict)
@@ -523,6 +462,9 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
                 and int(child_dispatch.get("generation") or 0) == generation
                 and str(child_dispatch.get("fence_token") or "") == fence_token
                 and str(child_dispatch.get("acked_by_worker_ref") or "") == worker_ref
+                and str(child_dispatch.get("wake_id") or "") == wake_id
+                and isinstance(child_task, dict)
+                and str(child_task.get("kind") or "") == "planner_worker_child"
             ):
                 return {
                     "ok": True,
@@ -566,8 +508,6 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
                     "evidence_ref": evidence_ref,
                     "request_state": existing.get("state"),
                 }
-
-            previous_wait = copy.deepcopy(control.get("wait"))
             recovery = {
                 "kind": "WORKER_WATCHDOG",
                 "source_role": "worker_watchdog",
@@ -581,14 +521,17 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
                 "worker_ref": worker_ref,
                 "lane_id": lane_id,
                 "worker_project_key": worker_project_key,
+                "old_conversation_id": conversation_id,
+                "wake_id": wake_id,
+                "child_reply_ref": child_reply_ref,
+                "incident_marker": f"WORKER_HELPER INCIDENT {helper_request_id}",
                 "reason": reason,
                 "observed_at": observed_at,
-                "previous_parent_wait": previous_wait,
             }
             prompt = (
                 f"WORKER HELPER incident: the Playwright 30-minute Worker watchdog expired for Child {child_task_id}. "
                 f"Inspect exact backend {backend_cl}, dispatch {dispatch_id} generation {generation}, "
-                f"fence {fence_token}, Worker owner {worker_ref}, lane {lane_id}, and the bound Worker browser conversation. "
+                f"fence {fence_token}, Worker owner {worker_ref}, lane {lane_id}, exact physical conversation {conversation_id}, and wake {wake_id}. "
                 f"Trigger reason: {reason}. This is Worker-watchdog recovery, not Planner-invoked Helper work. Establish the real page/runtime state and perform the smallest authorized recovery. "
                 "Do not invent or directly create a replacement Worker generation, dispatch, fence, wake, Child, or new semantic direction. "
                 "If an already-authorized Worker continuation exists and only mechanical delivery/reconciliation is stalled, restore that exact continuation. "
@@ -600,7 +543,7 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
                 "kind": "worker_helper_result",
                 "request_id": helper_request_id,
                 "challenge": _stable_token(
-                    "helper-challenge",
+                    "worker-helper-challenge",
                     {"incident": evidence_ref, "task_id": parent_task_id, "control_epoch": parent_control_epoch},
                 ),
                 "prompt": prompt,
@@ -681,6 +624,184 @@ def stage_worker_watchdog_helper(store: Any, req: dict[str, Any]) -> dict[str, A
     return {"ok": False, "error": "WORKER_WATCHDOG_HELPER_RETRY_EXHAUSTED"}
 
 
+def planner_watchdog_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+    """Validate that the exact Planner turn is still the current unresolved target."""
+    task_id = _safe_task_id(req.get("task_id"))
+    epoch = int(req.get("control_epoch") or 0)
+    conversation_id = _safe_id(req.get("conversation_id"), "PLANNER_WATCHDOG_CONVERSATION_INVALID")
+    request_id = _safe_id(req.get("request_id"), "PLANNER_WATCHDOG_REQUEST_INVALID")
+    output_ref = store._safe_repo_rel(req.get("output_ref"), "output_ref")
+    generation = int(req.get("planner_generation") or 0)
+    fence = _safe_id(req.get("planner_fence_token"), "PLANNER_WATCHDOG_FENCE_INVALID")
+    if epoch < 1 or generation < 1:
+        return {"ok": False, "error": "PLANNER_WATCHDOG_IDENTITY_INVALID"}
+    with store.git_lock:
+        store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+        base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+        cell = _read_json(store, base_sha, _task_cell_path(task_id))
+        if int(cell.get("control_epoch") or 0) != epoch:
+            return {"ok": True, "active": False, "idle": "planner_watchdog_epoch_changed"}
+        control = cell.get("planner_control") or {}
+        authority = control.get("authority") or {}
+        runtime = _runtime(control)
+        pending = runtime.get("pending_output")
+        active = (
+            isinstance(pending, dict)
+            and str(authority.get("conversation_id") or "") == conversation_id
+            and int(authority.get("planner_generation") or 0) == generation
+            and str(authority.get("planner_fence_token") or "") == fence
+            and str(pending.get("request_id") or "") == request_id
+            and str(pending.get("ref") or "") == output_ref
+            and str(pending.get("status") or "") in {"WAITING", "DELIVERY_PENDING"}
+        )
+        if not active:
+            return {"ok": True, "active": False, "idle": "planner_watchdog_target_not_current"}
+        outcome = _try_read_json(store, base_sha, output_ref) or {}
+        if str(outcome.get("turn_signal") or "").strip():
+            return {"ok": True, "active": False, "idle": "planner_watchdog_output_already_ready"}
+        return {
+            "ok": True,
+            "active": True,
+            "prompt_count": int(runtime.get("prompt_count") or 0),
+            "max_prompts_per_generation": int(
+                runtime.get("max_prompts_per_generation") or DEFAULT_MAX_PROMPTS_PER_GENERATION
+            ),
+        }
+
+
+def record_planner_watchdog_replay(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+    """Record one same-generation Planner wake replay after response-start."""
+    task_id = _safe_task_id(req.get("task_id"))
+    epoch = int(req.get("control_epoch") or 0)
+    request_id = _safe_id(req.get("request_id"), "PLANNER_WATCHDOG_REQUEST_INVALID")
+    output_ref = store._safe_repo_rel(req.get("output_ref"), "output_ref")
+    old_conversation_id = _safe_id(
+        req.get("old_conversation_id"), "PLANNER_WATCHDOG_OLD_CONVERSATION_INVALID"
+    )
+    new_conversation_id = _safe_id(
+        req.get("new_conversation_id"), "PLANNER_WATCHDOG_NEW_CONVERSATION_INVALID"
+    )
+    new_conversation_url = str(req.get("new_conversation_url") or "").strip()
+    generation = int(req.get("planner_generation") or 0)
+    fence = _safe_id(req.get("planner_fence_token"), "PLANNER_WATCHDOG_FENCE_INVALID")
+    replay_id = _safe_id(req.get("replay_id"), "PLANNER_WATCHDOG_REPLAY_ID_INVALID")
+    replacement = bool(req.get("replacement"))
+    if epoch < 1 or generation < 1:
+        return {"ok": False, "error": "PLANNER_WATCHDOG_IDENTITY_INVALID"}
+
+    for attempt in range(2):
+        with store.git_lock:
+            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+            cell_ref = _task_cell_path(task_id)
+            cell = _read_json(store, base_sha, cell_ref)
+            if int(cell.get("control_epoch") or 0) != epoch:
+                return {"ok": False, "error": "PLANNER_WATCHDOG_EPOCH_MISMATCH"}
+
+            control = copy.deepcopy(cell.get("planner_control") or {})
+            authority = control.get("authority") or {}
+            runtime = _runtime(control)
+            pending = runtime.get("pending_output")
+            prior = runtime.get("last_watchdog_replay")
+            if (
+                isinstance(prior, dict)
+                and str(prior.get("replay_id") or "") == replay_id
+                and str(authority.get("conversation_id") or "") == new_conversation_id
+            ):
+                return {
+                    "ok": True,
+                    "recorded": False,
+                    "duplicate": True,
+                    "prompt_count": int(runtime.get("prompt_count") or 0),
+                }
+
+            if (
+                not isinstance(pending, dict)
+                or int(authority.get("planner_generation") or 0) != generation
+                or str(authority.get("planner_fence_token") or "") != fence
+                or str(authority.get("conversation_id") or "") != old_conversation_id
+                or str(pending.get("request_id") or "") != request_id
+                or str(pending.get("ref") or "") != output_ref
+                or str(pending.get("status") or "") not in {"WAITING", "DELIVERY_PENDING"}
+            ):
+                return {"ok": False, "error": "PLANNER_WATCHDOG_TARGET_CHANGED"}
+
+            observed_at = utc_now()
+            next_cell = copy.deepcopy(cell)
+            next_control = copy.deepcopy(control)
+            next_authority = next_control.setdefault("authority", {})
+            next_runtime = _runtime(next_control)
+            next_pending = copy.deepcopy(next_runtime.get("pending_output") or {})
+            next_count = int(next_runtime.get("prompt_count") or 0) + 1
+
+            next_authority["conversation_id"] = new_conversation_id
+            next_runtime["prompt_count"] = next_count
+            next_runtime["last_response_started_at"] = observed_at
+            next_runtime["last_watchdog_replay"] = {
+                "replay_id": replay_id,
+                "old_conversation_id": old_conversation_id,
+                "new_conversation_id": new_conversation_id,
+                "replacement": replacement,
+                "response_started_at": observed_at,
+                "planner_generation": generation,
+            }
+            next_pending.update({
+                "conversation_id": new_conversation_id,
+                "status": "WAITING",
+                "started_at": observed_at,
+            })
+            next_runtime["pending_output"] = next_pending
+            next_control["runtime"] = next_runtime
+            next_cell["planner_control"] = next_control
+
+            roles = next_cell.setdefault("roles", {})
+            planner = copy.deepcopy(roles.get("planner") or {})
+            planner.update({
+                "conversation_id": new_conversation_id,
+                "conversation_url": new_conversation_url or planner.get("conversation_url"),
+                "request_id": request_id,
+                "planner_generation": generation,
+                "planner_fence_token": fence,
+                "response_started": True,
+                "observed_at": observed_at,
+                "status": "ACTIVE",
+                "semantic_ready": True,
+            })
+            roles["planner"] = planner
+            next_cell["updated_at"] = observed_at
+
+            worktree = _prepare_worktree(store, base_sha, f"planner-watchdog-replay-{task_id}-{attempt}")
+            try:
+                _write_json(worktree, cell_ref, next_cell)
+                try:
+                    commit_sha = _commit_push(
+                        store,
+                        worktree,
+                        [cell_ref],
+                        f"Record same-generation Planner watchdog replay for {task_id} [skip ci]",
+                    )
+                except subprocess.SubprocessError:
+                    if attempt == 0:
+                        continue
+                    return {"ok": False, "error": "PLANNER_WATCHDOG_REPLAY_PUSH_FAILED"}
+            finally:
+                _drop_worktree(store, worktree)
+
+            return {
+                "ok": True,
+                "recorded": True,
+                "replacement": replacement,
+                "planner_generation": generation,
+                "prompt_count": next_count,
+                "max_prompts_per_generation": int(
+                    next_runtime.get("max_prompts_per_generation")
+                    or DEFAULT_MAX_PROMPTS_PER_GENERATION
+                ),
+                "commit_sha": commit_sha,
+            }
+    return {"ok": False, "error": "PLANNER_WATCHDOG_REPLAY_RETRY_EXHAUSTED"}
+
+
 def _control_slot_available(state: dict[str, Any]) -> bool:
     control = state.get("control_request")
     if not isinstance(control, dict):
@@ -703,12 +824,16 @@ def _planner_helper_identity(task_id: str, decision_ref: str) -> tuple[str, str]
     return request_id, f"evidence/{task_id}/roles/helper/{request_id}.json"
 
 
-def _planner_helper_prompt(semantic_prompt: str, output_ref: str, git_branch: str = "main") -> str:
+def _helper_operational_core(
+    semantic_prompt: str,
+    output_ref: str,
+    git_branch: str = "main",
+) -> str:
     return (
         f"Act as HELPER. Use GitHub connector CAH_OWNER/CAH_OPERATIONAL_REPOSITORY branch {git_branch} for ALL reads/writes. "
         "ACTIVE RECOVERY REQUIRED: you are the bounded operational recovery owner, not an observer or advisor. "
+        "FIRST CHECK RUNNERS BEFORE ANY RECOVERY MUTATION: inspect compatible Runner health/availability, queue/occupancy, exact owned run/job or external operation, and durable Child Reply occupancy records. cah-shot is the normal bounded rescue/control channel. CAH also has __CAH_COLD_RUNNER_NAME__ at __CAH_RUNNER_BASE__\\actions-runner-backup with backup label, normally READY_OFF. Planner may require 02 open/keep/release or cleanup of an obsolete recorded run; after exact ownership/safety checks, execute that bounded request without re-litigating Planner strategy. If 02 is not occupied by business work, you may also use it as an alternate emergency/control channel; if READY_OFF, activate the exact configured Runner through an available authorized host path and verify identity before use. There is no required backup-runner wrapper protocol. Never commandeer ACTIVE_BUSY 02, never move Managed workload onto cah-shot, and never broad-kill Runner processes. "
         "This wake assigns executable incident work. Diagnosis is preparation for action, not completion. "
-        "PLANNER AUTHORITY: within this managed Task Cell, Planner is the highest autonomous task-level semantic authority below Foreground/user intent. If this incident wake contains an explicit bounded Planner operational instruction, you MUST execute it after verifying exact target/ownership/safety; do not treat yourself as a second approval layer and do not refuse merely because you personally judge the target healthy or cleanup unnecessary. If the requested end state already exists, reconcile any remaining canonical state so Planner's intended lifecycle becomes true. Only user/Foreground intent, Task Contract, ownership isolation or safety conflict can block that instruction. "
         "TWO MANDATORY MISSIONS: (1) restore the affected Harness/Task Cell/Runner lifecycle to its normal autonomous self-running state, with no stale waits/events/control/output/continuation pointers that would require later manual pushes; and (2) move the current task past this operational fault boundary to the next valid lifecycle point so the next semantic role is mechanically runnable/wakeable from the preserved frontier. "
         "If manual canonical repair is needed, make it closure-complete: update every materially coupled wait, event, control request, pending role output/request, Child continuation/ownership, dispatch/result/wait reference and resource ownership affected by the transition, while preserving task/epoch authority and machine-owned identities. Verify that the next Harness reconciliation can proceed without another manual correction. "
         f"Incident: {semantic_prompt.strip()} "
@@ -719,44 +844,53 @@ def _planner_helper_prompt(semantic_prompt: str, output_ref: str, git_branch: st
         "If a preferred connector/API/Tool is unavailable or fails, that alone is NOT a blocker: switch to another existing authorized surface that can safely produce the same bounded effect. "
         "Use the practical fallback ladder: existing lifecycle action -> alternate authorized browser/GitHub action -> exact task-owned host/Runner operation -> smallest canonical Harness/runtime correction -> concrete blocker. "
         "Do not broaden scope or invent new semantic strategy while following that ladder. Planner owns new semantic strategy; Helper owns restoring the existing strategy to a runnable state. "
-        "Do not interrupt or resend while an AI is still genuinely generating; preserve explicit task pause/cancel. "
         "Helper MUST NOT request exit while an authorized recovery mutation remains unattempted, while coupled canonical pointers remain stale, or before the correct next semantic role has actually started. "
-        f"TWO-PHASE HELPER RESULT: after recovery is materially complete, first write exactly {output_ref} with non-empty diagnosis and repair_result but OMIT turn_signal. This is the durable result-ready handoff payload, not Helper completion. Harness may route this payload while this Helper remains alive. "
-        "For a missed Planner/Worker input, restore the same retained control request/event to its runnable state so Harness re-delivers it mechanically; do not rewrite the prompt or fabricate replacement identity. "
-        "RETURN CONTROL: if a valid pre-existing Worker continuation already exists and only needs mechanical restoration, restore that exact continuation; otherwise, especially when Planner invoked this Helper or semantic review is required, route the result back to the same authoritative Planner. Never invent new Worker semantic direction, dispatch/generation/fence, Child, or replacement Planner merely to force progress. "
-        "Planner wake verification requires the helper_result event to be claimed by a Planner doorbell, state/chatgpt control_request role=planner for the same task/epoch, a real Harness-generated 'GAH_WAKE v=1 id=<planner-request-id> project=<task-cell-project-id>', and response_started=true. "
-        "Worker wake verification requires the existing legal canonical continuation, a real Harness-generated 'GAH_WAKE v=1 id=<wake-id> project=<worker-project-id>' plus matching 'GAH_DISPATCH task_id=<child-task-id> backend_cl=<backend-cl> dispatch_id=<dispatch-id> generation=<n> fence_token=<fence-token>', then normal ACK/RUNNING admission. Do NOT fake these markers. "
+        f"TWO-PHASE HELPER RESULT: once the incident-specific phase-1 mutations are complete and the intended return path is known, first write exactly {output_ref} with non-empty diagnosis and repair_result but OMIT turn_signal. This is the durable result-ready handoff payload, not Helper completion. Harness may use this payload to perform the mechanically authorized return/retry while this Helper remains alive. "
         "ONLY AFTER the correct next semantic role has actually started, update the SAME bound Helper result, preserving diagnosis and repair_result and adding turn_signal=done. That update must be this Helper incident's FINAL Git write. "
         "Durable turn_signal=done means only 'this single-use Helper has finished and may be removed'; it is NOT a chat ending and not a Planner/Worker routing instruction. "
-        "After that final Git write, emit exactly one final syscall block and stop: "
-        "GAH_SYSCALL_BEGIN\n{\"v\":1,\"kind\":\"semantic_sync\",\"call_id\":\"semantic-sync-001\"}\nGAH_SYSCALL_END. "
-        "Do not append the legacy one-word ending after the block. Do not start another incident, become standby, or delete your own chat. "
-        "On accepted Helper semantic_sync, Harness validates the exact binding/output, records done_observed_at, immediately exact-deletes this Helper conversation, and clears its Helper binding only after deletion succeeds. Harness does NOT wait for Helper response-end. "
+        "After that final Git write succeeds, stop. "
+        "Harness observes the bound final Git write directly; no chat ending or syscall is required. "
+        "Do not start another incident, become standby, or delete your own chat. "
+        "On accepted Helper Git output, Harness validates the exact binding/output, records done_observed_at, immediately exact-deletes this Helper conversation, then clears canonical roles.helper and the local Playwright Helper binding. If canonical cleanup transiently fails after physical deletion, Harness keeps the local binding as a cleanup receipt and retries; it does not forget a deleted Helper while Git still claims it is bound. Harness does NOT wait for Helper response-end. "
         "This is a single-use Helper conversation. Harness owns identity, routing, and Helper cleanup."
     )
 
 
-def _worker_helper_prompt(semantic_prompt: str, output_ref: str, git_branch: str = "main") -> str:
-    base = _planner_helper_prompt(semantic_prompt, output_ref, git_branch)
-    base = base.replace(
-        "Planner wake verification requires the helper_result event",
-        "If new semantic strategy is required, Planner wake verification requires the worker_helper_result event",
-    )
+def _planner_helper_prompt(
+    semantic_prompt: str,
+    output_ref: str,
+    git_branch: str = "main",
+) -> str:
     return (
-        "WORKER_HELPER SOURCE=PLAYWRIGHT_WATCHDOG. "
-        "This Helper was mechanically invoked for one exact Worker after its 30-minute watchdog deadline; "
-        "it is NOT a Planner-requested Helper turn and the timeout alone is not proof of a semantic fault. "
-        "WORKER_HELPER RESULT ROUTING: when writing the phase-1 diagnosis + repair_result payload, also write return_target='worker' when the same-generation Worker path has been restored/kept, or return_target='planner' only when new semantic strategy/review is required. "
-        "WORKER_HELPER RECOVERY ORDER: (1) inspect the exact Worker page, canonical Child/backend state, Runner/external work and durable progress; "
-        "(2) if a concrete operational fault is found and is safely repairable, repair it and push the SAME Worker forward; "
-        "(3) if no concrete repairable fault is found and the exact Worker remains abnormally unresolved, exact-delete that physical Worker conversation through the authorized Playwright/host path, then append a HELPER INCIDENT breadcrumb to the Worker Child Reply stating that the generation was killed after the 30-minute watchdog and will be retried; "
-        "(4) restore/re-deliver the ORIGINAL SAME-GENERATION wake/binding through Harness and verify the replacement physical Worker response-start/admission. "
-        "Do not synthesize G+1, a new dispatch, a new fence, a new wake identity, or new Worker semantics during this watchdog recovery. "
-        "Only if same-generation operational recovery is not legal or new semantic strategy is actually required should control return to the authoritative Planner. "
-        "Keep the Worker/Child/dispatch identity explicit in all recovery decisions. "
-        + base
+        "PLANNER_HELPER SOURCE=PLANNER. "
+        "PLANNER AUTHORITY: within this managed Task Cell, Planner is the highest autonomous task-level semantic authority below Foreground/user intent. "
+        "If this incident wake contains an explicit bounded Planner operational instruction, you MUST execute it after verifying exact target/ownership/safety; do not treat yourself as a second approval layer and do not refuse merely because you personally judge the target healthy or cleanup unnecessary. "
+        "If the requested end state already exists, reconcile any remaining canonical state so Planner's intended lifecycle becomes true. Only user/Foreground intent, Task Contract, ownership isolation or safety conflict can block that instruction. "
+        "For Planner-invoked recovery, do not interrupt or resend while the target AI is genuinely generating; preserve explicit task pause/cancel. "
+        + _helper_operational_core(semantic_prompt, output_ref, git_branch)
+        + " For a missed Planner/Worker input, restore the same retained control request/event to its runnable state so Harness re-delivers it mechanically; do not rewrite the prompt or fabricate replacement identity. "
+        "RETURN CONTROL: if a valid pre-existing Worker continuation already exists and only needs mechanical restoration, restore that exact continuation; otherwise route the result back to the same authoritative Planner. Never invent new Worker semantic direction, dispatch/generation/fence, Child, or replacement Planner merely to force progress. "
+        "Planner wake verification requires the helper_result event to be claimed by a Planner doorbell, state/chatgpt control_request role=planner for the same task/epoch, a real Harness-generated 'GAH_WAKE v=1 id=<planner-request-id> project=<task-cell-project-id>', and response_started=true. "
+        "Worker wake verification requires the existing legal canonical continuation, a real Harness-generated 'GAH_WAKE v=1 id=<wake-id> project=<worker-project-id>' plus matching 'GAH_DISPATCH task_id=<child-task-id> backend_cl=<backend-cl> dispatch_id=<dispatch-id> generation=<n> fence_token=<fence-token>', then normal ACK/RUNNING admission. Do NOT fake these markers."
     )
 
+
+def _worker_helper_prompt(
+    semantic_prompt: str,
+    output_ref: str,
+    git_branch: str = "main",
+) -> str:
+    return (
+        "WORKER_HELPER SOURCE=PLAYWRIGHT_WATCHDOG. "
+        "This is the managed-Worker 30-minute watchdog incident, not Planner-requested Helper work. "
+        "Read docs/task-cell/HELPER.md; its Worker watchdog section is authoritative for the full recovery order and examples. "
+        + _helper_operational_core(semantic_prompt, output_ref, git_branch)
+        + " HIGH-PRIORITY WORKER RULES: timeout alone is not semantic failure; inspect exact Worker/Child/backend, Reply/Result, owned external work, and Harness pointers before acting. "
+        "REVIEW BOUNDARY: before any W->W recovery on g5/g10/g15 or later multiples of five, inspect the exact current Reply + Result. If that exact generation already durably finished with continue, restore the existing normal W->P finalize/review path and verify the authoritative Planner wake/response-start; do not retry that Worker and do not create g+1. If durable continue is absent, generation number alone proves nothing and the current same-generation Worker remains the recovery target. "
+        "If same-generation Worker recovery is required, exact-delete only the incident conversation when repair cannot restore progress; after deletion append the required WORKER_HELPER INCIDENT breadcrumb to the Child Reply, then use the bound phase-1 Helper result to authorize Harness same_generation_retry. Never fabricate a replacement wake, generation, dispatch, fence, Worker owner, Child, or semantic direction. "
+        "RESULT ROUTING: return_target=worker with recovery_action=resume_current or same_generation_retry only when that exact Worker path is restored; return_target=planner only when the legal next path is Planner review/strategy. "
+        "Before turn_signal=done, verify the actual return role has started and re-check coupled parent wait/activity, pending Helper output, and Worker/Planner pointers so no stale recovery state remains. Harness does not blindly restore an earlier parent wait/activity snapshot for you."
+    )
 
 def _enabled_worker_lanes(store: Any, base_sha: str) -> list[dict[str, str]]:
     lanes_state = _read_json(store, base_sha, "state/lanes.json")
@@ -818,6 +952,7 @@ def _planner_turn_prompt(
         f"CAH_OWNER/CAH_OPERATIONAL_REPOSITORY branch {git_branch} for ALL reads/writes; never default to another ref. Read AGENTS.md and docs/task-cell/PLANNER.md. "
         f"Foreground requirements: tasks/{task_id}.json (also open any original requirements/material refs it names). Read these first, then {plan_ref}, {memory_ref}, and {plan_note_ref}; Memory and Plan Note do not replace the goal. "
         f"Use {plan_note_ref} freely as Planner's mutable decomposition/backlog workspace and load-shedding surface. A substantial parent task must not force you to fully decompose or reason through too much future work in one response: over-concentrating planning into one turn can cause an excessively long response, semantic/context collapse, response timeout, or a stalled Task Cell. When you judge that continuing decomposition in the current turn creates a meaningful risk of those failure modes, proactively use Plan Note instead of trying to finish the whole decomposition in that response. Stop at a useful frontier, preserve the remaining backlog in Plan Note, dispatch already-bounded work, and resume the remaining decomposition on later review turns. Treat this as an active recommendation: use Plan Note early enough to avoid an oversized risky turn, not merely as recovery after the turn has already become unwieldy. You may stage a coarse whole-task outline or partially decompose it. Do not impose a fixed syntax, tree depth, batch size, Child count, elapsed-time threshold, or token threshold. Inspect its remaining frontier on planning/review turns so deferred work is not forgotten, and distinguish remaining work from work already dispatched, accepted, superseded, or no longer needed. "
+        "CAPACITY COORDINATION: CAH has primary CAH-MANAGED-01 plus normally-off Cold/Burst __CAH_COLD_RUNNER_NAME__. You may proactively request through helper_prompt that 02 be opened, kept available, released to READY_OFF, or that an obsolete recorded run be exactly cleaned. Do not micromanage every experiment duration: Worker owns concrete execution-level judgment and may choose 02 for a specific long/heavy external operation, with a mandatory durable Child Reply record. If Worker reports 02 needed but offline/occupied, coordinate that capacity dependency. Planner and Worker never use cah-shot as normal workload capacity. "
         f"If this turn actually consults Plan Note for planning/review or changes it, then in the same turn record that use in {memory_entry_ref}: capture the meaningful note delta or decision and the remaining frontier for successor continuity. If changing Plan Note, write {plan_note_ref} before the Memory entry. Do not copy the whole note into Memory. Plan Note never overrides Task Contract, formal Plan, Child Reply/Result evidence, or accepted artifacts. "
         f"Current events={json.dumps(event_view, ensure_ascii=False)}. "
         f"Read relevant new refs={json.dumps(list(dict.fromkeys(refs)))}. "
@@ -832,10 +967,9 @@ def _planner_turn_prompt(
         f"Write {outcome_ref} LAST, preserving its pre-bound machine fields. Put any needed semantic payload there "
         "(final_result_ref for final acceptance, wait for an external dependency, question for user input, or error details) "
         "and set turn_signal to exactly one of done, rework, complete, handoff, wait, need_user, or error. "
-        "Do not fill the Harness-owned internal outcome field. After that durable write succeeds, actively kick local Harness sync "
-        "by emitting exactly one final syscall block and stop: "
-        "GAH_SYSCALL_BEGIN\n{\"v\":1,\"kind\":\"semantic_sync\",\"call_id\":\"semantic-sync-001\"}\nGAH_SYSCALL_END. "
-        "Do not append the legacy one-word ending after the block. Do not repeat work summaries, file lists or metadata in chat. "
+        "Do not fill the Harness-owned internal outcome field. After that durable write succeeds, stop. "
+        "Harness reads turn_signal from the bound Git file and reduces the turn in its normal cycle, "
+        "without a chat ending, syscall block or response-end. Do not repeat work summaries, file lists or metadata in chat. "
         "Harness derives routing and counts; the same lane-write detection applies to both initial work and adding Workers later."
     )
 
@@ -1367,20 +1501,20 @@ def _consume_planner_turn(
     }
 
 
-def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
-    """Bind a short browser signal to its existing canonical role/output.
+def observe_semantic_turn(store: Any, req: dict[str, Any], *, base_sha: str | None = None) -> dict[str, Any]:
+    """Reconcile one exact role binding from its committed Git output.
 
-    The host supplies identity from the observed conversation, never from the
-    assistant's response. Semantic files remain the normal Git write surface.
+    Kept as an explicit recovery entry point. A caller-supplied chat signal
+    cannot manufacture completion; only the bound output's turn_signal is read.
     """
     store._safe_client(req.get("client_id"))
     task_id = _safe_task_id(req.get("task_id"))
     role = str(req.get("role") or "")
-    signal = str(req.get("signal") or "").strip().lower()
-    sync_from_git = bool(req.get("sync_from_git"))
+    signal = ""
     with store.git_lock:
-        store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-        base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+        if base_sha is None:
+            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
         if role == "worker":
             task = _read_json(store, base_sha, _task_contract_ref(task_id))
             if task.get("kind") != "planner_worker_child":
@@ -1398,14 +1532,13 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 return {"ok": True, "accepted": True, "duplicate": True, "role": "worker"}
             output_ref = str(task["expected_result_ref"])
             previous_output = _try_read_json(store, base_sha, output_ref) or {}
-            if sync_from_git:
-                signal = str(previous_output.get("turn_signal") or "").strip().lower()
+            signal = str(previous_output.get("turn_signal") or "").strip().lower()
             status = {"continue": "CONTINUE", "complete": "PASS", "blocked": "BLOCKED", "error": "ERROR"}.get(signal)
             if status is None:
                 return {
                     "ok": True,
                     "accepted": False,
-                    "reason": "worker_turn_signal_missing" if sync_from_git else "worker_signal_missing",
+                    "reason": "worker_turn_signal_missing",
                     "role": "worker",
                 }
             output = copy.deepcopy(previous_output)
@@ -1461,13 +1594,39 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             if not pending or binding.get("conversation_id") != req.get("conversation_id"):
                 return {"ok": True, "accepted": False, "reason": "helper_binding_mismatch"}
             output = _try_read_json(store, base_sha, output_ref)
-            if sync_from_git and isinstance(output, dict):
+            if str(pending.get("kind") or "") == "worker_helper_result":
+                return_mode = str(pending.get("return_mode") or "")
+                pending_state = str(pending.get("state") or "")
+                if return_mode == "WORKER_SAME_GENERATION":
+                    if pending_state != "WORKER_STARTED":
+                        return {
+                            "ok": True,
+                            "accepted": False,
+                            "reason": "worker_helper_next_worker_not_started",
+                            "role": "helper",
+                        }
+                elif return_mode == "PLANNER_EVENT":
+                    if pending_state != "EMITTED":
+                        return {
+                            "ok": True,
+                            "accepted": False,
+                            "reason": "worker_helper_planner_event_not_emitted",
+                            "role": "helper",
+                        }
+                else:
+                    return {
+                        "ok": True,
+                        "accepted": False,
+                        "reason": "worker_helper_return_path_unresolved",
+                        "role": "helper",
+                    }
+            if isinstance(output, dict):
                 signal = str(output.get("turn_signal") or "").strip().lower()
             if signal != "done":
                 return {
                     "ok": True,
                     "accepted": False,
-                    "reason": "helper_turn_signal_missing" if sync_from_git else "helper_signal_missing",
+                    "reason": "helper_turn_signal_missing",
                     "role": "helper",
                 }
             ready = (
@@ -1477,8 +1636,29 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             )
             if not ready:
                 return {"ok": True, "accepted": False, "reason": "helper_output_missing", "role": "helper"}
-            if not pending.get("done_observed_at"):
-                pending["done_observed_at"] = utc_now()
+            restore = None
+            recovery = pending.get("recovery") or {}
+            wait = control.get("wait") or {}
+            runnable = (control.get("enabled") is True
+                        and not control.get("semantic_authority_closed")
+                        and str(control.get("activity") or "") not in {"WAIT_USER", "DONE", "ERROR", "CLEANING", "PAUSED", "STOPPED"}
+                        and str(cell.get("status") or "") not in {"DONE", "ERROR", "CANCELLED", "STOPPED", "PAUSED"})
+            if pending.get("kind") == "worker_helper_result" and recovery:
+                backend = _try_read_json(store, base_sha, str(recovery.get("backend_cl") or "")) or {}
+                dispatch = backend.get("dispatch") or {}
+                running = (runnable and backend.get("overall") == "RUNNING"
+                           and dispatch.get("state") == "RUNNING"
+                           and dispatch.get("dispatch_id") == recovery.get("dispatch_id")
+                           and dispatch.get("fence_token") == recovery.get("fence_token"))
+                restore = {**recovery, "watchdog_state": "ARMED" if running else "DISARMED",
+                           "resumed_at": pending.get("done_observed_at") or utc_now()}
+            wait_finished = (runnable and wait.get("kind") in {"WAIT_HELPER", "WAIT_WORKER_HELPER"}
+                             and (wait.get("selector") or {}).get("output_ref") == output_ref)
+            if not pending.get("done_observed_at") or wait_finished:
+                pending.setdefault("done_observed_at", utc_now())
+                if wait_finished:
+                    # Continue waiting for owned work, not for a Helper that exited.
+                    control["wait"] = {"kind": "WAIT_RESULT", "selector": {"task_id": task_id}, "refs": []}
                 control["runtime"] = runtime
                 cell["planner_control"] = control
                 worktree = _prepare_worktree(store, base_sha, f"helper-done-{task_id}")
@@ -1487,7 +1667,8 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     _commit_push(store, worktree, [cell_ref], f"Receive Helper done for {task_id} [skip ci]")
                 finally:
                     _drop_worktree(store, worktree)
-            return {"ok": True, "accepted": True, "role": "helper", "reason": None}
+            return {"ok": True, "accepted": True, "role": "helper", "reason": None,
+                    "worker_watchdog_restore": restore}
 
         authority = control.get("authority") or {}
         if (control.get("successor") or {}).get("state", "NONE") != "NONE":
@@ -1501,7 +1682,7 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
         if active.get("outcome_ref") != output_ref or pending.get("request_id") != request_id:
             return {"ok": True, "accepted": False, "reason": "planner_turn_mismatch"}
         output = _try_read_json(store, base_sha, output_ref)
-        if sync_from_git and isinstance(output, dict):
+        if isinstance(output, dict):
             signal = str(output.get("turn_signal") or "").strip().lower()
         if signal == "handoff":
             result = request_planner_rotation(store, {"task_id": task_id, "reason": "context_compacted", "caller_role": "harness"})
@@ -1512,7 +1693,7 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             return {
                 "ok": True,
                 "accepted": False,
-                "reason": "planner_turn_signal_missing" if sync_from_git else "planner_signal_missing",
+                "reason": "planner_turn_signal_missing",
                 "role": "planner",
             }
         if not isinstance(output, dict):
@@ -1533,15 +1714,92 @@ def observe_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 "role": "planner", "result": result}
 
 
-def sync_semantic_turn(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+def sync_semantic_turn(store: Any, req: dict[str, Any], *, base_sha: str | None = None) -> dict[str, Any]:
     """Actively reconcile a bound semantic turn from its durable Git turn_signal.
 
-    The kick carries no semantic result and no routing decision. Harness fetches
-    canonical Git, validates the existing bound identity, reads turn_signal from
-    the pre-bound output, and then reuses the normal semantic reducer. Browser
-    response-end observation remains a fallback only.
+    Used by the normal Git reconciliation pass and explicit recovery calls.
+    The bound Git output is the completion source; no browser text or
+    response-end is needed. Identity and semantic validation stay in one reducer.
     """
-    return observe_semantic_turn(store, {**req, "sync_from_git": True, "signal": ""})
+    return observe_semantic_turn(store, req, base_sha=base_sha)
+
+
+
+def complete_helper_cleanup(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+    """Clear the exact canonical Helper role only after physical deletion succeeded."""
+    store._safe_client(req.get("client_id"))
+    task_id = _safe_task_id(req.get("task_id"))
+    epoch = int(req.get("control_epoch") or 0)
+    conversation_id = _safe_id(req.get("conversation_id"), "HELPER_CLEANUP_CONVERSATION_INVALID")
+    request_id = _safe_id(req.get("request_id"), "HELPER_CLEANUP_REQUEST_INVALID")
+    output_ref = store._safe_repo_rel(req.get("output_ref"), "output_ref")
+    if epoch < 1:
+        return {"ok": False, "error": "HELPER_CLEANUP_EPOCH_INVALID"}
+
+    for attempt in range(2):
+        with store.git_lock:
+            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+            cell_ref = _task_cell_path(task_id)
+            cell = _try_read_json(store, base_sha, cell_ref)
+            if not isinstance(cell, dict):
+                return {"ok": True, "cleaned": True, "duplicate": True, "reason": "task_cell_absent"}
+            if int(cell.get("control_epoch") or 0) != epoch:
+                return {"ok": False, "error": "HELPER_CLEANUP_EPOCH_MISMATCH"}
+
+            roles = cell.get("roles") if isinstance(cell.get("roles"), dict) else {}
+            helper = roles.get("helper") if isinstance(roles.get("helper"), dict) else None
+            if helper is None:
+                return {"ok": True, "cleaned": True, "duplicate": True, "reason": "helper_binding_absent"}
+            if (
+                str(helper.get("conversation_id") or "") != conversation_id
+                or str(helper.get("request_id") or "") != request_id
+            ):
+                return {"ok": False, "error": "HELPER_CLEANUP_BINDING_MISMATCH"}
+
+            control = cell.get("planner_control") if isinstance(cell.get("planner_control"), dict) else {}
+            runtime = _runtime(control)
+            pending = next((
+                row for row in runtime.get("pending_role_outputs") or []
+                if isinstance(row, dict)
+                and str(row.get("request_id") or "") == request_id
+                and str(row.get("artifact_ref") or "") == output_ref
+            ), None)
+            if not isinstance(pending, dict) or not pending.get("done_observed_at"):
+                return {"ok": False, "error": "HELPER_CLEANUP_DONE_NOT_OBSERVED"}
+
+            next_cell = copy.deepcopy(cell)
+            next_roles = next_cell.setdefault("roles", {})
+            next_roles.pop("helper", None)
+            next_cell["updated_at"] = utc_now()
+
+            worktree = _prepare_worktree(store, base_sha, f"helper-cleanup-{task_id}-{attempt}")
+            try:
+                _write_json(worktree, cell_ref, next_cell)
+                try:
+                    commit_sha = _commit_push(
+                        store,
+                        worktree,
+                        [cell_ref],
+                        f"Clear completed Helper binding for {task_id} [skip ci]",
+                    )
+                except subprocess.SubprocessError:
+                    if attempt == 0:
+                        continue
+                    return {"ok": False, "error": "HELPER_CLEANUP_PUSH_FAILED"}
+            finally:
+                _drop_worktree(store, worktree)
+            return {
+                "ok": True,
+                "cleaned": True,
+                "duplicate": False,
+                "task_id": task_id,
+                "conversation_id": conversation_id,
+                "request_id": request_id,
+                "commit_sha": commit_sha,
+            }
+
+    return {"ok": False, "error": "HELPER_CLEANUP_RETRY_EXHAUSTED"}
 
 
 def _terminal_dispatch_state(value: Any) -> bool:
@@ -2037,8 +2295,16 @@ def _set_control_request(
 
 
 def _rotation_due(control: dict[str, Any], now: datetime | None = None) -> tuple[bool, str | None]:
-    # Context compaction is signalled by the bound Planner, not inferred from
-    # prompt counts or elapsed wall time. Runtime failures go to Helper.
+    runtime = _runtime(control)
+    prompt_count = int(runtime.get("prompt_count") or 0)
+    max_prompts = int(
+        runtime.get("max_prompts_per_generation") or DEFAULT_MAX_PROMPTS_PER_GENERATION
+    )
+    if max_prompts > 0 and prompt_count >= max_prompts:
+        return True, "prompt_ceiling"
+    # Wall time alone never rotates Planner. Semantic context compaction still
+    # uses the explicit Planner handoff signal; the deterministic prompt ceiling
+    # is a separate Harness lifecycle guard.
     return False, None
 
 
@@ -2159,7 +2425,6 @@ def migrate_planner_runtime(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 "generation_started_at": utc_now(),
                 "max_prompts_per_generation": int(req.get("max_prompts_per_generation") or DEFAULT_MAX_PROMPTS_PER_GENERATION),
                 "max_generation_age_seconds": int(req.get("max_generation_age_seconds") or DEFAULT_MAX_GENERATION_AGE_SECONDS),
-                "semantic_output_timeout_seconds": int(req.get("semantic_output_timeout_seconds") or DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS),
             })
             control["runtime"] = runtime
             control_cell["planner_control"] = control
@@ -2445,11 +2710,11 @@ def planner_final_delivery_update(store: Any, req: dict[str, Any], *, operation:
                 for lane in lane_state.get("lanes") or []:
                     if not isinstance(lane, dict):
                         continue
-                    pools = lane.get("task_pools")
-                    pool = pools.get(owner_key) if isinstance(pools, dict) else None
-                    if not isinstance(pool, dict):
+                    lineages = lane.get(WORKER_LINEAGES_KEY)
+                    lineage = lineages.get(owner_key) if isinstance(lineages, dict) else None
+                    if not isinstance(lineage, dict):
                         continue
-                    pools.pop(owner_key, None)
+                    lineages.pop(owner_key, None)
                 lane_state["updated_at"] = event.get("consumed_at") or event.get("cleaned_at")
                 paths.append("state/lanes.json")
                 # Reset only this task; preserve unrelated paused/current work.
@@ -2838,7 +3103,6 @@ def complete_foreground_planner_handoff_binding(store: Any, req: dict[str, Any])
                 return {"ok": False, "error": "PLANNER_INITIAL_TURN_MISSING"}
 
             bound_cell = copy.deepcopy(cell)
-            bootstrap_runtime = _runtime(bound_cell.pop("planner_control", {})) if cell.get("bootstrap_recovery") else None
             bound_cell["roles"] = {
                 **(bound_cell.get("roles") or {}),
                 "planner": {
@@ -2875,11 +3139,6 @@ def complete_foreground_planner_handoff_binding(store: Any, req: dict[str, Any])
                 "delivery_state": "CLAIMED",
             }
             runtime = _runtime(control)
-            if bootstrap_runtime is not None:
-                runtime["pending_role_requests"] = bootstrap_runtime.get("pending_role_requests", [])
-                runtime["pending_role_outputs"] = bootstrap_runtime.get("pending_role_outputs", [])
-                control_cell["bootstrap_recovery"]["state"] = "BOUND"
-            timeout = int(runtime.get("semantic_output_timeout_seconds") or DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS)
             runtime.update({
                 "foreground_runtime_dependency": False,
                 "authority_mode": "PLANNER",
@@ -2893,7 +3152,6 @@ def complete_foreground_planner_handoff_binding(store: Any, req: dict[str, Any])
                     "conversation_id": conversation_id,
                     "status": "WAITING",
                     "started_at": utc_now(),
-                    "deadline_at": _iso_after(timeout),
                     "wake_prompt": str(control_req.get("prompt") or ""),
                 },
                 "active_turn": copy.deepcopy(initial_turn),
@@ -3086,7 +3344,6 @@ def request_planner_rotation(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     "to_generation": int(successor["to_generation"]),
                     "pending_fence_token": pending_fence,
                     "predecessor_conversation_id": str(authority.get("conversation_id") or ""),
-                    "transport_bootstrap_only": False,
                     "required_output_ref": outcome_ref,
                 },
             )
@@ -3139,7 +3396,6 @@ def request_planner_rotation(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     "to_generation": int(successor["to_generation"]),
                     "pending_fence_token": pending_fence,
                     "request_id": successor_request_id,
-                    "transport_bootstrap_only": False,
                     "required_output_ref": outcome_ref,
                     "commit_sha": commit_sha,
                 }
@@ -3236,7 +3492,6 @@ def complete_planner_successor_bootstrap(store: Any, req: dict[str, Any]) -> dic
                     "conversation_id": conversation_id,
                     "handoff_id": handoff_id,
                     "response_started": True,
-                    "transport_bootstrap_only": False,
                 },
             }
             promote_request_id = _stable_token(
@@ -3315,7 +3570,9 @@ def complete_planner_successor_promote(store: Any, req: dict[str, Any]) -> dict[
             runtime = _runtime(control)
             runtime["browser_promotion_complete"] = True
             runtime["generation_started_at"] = utc_now()
-            runtime["prompt_count"] = 0
+            # The successor bootstrap message is explicitly its first semantic
+            # turn, and response-start already happened before promotion.
+            runtime["prompt_count"] = 1
             runtime["last_response_started_at"] = utc_now()
             control["runtime"] = runtime
             new_cell = copy.deepcopy(cell)
@@ -3484,330 +3741,107 @@ def _artifact_exists(store: Any, ref: str, path: str) -> bool:
 
 
 
-def _recover_stalled_initial_planner(store: Any, state: dict[str, Any], base_sha: str) -> dict[str, Any] | None:
-    """Bootstrap also needs a watchdog, before any Planner authority exists."""
-    request = state.get("control_request") or {}
-    if (request.get("kind") != "task_cell_planner_foreground_handoff"
-            or request.get("phase") != "CREATE_INITIAL_PLANNER"
-            or request.get("status") not in {"PENDING", "APPLYING", "ERROR"}
-            or (request.get("status") == "ERROR" and request.get("error") != "INITIAL_PLANNER_CREATE_RETRY_EXHAUSTED")):
-        return None
-    task_id = _safe_task_id(request.get("task_id"))
-    cell_ref = _task_cell_path(task_id)
-    cell = _try_read_json(store, base_sha, cell_ref) or {}
-    task = _try_read_json(store, base_sha, _task_contract_ref(task_id)) or {}
-    started = _parse_time(request.get("requested_at"))
-    if (cell.get("status") != "BOOTSTRAPPING" or cell.get("bootstrap_recovery")
-            or int(cell.get("control_epoch") or 0) != int(request.get("control_epoch") or 0)
-            or (cell.get("planner_control") or {}).get("authority")
-            or task.get("status") in {"PAUSED_BY_USER", "PAUSED", "CANCELLED", "STOPPED", "DONE"}
-            or not request.get("planner_request_id") or not request.get("prompt")
-            or started is None):
-        return None
-    timeout = int(request.get("semantic_output_timeout_seconds") or DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS)
-    if request.get("status") != "ERROR" and _now_dt() < started + timedelta(seconds=max(1, timeout)):
-        return None
-    evidence_ref = f"evidence/{task_id}/recovery/{_stable_token('bootstrap-timeout', {'request_id': request['request_id']})}.json"
-    helper_id, helper_ref = _planner_helper_identity(task_id, evidence_ref)
-    recovery = {"kind": "INITIAL_PLANNER_BOOTSTRAP", "request_id": request["planner_request_id"],
-                "output_ref": request["required_output_ref"], "prompt": request["prompt"],
-                "project_key": cell["task_cell_project_key"]}
-    new_cell, new_state = copy.deepcopy(cell), copy.deepcopy(state)
-    new_cell["bootstrap_recovery"] = {"state": "WAITING_HELPER", "helper_request_id": helper_id,
-                                      "evidence_ref": evidence_ref, "control_request": copy.deepcopy(request)}
-    new_state["control_request"] = {**request, "status": "ERROR", "recovery_ref": evidence_ref}
-    # This is an incident mailbox, not a fabricated Planner authority or turn.
-    control = {"enabled": False, "runtime": {}}
-    runtime = _runtime(control)
-    runtime["pending_role_requests"].append({
-        "role": "helper", "kind": "helper_result", "request_id": helper_id,
-        "challenge": _stable_token("helper-challenge", {"incident": evidence_ref}),
-        "artifact_ref": helper_ref, "state": "REQUEST_PENDING", "decision_ref": evidence_ref,
-        "recovery": recovery,
-        "prompt": f"Initial Planner bootstrap did not reach a verified conversation binding. Inspect {evidence_ref}, the retained original control request, and only the browser evidence needed to distinguish still-running work from a missed/stopped delivery. If the original request should be retried, restore that same retained control request/event to its runnable state so Harness re-delivers it mechanically; do not create or rotate Planner and do not rewrite the prompt. Verify the resulting response-start/binding state, then record diagnosis/repair_result."
-    })
-    runtime, _ = _stage_pending_helper_request(new_state, new_cell, runtime, store.git_branch)
-    control["runtime"] = runtime
-    new_cell["planner_control"] = control
-    evidence = {"v": 1, "code": "INITIAL_PLANNER_BOOTSTRAP_STALLED", "task_id": task_id,
-                "control_epoch": cell["control_epoch"], "observed_at": utc_now(),
-                "source_commit": base_sha, "request": request, "recovery": recovery}
-    worktree = _prepare_worktree(store, base_sha, f"planner-bootstrap-helper-{task_id}")
-    try:
-        objects = {evidence_ref: evidence, cell_ref: new_cell, "state/chatgpt.json": new_state}
-        for path, value in objects.items():
-            _write_json(worktree, path, value)
-        commit = _commit_push(store, worktree, list(objects), f"Wake Helper for initial Planner bootstrap {task_id} [skip ci]")
-    finally:
-        _drop_worktree(store, worktree)
-    return {"ok": True, "action": "planner_bootstrap_helper_staged", "task_id": task_id,
-            "helper_request_id": helper_id, "recovery_ref": evidence_ref, "commit_sha": commit}
-
-
-def _recover_stalled_planner_delivery(store: Any, state: dict[str, Any], base_sha: str) -> dict[str, Any] | None:
-    """Release only an expired, exact Planner delivery; preserve its request.
-
-    This is transport recovery only. Missing semantic output remains canonical
-    state for Harness/Playwright liveness reconciliation.
-    """
-    request = state.get("control_request") or {}
-    if (request.get("kind") != "task_cell_role_prompt" or request.get("role") != "planner"
-            or request.get("status") not in {"PENDING", "APPLYING"}):
-        return None
-    started = _parse_time(request.get("requested_at"))
-    if started is None:
-        return None  # Unknown delivery age is not fabricated timeout evidence.
-    task_id = _safe_task_id(request.get("task_id"))
-    cell_ref = _task_cell_path(task_id)
-    cell = _try_read_json(store, base_sha, cell_ref)
-    if not cell:
-        return None
-    task = _try_read_json(store, base_sha, _task_contract_ref(task_id)) or {}
-    control = cell.get("planner_control") or {}
-    authority = control.get("authority") or {}
-    if (control.get("enabled") is not True or control.get("semantic_authority_closed") is True
-            or any(str(x.get("status") or "").upper() in {"PAUSED_BY_USER", "PAUSED", "CANCELLED", "STOPPED", "DONE"} for x in (task, cell))
-            or str(control.get("activity") or "") in {"WAIT_USER", "DONE", "ERROR", "HANDOFF", "ROTATING"}
-            or int(request.get("control_epoch") or 0) != int(cell.get("control_epoch") or 0)
-            or str(request.get("challenge") or "") != str(authority.get("challenge") or "")):
-        return None
-    runtime = _runtime(control)
-    timeout = int(runtime.get("semantic_output_timeout_seconds") or DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS)
-    if _now_dt() < started + timedelta(seconds=max(1, timeout)):
-        return None
-    output_ref = str(request.get("required_output_ref") or "")
-    if not output_ref:
-        return None
-    output_exists = _artifact_exists(store, base_sha, output_ref)
-    evidence_ref = f"evidence/{task_id}/recovery/control-{_stable_token('delivery', {'request_id': request.get('request_id')})}.json"
-    evidence = {"v": 1, "task_id": task_id, "control_epoch": cell["control_epoch"],
-                "code": "PLANNER_DELIVERY_LEASE_EXPIRED", "observed_at": utc_now(),
-                "source_commit": base_sha, "request": copy.deepcopy(request), "output_exists": output_exists}
-    new_state = copy.deepcopy(state)
-    new_state["control_request"] = {**request, "status": "ERROR", "completed_at": utc_now(), "recovery_ref": evidence_ref}
-    new_cell = copy.deepcopy(cell)
-    recovery_inbox = ((cell.get("planner_control") or {}).get("inbox") or {})
-    recovery_doorbell = recovery_inbox.get("active_doorbell") if isinstance(recovery_inbox, dict) else None
-    event_ids = [
-        str(x)
-        for x in (recovery_doorbell.get("event_ids") if isinstance(recovery_doorbell, dict) else [])
-    ]
-
-    rt = _runtime(new_cell["planner_control"])
-    helper_id, helper_ref = _planner_helper_identity(task_id, evidence_ref)
-    pending = list(rt.get("pending_role_requests") or [])
-    pending.append({"role": "helper", "kind": "helper_result", "request_id": helper_id,
-        "challenge": _stable_token("helper-challenge", {"incident": evidence_ref}),
-        "artifact_ref": helper_ref, "state": "REQUEST_PENDING", "decision_ref": evidence_ref,
-        "prompt": f"Harness delivery timeout; inspect {evidence_ref} and the exact Planner chat {authority.get('conversation_id')}. If internal state has no clear stall, inspect the actual browser using available Playwright tools. Distinguish still-generating work from missed Enter/missing original wake; repair only that bound input, never invent a task or rotate Planner on timeout. Record observations/action/outcome."})
-    rt["pending_role_requests"] = pending
-    rt, _ = _stage_pending_helper_request(new_state, new_cell, rt, store.git_branch)
-    new_cell["planner_control"]["runtime"] = rt
-    worktree = _prepare_worktree(store, base_sha, f"planner-delivery-recovery-{task_id}")
-    try:
-        for path, value in {evidence_ref: evidence, cell_ref: new_cell, "state/chatgpt.json": new_state}.items():
-            _write_json(worktree, path, value)
-        commit_sha = _commit_push(store, worktree, [evidence_ref, cell_ref, "state/chatgpt.json"], f"Recover expired Planner delivery {task_id} [skip ci]")
-    finally:
-        _drop_worktree(store, worktree)
-
-    helper = {"ok": True, "staged": True}
-    return {
-        "ok": True,
-        "action": "planner_delivery_recovered",
-        "task_id": task_id,
-        "recovery_ref": evidence_ref,
-        "output_exists": output_exists,
-        "released_event_ids": event_ids,
-        "recovery_commit_sha": commit_sha,
-        "helper": helper,
-    }
-
-
-def _stage_expired_planner_output_helper(store: Any, state: dict[str, Any], cell: dict[str, Any], base_sha: str) -> dict[str, Any] | None:
-    """Mechanical timeout -> existing Helper channel, independent of Planner approval."""
-    control = cell.get("planner_control") or {}
-    runtime = _runtime(control)
-    pending = runtime.get("pending_output") or {}
-    deadline = _parse_time(pending.get("deadline_at"))
-    task_id = str(cell.get("task_id") or "")
-    task = _try_read_json(store, base_sha, _task_contract_ref(task_id)) or {}
-    if (pending.get("status") != "WAITING" or deadline is None or _now_dt() < deadline
-            or control.get("semantic_authority_closed") is True
-            or control.get("activity") in {"WAIT_USER", "DONE", "ERROR", "HANDOFF", "ROTATING"}
-            or any(item.get("status") in {"PAUSED_BY_USER", "PAUSED", "CANCELLED", "STOPPED", "DONE"} for item in (task, cell))):
-        return None
-    authority = control.get("authority") or {}
-    if not pending.get("conversation_id") or pending["conversation_id"] != authority.get("conversation_id"):
-        return None
-    evidence_ref = f"evidence/{task_id}/recovery/{_stable_token('output-timeout', {'request_id': pending.get('request_id'), 'deadline': pending.get('deadline_at')})}.json"
-    helper_id, helper_ref = _planner_helper_identity(task_id, evidence_ref)
-    if any(item.get("request_id") == helper_id for item in runtime.get("pending_role_requests", [])):
-        return None
-    original = state.get("control_request") or {}
-    prompt = str(pending.get("wake_prompt") or "")
-    if not prompt and pending.get("request_id") in {original.get("request_id"), original.get("planner_request_id")}:
-        prompt = str(original.get("prompt") or "")  # Existing pre-fix live turn.
-    recovery = {"request_id": pending["request_id"], "output_ref": pending["ref"],
-                "conversation_id": pending["conversation_id"], "prompt": prompt,
-                "project_key": str(cell.get("task_cell_project_key") or ""),
-                "conversation_url": str((cell.get("roles", {}).get("planner") or {}).get("conversation_url") or ""),
-                "planner_generation": authority.get("planner_generation"),
-                "planner_fence_token": authority.get("planner_fence_token")}
-    new_cell, new_state = copy.deepcopy(cell), copy.deepcopy(state)
-    rt = _runtime(new_cell["planner_control"])
-    rt["pending_role_requests"].append({
-        "role": "helper", "kind": "helper_result", "request_id": helper_id,
-        "challenge": _stable_token("helper-challenge", {"incident": evidence_ref}),
-        "artifact_ref": helper_ref, "state": "REQUEST_PENDING", "decision_ref": evidence_ref,
-        "recovery": recovery,
-        "prompt": f"Harness observed no completed Planner output by its deadline. Inspect {evidence_ref}, the exact retained request/output binding, and only the browser evidence needed to distinguish genuine continued generation from a missed/stopped delivery. A timeout alone is not proof of a stopped AI. If the original bound request should be retried and no valid outcome exists, restore that same retained request/event to its runnable state so Harness re-delivers it mechanically to the same Planner. Never rewrite instructions or rotate Planner. Verify the resulting real response-start/state, then record diagnosis/repair_result."
-    })
-    rt, _ = _stage_pending_helper_request(new_state, new_cell, rt, store.git_branch)
-    new_cell["planner_control"]["runtime"] = rt
-    evidence = {"v": 1, "code": "PLANNER_OUTPUT_DEADLINE_EXPIRED", "task_id": task_id,
-                "control_epoch": cell["control_epoch"], "observed_at": utc_now(),
-                "source_commit": base_sha, "pending_output": pending, "recovery": recovery}
-    worktree = _prepare_worktree(store, base_sha, f"planner-output-helper-{task_id}")
-    try:
-        objects = {evidence_ref: evidence, _task_cell_path(task_id): new_cell, "state/chatgpt.json": new_state}
-        for path, value in objects.items():
-            _write_json(worktree, path, value)
-        commit = _commit_push(store, worktree, list(objects), f"Wake Helper for expired Planner output {task_id} [skip ci]")
-    finally:
-        _drop_worktree(store, worktree)
-    return {"ok": True, "action": "planner_output_helper_staged", "task_id": task_id,
-            "helper_request_id": helper_id, "recovery_ref": evidence_ref, "commit_sha": commit}
-
-
-def _route_ready_bootstrap_helper_result(
-    store: Any,
-    state: dict[str, Any],
-    base_sha: str,
-    cell_ref: str,
-    cell: dict[str, Any],
-) -> dict[str, Any] | None:
-    """Route a complete bootstrap Helper result before Helper exits.
-
-    diagnosis+repair_result is the semantic handoff payload. turn_signal=done is
-    deliberately not required here; it is written later only after the resumed
-    Planner has actually started.
-    """
-    bootstrap = cell.get("bootstrap_recovery") if isinstance(cell.get("bootstrap_recovery"), dict) else {}
-    if (
-        str(cell.get("status") or "") != "BOOTSTRAPPING"
-        or str(bootstrap.get("state") or "") != "WAITING_HELPER"
-    ):
-        return None
-    helper_id = str(bootstrap.get("helper_request_id") or "")
-    if not helper_id:
-        return None
-    control = cell.get("planner_control") if isinstance(cell.get("planner_control"), dict) else {}
-    runtime = _runtime(control)
-    pending_outputs = list(runtime.get("pending_role_outputs") or [])
-    match_index = -1
-    record: dict[str, Any] | None = None
-    for index, row in enumerate(pending_outputs):
-        if (
-            isinstance(row, dict)
-            and str(row.get("request_id") or "") == helper_id
-            and str(row.get("state") or "") == "WAITING"
-        ):
-            match_index = index
-            record = row
-            break
-    if record is None:
-        return None
-    output_ref = str(record.get("artifact_ref") or "")
-    if not output_ref or not _artifact_exists(store, base_sha, output_ref):
-        return None
-    result = _try_read_json(store, base_sha, output_ref) or {}
-    if not (
-        bool(str(result.get("diagnosis") or "").strip())
-        and bool(str(result.get("repair_result") or "").strip())
-    ):
-        return None
-    if not _control_slot_available(state):
-        return None
-    current_request = state.get("control_request") or {}
-    if (
-        str(current_request.get("request_id") or "") != helper_id
-        or str(current_request.get("status") or "") not in {"DONE", "ERROR"}
-    ):
-        return None
-    task_id = str(cell.get("task_id") or "")
-    task = _try_read_json(store, base_sha, _task_contract_ref(task_id)) or {}
-    if task.get("status") in {"PAUSED_BY_USER", "PAUSED", "CANCELLED", "STOPPED", "DONE"}:
-        return None
-    original = bootstrap.get("control_request") if isinstance(bootstrap.get("control_request"), dict) else {}
-    if not original:
-        return None
-
-    new_cell = copy.deepcopy(cell)
-    new_state = copy.deepcopy(state)
-    new_bootstrap = new_cell["bootstrap_recovery"]
-    new_bootstrap["state"] = "RESUMING"
-    new_bootstrap["helper_result_ref"] = output_ref
-    rt = _runtime(new_cell["planner_control"])
-    pending = list(rt.get("pending_role_outputs") or pending_outputs)
-    if 0 <= match_index < len(pending) and isinstance(pending[match_index], dict):
-        pending[match_index] = {
-            **pending[match_index],
-            "state": "EMITTED",
-            "result_ready_at": utc_now(),
-            "return_mode": "BOOTSTRAP_RESUME",
-        }
-    rt["pending_role_outputs"] = pending
-    new_cell["planner_control"]["runtime"] = rt
-    new_state["control_request"] = {
-        **copy.deepcopy(original),
-        "status": "PENDING",
-        "bootstrap_recovery_ref": str(bootstrap.get("evidence_ref") or ""),
-    }
-
-    worktree = _prepare_worktree(store, base_sha, f"bootstrap-helper-result-{task_id}")
-    try:
-        _write_json(worktree, cell_ref, new_cell)
-        _write_json(worktree, "state/chatgpt.json", new_state)
-        commit_sha = _commit_push(
-            store,
-            worktree,
-            [cell_ref, "state/chatgpt.json"],
-            f"Route bootstrap Helper result for {task_id} [skip ci]",
-        )
-    finally:
-        _drop_worktree(store, worktree)
-    return {
-        "ok": True,
-        "action": "bootstrap_helper_result_routed",
-        "task_id": task_id,
-        "helper_request_id": helper_id,
-        "output_ref": output_ref,
-        "commit_sha": commit_sha,
-    }
+def _canonical_semantic_turns(store: Any, base_sha: str) -> list[dict[str, Any]]:
+    """Only current bound outputs, never a scan of historical result files."""
+    turns = []
+    for cell_ref in _list_task_cells(store, base_sha):
+        cell = _try_read_json(store, base_sha, cell_ref) or {}
+        control = cell.get("planner_control") or {}
+        if control.get("enabled") is not True:
+            continue
+        runtime = _runtime(control)
+        task_id, epoch = cell.get("task_id"), cell.get("control_epoch")
+        authority, pending = control.get("authority") or {}, runtime.get("pending_output") or {}
+        if runtime.get("active_turn") and pending.get("request_id"):
+            turns.append({"role": "planner", "task_id": task_id, "control_epoch": epoch,
+                          "conversation_id": authority.get("conversation_id"),
+                          "request_id": pending["request_id"], "output_ref": pending.get("ref")})
+        helper = (cell.get("roles") or {}).get("helper") or {}
+        for pending in runtime.get("pending_role_outputs") or []:
+            if (pending.get("request_id") == helper.get("request_id")
+                    and helper.get("conversation_id")):
+                turns.append({"role": "helper", "task_id": task_id, "control_epoch": epoch,
+                              "conversation_id": helper["conversation_id"],
+                              "request_id": pending.get("request_id"), "output_ref": pending.get("artifact_ref")})
+        for child in runtime.get("owned_children") or []:
+            if child.get("event_state") != "WAITING":
+                continue
+            backend = _try_read_json(store, base_sha, str(child.get("backend_cl") or "")) or {}
+            dispatch = backend.get("dispatch") or {}
+            if dispatch.get("state") != "RUNNING":
+                continue
+            turns.append({"role": "worker", "task_id": child.get("child_task_id"),
+                          "backend_cl": child.get("backend_cl"), "dispatch_id": dispatch.get("dispatch_id"),
+                          "dispatch_generation": dispatch.get("generation"), "fence_token": dispatch.get("fence_token"),
+                          "worker_ref": dispatch.get("acked_by_worker_ref")})
+    return turns
 
 
 def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+    """Consume committed role signals, then run the existing task scheduler.
+
+    Local bindings supplement canonical bindings for physical acknowledgements
+    (including a lost HTTP reply) and direct-bounded error Helpers. They are not
+    new authority: the existing exact-identity reducers validate each candidate.
+    """
+    store._safe_client(req.get("client_id"))
+    if not str(req.get("project_id") or "").strip():
+        return {"ok": False, "error": "project_id required"}
+    results = []
+    with store.git_lock:
+        store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+        base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+        turns = list(req.get("bound_turns") or []) + _canonical_semantic_turns(store, base_sha)
+        seen = set()
+        for turn in turns:
+            role = turn.get("role")
+            key = (role, turn.get("task_id"), turn.get("request_id"),
+                   turn.get("dispatch_id"), turn.get("dispatch_generation"))
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                if role == "worker":
+                    task = _try_read_json(store, base_sha, _task_contract_ref(str(turn.get("task_id") or ""))) or {}
+                    output_ref = str(task.get("expected_result_ref") or "")
+                else:
+                    output_ref = str(turn.get("output_ref") or "")
+                if not output_ref:
+                    continue
+                output_ref = store._safe_repo_rel(output_ref, "output_ref")
+                output = _try_read_json(store, base_sha, output_ref) or {}
+                signal = str(output.get("turn_signal") or "").strip().lower()
+                if not signal:
+                    continue
+                bound = {**turn, "client_id": req["client_id"], "project_id": req["project_id"]}
+                if role == "helper" and turn.get("helper_source") == "harness_error":
+                    result = store.harness_error_result(bound, base_sha=base_sha)
+                else:
+                    result = sync_semantic_turn(store, bound, base_sha=base_sha)
+                results.append({"binding": turn, "turn_signal": signal, "result": result})
+            except Exception as exc:
+                results.append({"binding": turn, "result": {"ok": False,
+                                "error": type(exc).__name__, "detail": str(exc)[:1000]}})
+            # A ready reducer may have committed even if its response failed.
+            # Refresh only after an attempted ready result, not per idle role.
+            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
+            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+        scheduled = _planner_runtime_tick(store, req, base_sha)
+    return {**scheduled, "semantic_turns": results}
+
+
+def _planner_runtime_tick(store: Any, req: dict[str, Any], base_sha: str) -> dict[str, Any]:
     store._safe_client(req.get("client_id"))
     project_id = str(req.get("project_id") or "").strip()
     if not project_id:
         return {"ok": False, "error": "project_id required"}
 
     with store.git_lock:
-        store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-        base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
         state = _read_json(store, base_sha, "state/chatgpt.json")
         control_busy = not _control_slot_available(state)
         cells = _list_task_cells(store, base_sha)
-        recovered = _recover_stalled_initial_planner(store, state, base_sha)
-        if recovered:
-            return recovered
 
     if control_busy:
-        with store.git_lock:
-            recovered = _recover_stalled_planner_delivery(store, state, base_sha)
-        if recovered:
-            return recovered
         return {"ok": True, "idle": "control_slot_busy", "task_cells_scanned": len(cells)}
 
     for cell_ref in cells:
@@ -3815,11 +3849,6 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             cell = _try_read_json(store, base_sha, cell_ref)
             if not isinstance(cell, dict):
                 continue
-            bootstrap_result = _route_ready_bootstrap_helper_result(
-                store, state, base_sha, cell_ref, cell,
-            )
-            if bootstrap_result is not None:
-                return bootstrap_result
             control = cell.get("planner_control")
             if not isinstance(control, dict) or control.get("enabled") is not True:
                 continue
@@ -3851,10 +3880,6 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     return {"ok": False, "error": exc.code, "task_id": task_id}
                 if turn_result is not None:
                     return turn_result
-
-                recovered = _stage_expired_planner_output_helper(store, state, cell, base_sha)
-                if recovered is not None:
-                    return recovered
 
             # A committed Foreground Task Contract change is itself the
             # durable user-intent signal. Harness derives the Planner event.
@@ -4034,7 +4059,8 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             pending_helper = _pending_helper_request(runtime)
             if planner_ready and pending_helper is not None:
                 _helper_index, helper_request = pending_helper
-                worker_helper = str(helper_request.get("kind") or "") == "worker_helper_result"
+                helper_kind = str(helper_request.get("kind") or "")
+                worker_helper = helper_kind == "worker_helper_result"
                 new_control = copy.deepcopy(control)
                 rt = _runtime(new_control)
                 rt, state_changed = _stage_pending_helper_request(state, cell, rt, store.git_branch)
@@ -4097,40 +4123,170 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     else "planner"
                 )
 
-                # Worker Helper is not a disguised Planner Helper. If same-generation
-                # Worker recovery is the return path, retain the result in-place for
-                # Helper exit verification and do not manufacture a Planner event.
+                # Worker Helper is not a disguised Planner Helper. Same-generation
+                # Worker recovery remains on the Worker path and never manufactures
+                # a Planner event.
                 if worker_helper and return_target in {"worker", "same_worker"}:
+                    recovery = (
+                        record.get("recovery")
+                        if isinstance(record.get("recovery"), dict)
+                        else {}
+                    )
+                    recovery_action = str(
+                        helper_result.get("recovery_action") or ""
+                    ).strip().lower()
+
+                    if recovery_action == "resume_current":
+                        new_control = copy.deepcopy(control)
+                        rt = _runtime(new_control)
+                        pending = list(rt.get("pending_role_outputs") or pending_roles)
+                        if index < len(pending) and isinstance(pending[index], dict):
+                            pending[index] = {
+                                **pending[index],
+                                "state": "WORKER_STARTED",
+                                "result_ready_at": utc_now(),
+                                "return_mode": "WORKER_SAME_GENERATION",
+                                "recovery_action": "resume_current",
+                                "output_blob_sha": output_blob_sha,
+                            }
+                        rt["pending_role_outputs"] = pending
+                        new_control["runtime"] = rt
+                        new_cell = copy.deepcopy(cell)
+                        new_cell["planner_control"] = new_control
+                        worktree = _prepare_worktree(store, base_sha, f"worker-helper-resume-{task_id}")
+                        try:
+                            _write_json(worktree, cell_ref, new_cell)
+                            commit_sha = _commit_push(
+                                store,
+                                worktree,
+                                [cell_ref],
+                                f"Record WORKER_HELPER same-Worker recovery for {task_id} [skip ci]",
+                            )
+                        finally:
+                            _drop_worktree(store, worktree)
+                        return {
+                            "ok": True,
+                            "action": "worker_helper_current_worker_resumed",
+                            "task_id": task_id,
+                            "return_target": "worker",
+                            "commit_sha": commit_sha,
+                        }
+
+                    if recovery_action != "same_generation_retry":
+                        continue
+
+                    helper_request_id = str(record.get("request_id") or "")
+                    old_conversation_id = str(
+                        recovery.get("old_conversation_id") or ""
+                    )
+                    deleted_conversation_id = str(
+                        helper_result.get("deleted_conversation_id") or ""
+                    )
+                    child_reply_ref = str(recovery.get("child_reply_ref") or "")
+                    incident_marker = str(
+                        recovery.get("incident_marker")
+                        or f"WORKER_HELPER INCIDENT {helper_request_id}"
+                    )
+                    if (
+                        not old_conversation_id
+                        or deleted_conversation_id != old_conversation_id
+                        or not child_reply_ref
+                        or not incident_marker
+                    ):
+                        continue
+                    try:
+                        child_reply_text = store._git(
+                            "show", f"{base_sha}:{child_reply_ref}"
+                        ).stdout
+                    except subprocess.SubprocessError:
+                        continue
+                    if incident_marker not in child_reply_text:
+                        continue
+
+                    retry_request_id = _stable_token(
+                        "worker-retry",
+                        {
+                            "task_id": task_id,
+                            "helper_request_id": helper_request_id,
+                            "child_task_id": recovery.get("child_task_id"),
+                            "dispatch_id": recovery.get("dispatch_id"),
+                            "generation": recovery.get("dispatch_generation"),
+                            "wake_id": recovery.get("wake_id"),
+                            "old_conversation_id": old_conversation_id,
+                        },
+                    )
+                    retry_challenge = _stable_token(
+                        "worker-retry-challenge",
+                        {"request_id": retry_request_id, "helper_request_id": helper_request_id},
+                    )
+
                     new_control = copy.deepcopy(control)
                     rt = _runtime(new_control)
                     pending = list(rt.get("pending_role_outputs") or pending_roles)
                     if index < len(pending) and isinstance(pending[index], dict):
                         pending[index] = {
                             **pending[index],
-                            "state": "RESULT_READY",
+                            "state": "RETRY_STAGED",
                             "result_ready_at": utc_now(),
                             "return_mode": "WORKER_SAME_GENERATION",
+                            "recovery_action": "same_generation_retry",
+                            "retry_request_id": retry_request_id,
                             "output_blob_sha": output_blob_sha,
                         }
                     rt["pending_role_outputs"] = pending
                     new_control["runtime"] = rt
                     new_cell = copy.deepcopy(cell)
                     new_cell["planner_control"] = new_control
-                    worktree = _prepare_worktree(store, base_sha, f"worker-helper-ready-{task_id}")
+
+                    try:
+                        _set_control_request(
+                            state,
+                            kind="worker_same_generation_retry",
+                            request_id=retry_request_id,
+                            task_id=task_id,
+                            epoch=int(cell["control_epoch"]),
+                            role="helper",
+                            challenge=retry_challenge,
+                            project_key=str(cell.get("task_cell_project_key") or ""),
+                            extra={
+                                "helper_request_id": helper_request_id,
+                                "helper_output_ref": output_ref,
+                                "child_task_id": str(recovery.get("child_task_id") or ""),
+                                "backend_cl": str(recovery.get("backend_cl") or ""),
+                                "dispatch_id": str(recovery.get("dispatch_id") or ""),
+                                "dispatch_generation": int(recovery.get("dispatch_generation") or 0),
+                                "fence_token": str(recovery.get("fence_token") or ""),
+                                "wake_id": str(recovery.get("wake_id") or ""),
+                                "worker_ref": str(recovery.get("worker_ref") or ""),
+                                "control_lane_id": str(recovery.get("lane_id") or ""),
+                                "worker_project_key": str(recovery.get("worker_project_key") or ""),
+                                "old_conversation_id": old_conversation_id,
+                                "child_reply_ref": child_reply_ref,
+                                "incident_marker": incident_marker,
+                                "retry_mode": "same_generation",
+                                "exact_id_only": True,
+                            },
+                        )
+                    except PlannerRuntimeError:
+                        continue
+
+                    worktree = _prepare_worktree(store, base_sha, f"worker-same-generation-retry-{task_id}")
                     try:
                         _write_json(worktree, cell_ref, new_cell)
+                        _write_json(worktree, "state/chatgpt.json", state)
                         commit_sha = _commit_push(
                             store,
                             worktree,
-                            [cell_ref],
-                            f"Record WORKER_HELPER result-ready for {task_id} [skip ci]",
+                            [cell_ref, "state/chatgpt.json"],
+                            f"Stage same-generation Worker retry for {task_id} [skip ci]",
                         )
                     finally:
                         _drop_worktree(store, worktree)
                     return {
                         "ok": True,
-                        "action": "worker_helper_result_ready",
+                        "action": "worker_same_generation_retry_staged",
                         "task_id": task_id,
+                        "retry_request_id": retry_request_id,
                         "return_target": "worker",
                         "commit_sha": commit_sha,
                     }
@@ -4151,7 +4307,7 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                         )
                     ),
                 }
-                event_kind = "worker_helper_result" if worker_helper else "helper_result"
+                event_kind = "helper_result"
                 try:
                     event = make_planner_event(
                         task_id=task_id,
@@ -4198,7 +4354,7 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 return {
                     "ok": True,
                     "action": (
-                        "worker_helper_result_event_enqueued"
+                        "worker_helper_planner_event_enqueued"
                         if worker_helper
                         else "helper_result_event_enqueued"
                     ),

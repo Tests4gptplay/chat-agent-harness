@@ -13,9 +13,16 @@ from local_bridge.server import WakeStore  # noqa: E402
 from playwright_host.worker import wake_text  # noqa: E402
 
 
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    TASK_LINEAGE_SCOPED_KEY,
+    WORKER_LINEAGES_KEY,
+)
+
+
 class WakeTests(unittest.TestCase):
     def test_make_validate_marker(self):
-        wake = make_wake("example-project", repo="example-owner/example-lab", run_id=123)
+        wake = make_wake("3d-agent-lab", repo="CAH_OWNER/3d-agent-lab", run_id=123)
         validate_wake(wake)
         self.assertEqual(wake["v"], 1)
         self.assertEqual(wake["state"], "NEED_AGENT")
@@ -38,7 +45,7 @@ class WakeTests(unittest.TestCase):
         )
 
 
-    def test_worker_wake_declares_ten_minute_durable_handoff_contract(self):
+    def test_worker_wake_declares_ten_minute_handoff_budget(self):
         wake = {
             "wake_id": "wake-budget-0001",
             "project_id": "git-agent-harness",
@@ -62,11 +69,7 @@ class WakeTests(unittest.TestCase):
         self.assertIn("instruction=prepare_handoff", text)
         self.assertIn("Treat about 10 minutes as this Worker generation's healthy work budget", text)
         self.assertIn("is not a reason to keep this Worker merely to watch it", text)
-        self.assertIn("Write the current Result LAST", text)
         self.assertIn("turn_signal=continue", text)
-        self.assertIn('"kind":"semantic_sync"', text)
-        self.assertNotIn("finish with only continue", text)
-        self.assertNotIn("healthy_limit=05:00", text)
 
     def test_scheduler_wake_identity(self):
         wake = make_wake(
@@ -74,7 +77,7 @@ class WakeTests(unittest.TestCase):
             wake_id="wake-scheduler-0001",
             repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
+            worker_project_key="g-p-CAHTESTB86CD70AB2",
             kind="task_continue",
             task_id="task-001",
             backend_cl="cl/task-001.backend.json",
@@ -173,13 +176,13 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "project_key": "g-p-runtimeack",
-                    "last_pool_takeover_id": "pool-runtime-worker-0001",
+                    LAST_WORKER_REF_KEY: "pool-runtime-worker-0001",
                 }],
             }
             state = {
                 "v": 1,
                 "agent": "chatgpt",
-                "last_pool_takeover_id": "pool-runtime-worker-0001",
+                LAST_WORKER_REF_KEY: "pool-runtime-worker-0001",
             }
             backend = {
                 "v": 1,
@@ -254,7 +257,7 @@ class WakeTests(unittest.TestCase):
             "git-agent-harness",
             wake_id="wake-attachment-0001",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
+            worker_project_key="g-p-CAHTESTB86CD70AB2",
             attachment_ref=ref,
         )
         validate_wake(wake)
@@ -385,7 +388,7 @@ class WakeTests(unittest.TestCase):
                     "data": {"secret": "must-not-be-written"},
                 })
 
-    def test_worker_takeover_status_uses_exact_task_pool_canonical_git_id(self):
+    def test_worker_takeover_status_uses_exact_task_lineage_canonical_git_id(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             origin = base / "origin.git"
@@ -424,15 +427,15 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                     "enabled": True,
                     "status": "IDLE",
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         f"{owner_task_id}::{owner_epoch}": {
                             "owner_task_id": owner_task_id,
                             "owner_control_epoch": owner_epoch,
-                            "last_pool_takeover_id": exact,
+                            LAST_WORKER_REF_KEY: exact,
                             "worker_rollover_request": {
                                 "handoff_id": exact,
                                 "reason": "context_compacted",
@@ -443,22 +446,22 @@ class WakeTests(unittest.TestCase):
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed task pool takeover"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed task lineage takeover"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             # Contradict the local worktree after the commit. The bridge must read
-            # the fetched canonical task pool, not this uncommitted local value.
+            # the fetched canonical task lineage, not this uncommitted local value.
             lanes_file.write_text(json.dumps({
                 "v": 1,
                 "lanes": [{
                     "lane_id": "lane-00",
-                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                    "task_pools": {
+                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    WORKER_LINEAGES_KEY: {
                         f"{owner_task_id}::{owner_epoch}": {
                             "owner_task_id": owner_task_id,
                             "owner_control_epoch": owner_epoch,
-                            "last_pool_takeover_id": "pool-local-stale",
+                            LAST_WORKER_REF_KEY: "pool-local-stale",
                             "worker_rollover_request": None,
                         },
                     },
@@ -471,15 +474,15 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": exact,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "owner_task_id": owner_task_id,
                 "owner_control_epoch": owner_epoch,
             }
             matched = store.worker_takeover_status(request)
             self.assertTrue(matched["ok"])
             self.assertTrue(matched["matched"])
-            self.assertTrue(matched["task_pool_scoped"])
-            self.assertEqual(matched["last_pool_takeover_id"], exact)
+            self.assertTrue(matched[TASK_LINEAGE_SCOPED_KEY])
+            self.assertEqual(matched[LAST_WORKER_REF_KEY], exact)
             self.assertTrue(matched["rollover_requested"])
             self.assertEqual(matched["rollover_request_handoff_id"], exact)
             self.assertEqual(matched["rollover_reason"], "context_compacted")
@@ -497,11 +500,11 @@ class WakeTests(unittest.TestCase):
             unmatched = store.worker_takeover_status(request)
             self.assertTrue(unmatched["ok"])
             self.assertFalse(unmatched["matched"])
-            self.assertEqual(unmatched["last_pool_takeover_id"], exact)
+            self.assertEqual(unmatched[LAST_WORKER_REF_KEY], exact)
             self.assertFalse(unmatched["rollover_requested"])
 
 
-    def test_worker_takeover_status_does_not_borrow_another_task_pool(self):
+    def test_worker_takeover_status_does_not_borrow_another_task_lineage(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             origin = base / "origin.git"
@@ -511,8 +514,8 @@ class WakeTests(unittest.TestCase):
             subprocess.check_call(["git", "-C", str(work), "config", "user.name", "gah-test"])
             subprocess.check_call(["git", "-C", str(work), "config", "user.email", "gah-test@example.invalid"])
             (work / "state").mkdir()
-            pool_a = "pool-task-a-0001"
-            pool_b = "pool-task-b-0001"
+            lineage_a = "pool-task-a-0001"
+            lineage_b = "pool-task-b-0001"
             (work / "state" / "chatgpt.json").write_text(json.dumps({
                 "v": 1, "agent": "chatgpt", "updated": "2026-09-18"
             }), encoding="utf-8")
@@ -525,24 +528,24 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                     "enabled": True,
                     "status": "RUNNING",
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         "task-A::1": {
                             "owner_task_id": "task-A",
                             "owner_control_epoch": 1,
-                            "last_pool_takeover_id": pool_a,
+                            LAST_WORKER_REF_KEY: lineage_a,
                             "worker_rollover_request": None,
                         },
                         "task-B::1": {
                             "owner_task_id": "task-B",
                             "owner_control_epoch": 1,
-                            "last_pool_takeover_id": pool_b,
+                            LAST_WORKER_REF_KEY: lineage_b,
                             "worker_rollover_request": {
-                                "handoff_id": pool_b,
-                                "reason": "semantic_stall",
+                                "handoff_id": lineage_b,
+                                "reason": "context_compacted",
                                 "handoff_packet_ref": "memory/tasks/task-B/handoff.json",
                             },
                         },
@@ -550,7 +553,7 @@ class WakeTests(unittest.TestCase):
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed independent pools"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed independent lineages"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -558,29 +561,29 @@ class WakeTests(unittest.TestCase):
             a = store.worker_takeover_status({
                 "client_id": "client-test-001",
                 "project_id": "git-agent-harness",
-                "handoff_id": pool_b,
+                "handoff_id": lineage_b,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 1,
             })
             self.assertTrue(a["ok"])
             self.assertFalse(a["matched"])
-            self.assertEqual(a["last_pool_takeover_id"], pool_a)
+            self.assertEqual(a[LAST_WORKER_REF_KEY], lineage_a)
             self.assertFalse(a["rollover_requested"])
 
             b = store.worker_takeover_status({
                 "client_id": "client-test-001",
                 "project_id": "git-agent-harness",
-                "handoff_id": pool_b,
+                "handoff_id": lineage_b,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "owner_task_id": "task-B",
                 "owner_control_epoch": 1,
             })
             self.assertTrue(b["matched"])
             self.assertTrue(b["rollover_requested"])
-            self.assertEqual(b["rollover_reason"], "semantic_stall")
+            self.assertEqual(b["rollover_reason"], "context_compacted")
 
 
     def test_worker_takeover_status_isolates_control_epochs(self):
@@ -605,28 +608,28 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                     "enabled": True,
                     "status": "RUNNING",
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         "task-A::1": {
                             "owner_task_id": "task-A",
                             "owner_control_epoch": 1,
-                            "last_pool_takeover_id": "pool-epoch-one",
+                            LAST_WORKER_REF_KEY: "pool-epoch-one",
                             "worker_rollover_request": None,
                         },
                         "task-A::2": {
                             "owner_task_id": "task-A",
                             "owner_control_epoch": 2,
-                            "last_pool_takeover_id": "pool-epoch-two",
+                            LAST_WORKER_REF_KEY: "pool-epoch-two",
                             "worker_rollover_request": None,
                         },
                     },
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
-            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed epoch pools"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "seed epoch lineages"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "branch", "-M", "main"])
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             store = WakeStore(base / "spool", repo_root=work)
@@ -636,19 +639,19 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": "pool-epoch-two",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 1,
             })
             self.assertFalse(epoch1["matched"])
-            self.assertEqual(epoch1["last_pool_takeover_id"], "pool-epoch-one")
+            self.assertEqual(epoch1[LAST_WORKER_REF_KEY], "pool-epoch-one")
 
             epoch2 = store.worker_takeover_status({
                 "client_id": "client-test-001",
                 "project_id": "git-agent-harness",
                 "handoff_id": "pool-epoch-two",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 2,
             })

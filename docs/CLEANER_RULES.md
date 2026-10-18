@@ -26,7 +26,7 @@ Terminal State Restore releases hot machine ownership:
 - active Worker owner / rollover pointers;
 - local Worker current/handoff pointers.
 
-Before releasing conversation bindings, confirm deletion of the exact task-owned chats: all retained Worker generations in its lane pools and Planner/Helper in Task Cell. Retrying or diagnosing a failed cleanup must retain the ownership needed to address the same exact conversations; do not forget their ids and claim deletion.
+Before releasing conversation bindings, confirm deletion of the exact task-owned chats: all retained Worker generations in its lane lineages and Planner/Helper in Task Cell. Retrying or diagnosing a failed cleanup must retain the ownership needed to address the same exact conversations; do not forget their ids and claim deletion.
 
 It preserves durable history and non-target resources:
 

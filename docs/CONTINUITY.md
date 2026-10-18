@@ -35,7 +35,7 @@ Worker Handoff
 
 A replacement Planner continues the same Planner Memory. A replacement Worker continues the same Child Reply and reads the current handoff packet when supplied.
 
-Planner saves progress and outputs `handoff` when context has collapsed; normal `done` keeps its conversation. Worker saves its frontier in Child Reply and outputs `continue`; Harness prepares the replacement identities and any thin handoff refs. Helper records one incident result, outputs `done`, and is discarded after result receipt; the next Helper inherits durable incident refs rather than reusing the finished chat.
+Planner saves progress and writes `turn_signal=handoff` to its bound Git outcome when context has collapsed; normal `done` keeps its conversation. Worker saves its frontier in Child Reply and writes `turn_signal=continue` in its bound Git Result; Harness prepares the replacement identities and any thin handoff refs. Helper records one incident result, writes `turn_signal=done` in its bound Git output, and is discarded after result receipt. Harness consumes these Git facts in its normal reconciliation cycle, without waiting for a chat ending; the next Helper inherits durable incident refs rather than reusing the finished chat.
 
 When a Helper recovery materially changes an active Child's operational execution state, continuity must not remain only in the short-lived Helper result. Carry a concise append-only `HELPER INCIDENT` breadcrumb into that Child's long-lived Reply, preserving the exact Runner/run/job/process disposition and post-recovery frontier. This breadcrumb does not become Worker-authored work or Planner direction; it exists so later Worker generations can recover the operational history that affects what is safe to resume or relaunch.
 

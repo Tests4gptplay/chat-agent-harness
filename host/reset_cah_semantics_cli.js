@@ -140,40 +140,46 @@ async (page) => {
 
   async function deleteConversation(target, conversationId) {
     const hrefPrefix = '/g/' + target.project_key + '/c/' + conversationId;
-    const projectMain = page.locator('main').last();
-
-    let exact = projectMain.locator(
+    const matches = page.locator(
       'a[href^="' + hrefPrefix + '"]:visible'
-    ).first();
+    );
 
-    if (!(await exact.count())) {
-      exact = page.locator(
-        'a[href^="' + hrefPrefix + '"]:visible'
-      ).last();
+    let exact = matches.first();
+    const matchCount = await matches.count();
+    for (let i = 0; i < matchCount; i++) {
+      const candidate = matches.nth(i);
+      const candidateRow = candidate.locator(
+        'xpath=ancestor::*[@role="group"][1]'
+      );
+      if (
+        await candidateRow.count() &&
+        await candidateRow.locator(
+          'button[aria-haspopup="menu"]:visible'
+        ).count()
+      ) {
+        exact = candidate;
+        break;
+      }
     }
 
     await exact.waitFor({ state: 'visible', timeout: 15000 });
 
     const title = ((await exact.innerText().catch(() => '')) || '').trim();
-    await exact.hover();
-    await page.waitForTimeout(150);
+    const box = await exact.boundingBox();
+    if (!box) {
+      throw new Error('Conversation link has no bounding box: ' + conversationId);
+    }
+    await page.mouse.move(
+      box.x + Math.max(1, Math.min(box.width - 1, box.width / 2)),
+      box.y + Math.max(1, Math.min(box.height - 1, box.height / 2))
+    );
+    await page.waitForTimeout(200);
 
-    const escapeRegex = (value) =>
-      value.replace(/[.*+?^$()|[\]{}\\-]/g, '\\$&');
-
-    let ops = page.getByRole('button', {
-      name: new RegExp(
-        '^' + escapeRegex(title) + '.*(?:操作|actions?|options?)$',
-        'i'
-      ),
-      includeHidden: true
-    }).last();
+    const row = exact.locator('xpath=ancestor::*[@role="group"][1]');
+    let ops = row.getByRole('button', { name: opsRe }).first();
 
     if (!(await ops.count())) {
-      ops = page.getByRole('button', {
-        name: /^(?:聊天操作|chat actions?|chat options?|options?)$/i,
-        includeHidden: true
-      }).last();
+      ops = row.locator('button[aria-haspopup="menu"]:visible').first();
     }
 
     if (!(await ops.count())) {
@@ -182,39 +188,56 @@ async (page) => {
       );
     }
 
-    await ops.click({ force: true });
+    await ops.dispatchEvent('pointerdown', {
+      button: 0,
+      pointerType: 'mouse',
+      isPrimary: true
+    });
+    await page.waitForTimeout(150);
+    if (!(await page.locator('[role="menu"]:visible').count())) {
+      await ops.dispatchEvent('click', { button: 0 });
+    }
+    const menu = page.locator('[role="menu"]:visible').last();
+    await menu.waitFor({ state: 'visible', timeout: 5000 });
 
-    let deleteItem = page
-      .locator('[data-testid="delete-chat-menu-item"]:visible')
+    let deleteItem = menu
+      .locator('[data-testid*="delete"]:visible')
       .first();
 
     if (!(await deleteItem.count())) {
-      deleteItem = page
+      deleteItem = menu
         .getByRole('menuitem', { name: deleteRe })
         .last();
     }
 
     if (!(await deleteItem.count())) {
-      throw new Error('Delete menu item missing for ' + conversationId);
+      deleteItem = menu
+        .getByText(deleteRe)
+        .last();
     }
 
-    await deleteItem.click();
+    if (!(await deleteItem.count())) {
+      const menuText = ((await menu.innerText().catch(() => '')) || '').trim();
+      throw new Error(
+        'Delete menu item missing for ' + conversationId +
+        ' menu=' + menuText.slice(0, 500)
+      );
+    }
+
+    await deleteItem.evaluate((el) => el.click());
 
     const dialog = page.getByRole('dialog').last();
-    if (
-      await dialog.count() &&
-      await dialog.isVisible().catch(() => false)
-    ) {
-      const confirm = dialog
-        .getByRole('button', { name: deleteRe })
-        .last();
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
 
-      if (!(await confirm.count())) {
-        throw new Error('Delete confirmation missing for ' + conversationId);
-      }
+    const confirm = dialog
+      .getByRole('button', { name: deleteRe })
+      .last();
 
-      await confirm.click();
+    if (!(await confirm.count())) {
+      throw new Error('Delete confirmation missing for ' + conversationId);
     }
+
+    await confirm.evaluate((el) => el.click());
 
     const deadline = Date.now() + 15000;
     while (Date.now() < deadline) {

@@ -6,8 +6,6 @@ param(
     [switch]$Attach,
     [string[]]$CliArgs = @('--help')
 )
-& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Stop'
 $config = Get-Content -LiteralPath (Join-Path $ToolsRoot 'runtime.json') -Raw | ConvertFrom-Json
 if (-not $WorkDir) { $WorkDir = Join-Path $config.workspace "browser-cli\$Session" }

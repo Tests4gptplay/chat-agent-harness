@@ -65,6 +65,9 @@ After Task Contract and initial Plan are durable, initiate managed Planner hando
 
 The first Planner response is real semantic work on pre-bound Planner turn surfaces.
 
+**Do not tell the user that a managed task has been delivered merely because Task/Plan were committed or a Planner-create request was emitted.** Foreground owns the delivery boundary until the initial Planner handoff is actually admitted. Before reporting that the task has been handed off / started, verify the real Harness outcome: the Planner conversation has response-started, canonical Planner authority and role binding point to that exact conversation/generation/fence, the bound Planner output/turn is active, and the Foreground -> Planner control request completed without an unresolved Harness error. If initial Planner creation or binding fails, report the concrete delivery failure or continue the existing authorized Foreground-side repair; do not claim successful delivery and do not create a Helper merely to certify the handoff.
+
+
 ## Ongoing user interaction
 
 For status questions, read canonical Planner/Worker state and durable evidence, then report what is currently known.
@@ -193,11 +196,11 @@ The BAT sequence is:
    - preserves the Project containers;
    - verifies every dedicated CAH Project reaches zero conversations before detach.
 5. Back up and clear browser-local CAH ownership state:
-   - all local lane task pools;
+   - all local lane task lineages;
    - Task Cell Planner/Helper role bindings;
    - Planner successor bindings.
 6. Remove disposable pending/claimed wake transport.
-7. Clear canonical lane task pools and set lane status to `IDLE`.
+7. Clear canonical lane task lineages and set lane status to `IDLE`.
 8. When an active task exists, delete only its hot-state files:
    ```text
    tasks/<active_task>.json
@@ -227,7 +230,7 @@ The BAT sequence is:
    - `phase == IDLE`;
    - `active_task == null`;
    - `control_request == null`;
-   - canonical/local Worker pools are empty;
+   - canonical/local Worker lineages are empty;
    - Task Cell role/successor bindings are empty;
    - pending/claimed wakes are empty;
    - exactly one native Host is running and CDP is reachable.
@@ -247,3 +250,5 @@ If the BAT itself fails, inspect that run's log and report the concrete BAT fail
 ## Completion record destination
 
 Bind the user project’s existing absolute host directory as `project_directory` in the Task Contract. Final clean/reset restores CAH working state, never engineering source or outputs. Harness exports process records to `records.md` and verifies them before pruning corresponding CAH caches; do not ask Planner/Worker to rewrite records or manage hashes. Without a known directory preserve records, do not guess. See `docs/CLEANER_RULES.md`.
+
+The separate record repository is configured in `state/record-store.json` (currently `CAH_OWNER/chat-agent-harness-records`; see `docs/RECORD_ARCHIVE.md`). Independent Showcase observations live under its `showcase-observer/`, distinct from project-local `records.md`; do not write observer reports into active CAH Git or routinely load cold archives.

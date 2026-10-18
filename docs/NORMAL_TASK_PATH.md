@@ -18,6 +18,6 @@ Helper durable result + done -> receive result, delete that Helper
 
 Task Cell semantics are defined in `docs/task-cell/README.md` and the role contracts under `docs/task-cell/`.
 
-Planner and Helper can both finish with `done`: the existing conversation binding selects the role-specific action, so Planner remains while the finished Helper is retired. AI writes semantic content to CAH/Git and emits only the short status; it does not repeat identity headers or perform machine bookkeeping.
+Planner and Helper can both finish with `done`: the existing conversation binding selects the role-specific action, so Planner remains while the finished Helper is retired. AI writes semantic content to CAH/Git, sets the applicable `turn_signal` in the bound output as its final Git write, then stops; it does not repeat identity headers or perform machine bookkeeping.
 
 Role-visible signal meaning and continuity duties are defined in the role contracts. Runtime lifecycle mechanics remain implementation-owned; matching MD wording is not evidence that live browser execution has passed.

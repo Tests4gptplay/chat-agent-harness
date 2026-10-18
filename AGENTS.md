@@ -18,7 +18,25 @@ Semantic roles use their available Git/GitHub connector capability directly for 
 
 When the current Task Contract requires an execution effect and no existing Tool or Workflow can provide it, the owning semantic role may add the smallest corresponding Tool or Workflow needed to complete the task.
 
-`cah-shot`（Short Task）是 Foreground 快速完成独立短任务的专有入口。Worker、Planner、Helper 等其他角色一律走常规执行通道，不使用该入口。
+`cah-shot`（Short Task）是独立的短任务/救援控制通道。Foreground 可用它完成独立短任务；Helper 可在 `docs/task-cell/HELPER.md` 授权的 bounded operational recovery 中使用它执行诊断、解阻、精确清理和恢复控制。Planner 与 Worker 不得把 `cah-shot` 当作正常语义执行或 Managed workload 通道，也不得把原 Managed 业务迁移到该入口。
+
+### Runner topology and Cold/Burst capacity
+
+CAH exposes three distinct Runner roles:
+
+- `CAH-MANAGED-01`: primary Managed Runner for normal `[self-hosted, Windows, X64]` work.
+- `cah-shot`: always-available bounded short-task / rescue-control channel; it is not normal Managed workload capacity.
+- `__CAH_COLD_RUNNER_NAME__`: Cold/Burst Managed Runner, normally `READY_OFF`. When activated it retains normal `self-hosted, Windows, X64` eligibility and carries dedicated identity label `backup`.
+
+`__CAH_COLD_RUNNER_NAME__` is shared Cold/Burst Managed capacity, not only a crash fallback. Planner has task-level authority to request that it be opened, kept available, released back to `READY_OFF`, or used to preserve useful parallel progress. Planner may also decide that an in-flight experiment has become semantically obsolete and request exact cleanup.
+
+Worker has the **execution-level placement judgment** for a concrete experiment. When Worker can see that a useful build, Cook, render, runtime probe, compile, or similar detached operation will occupy a Managed Runner for a long period and isolating it on 02 preserves useful capacity, Worker may choose the dedicated cold managed workflow/request surface targeting the `backup` label unless current Planner direction forbids that placement. Worker must leave a durable Child Reply record of the 02 use/need, exact request/run/job refs, reason, expected output/frontier, current occupancy state, and release/cleanup condition. Worker does not independently start/stop Runner infrastructure and never substitutes `cah-shot` for the workload.
+
+Helper performs exact operational Runner changes requested by Planner and may also use `__CAH_COLD_RUNNER_NAME__` as an **alternate bounded emergency/control channel** when 02 is not occupied by business work. `cah-shot` remains the normal dedicated rescue channel, but it is not the only possible recovery execution surface. Helper must not commandeer an `ACTIVE_BUSY` 02 or preempt a recorded long-running business experiment without Planner authority or an independently valid safety/recovery reason. Harness/Start_CAH report and validate Runner state but do not make business placement or capacity decisions automatically.
+
+## Immediate Harness error recovery
+
+A reported mechanical Harness/Host/Bridge **error immediately activates Helper**, with the error source, operation and exception in its first prompt. No watchdog delay, recurrence threshold, severity scoring or Planner approval precedes activation. This direct-bounded system incident uses the existing Helper conversation, Git result and exact-delete flow, independently of the business `control_request`; it does not create a Task/Plan or resume stopped work. Repeated/additional errors remain with the same active error Helper. See the Harness errors section of `docs/task-cell/HELPER.md`.
 
 ## Resume
 
@@ -41,19 +59,13 @@ Read the common contract plus the role contract for the semantic work in the cur
 
 ### Managed semantic completion
 
-Write the required semantic content to the exact CAH/Git surfaces first. As the final durable Git write for the turn, add the applicable lowercase `turn_signal` to the exact pre-bound Result/Outcome artifact. Then emit one final local sync kick and stop:
+Write the required semantic content to the exact bound CAH/Git surfaces first. As the final durable Git write for the turn, set the applicable lowercase `turn_signal` in the pre-bound Result/Outcome artifact, then stop.
 
-```text
-GAH_SYSCALL_BEGIN
-{"v":1,"kind":"semantic_sync","call_id":"semantic-sync-001"}
-GAH_SYSCALL_END
-```
+Harness reads current bound outputs during its normal Git reconciliation cycle, validates their existing identity and required semantic writes, maps the signal to internal state, and advances the existing scheduler. It does not wait for chat text, a `semantic_sync` syscall, a one-word ending or browser response-end. These are not a second source of completion authority. Normal browser transport and actual Tool calls are unchanged.
 
-The kick carries no semantic result, identity, routing choice, generation or fence. Harness obtains those from the existing bound conversation/task/epoch/request/dispatch, fetches canonical Git, reads `turn_signal`, validates the required durable writes, and maps it to internal machine state. The shared role/signal table is in `docs/task-cell/README.md`.
+Planner completion consumes its turn and preserves or advances authority according to the bound signal. Worker completion finalizes the exact dispatch and proceeds through normal continuation/review. Helper phase-1 result routing remains separate; accepted final `done` restores the matching supervision/wait and initiates exact Helper cleanup. No extra Helper exit certification is introduced.
 
-The earlier plain lowercase chat ending remains a compatibility/recovery path only. Playwright response-end observation may use it when an older/in-flight turn lacks the active sync kick, but chat text is not the primary semantic completion source.
-
-Do not echo task, role, epoch, request, generation, fence, headers, or result JSON in the final sync block. Do not add an explanation, readiness ACK, signature, or copy of the Git result after the block. Tool calls/results and intermediate assistant continuations are not completion signals.
+A still-running response may be stopped after its Git output has been accepted. Physical cleanup failure is an operational error, not permission to undo accepted semantic work or change generation.
 
 ## Execution modes
 
@@ -85,26 +97,26 @@ Worker write order is:
 real task artifacts
 -> current Worker reply-entry semantic body
 -> semantic content + turn_signal in the pre-bound Result Artifact LAST
--> semantic_sync kick
+-> Harness Git reconciliation (no chat signal required)
 ```
 
 Harness creates and preserves the Result Artifact envelope, binds `v` and `task_id`, and maps the durable `turn_signal` to its internal result status after canonical verification. Worker writes only the required semantic result content plus `turn_signal`; it does not reconstruct the envelope. The unique expected result ref already binds the active dispatch, so Harness carries dispatch/generation/fence bookkeeping mechanically.
 
-Planner continuity lives in append-only Planner Memory. Worker continuity lives in append-only Worker Child Reply. Harness prepares any thin handoff packet and machine references during generation replacement; Worker need not duplicate its Reply. Continuity details: `docs/CONTINUITY.md`, `docs/SCHEDULER_MODEL.md`, `docs/CONVERSATION_POOL.md`.
+Planner continuity lives in append-only Planner Memory. Worker continuity lives in append-only Worker Child Reply. Harness prepares any thin handoff packet and machine references during generation replacement; Worker need not duplicate its Reply. Continuity details: `docs/CONTINUITY.md`, `docs/SCHEDULER_MODEL.md`, `docs/WORKER_GENERATIONS.md`.
 
-### Worker task-pool ownership
+### Worker task-lineage ownership
 
 Worker conversations are owned by the logical managed task. The physical lane and ChatGPT Project are shared transport resources.
 
-The Worker pool identity is:
+The Worker lineage identity is:
 
 ```text
 owner_task_id + owner_control_epoch + lane_id
 ```
 
-Each owner has its own 5+1 / 6->5 retention ring inside a shared lane. Worker rollover, current/standby state, generation retention and retirement are resolved through that owner pool. A new Worker conversation starts with the real semantic wake; response-start admission binds the machine-owned Worker ref. The shared lane/Project serializes the short physical create/delete transaction.
+Each owner has its own 5+1 / 6->5 retention ring inside a shared lane. Worker rollover, current/standby state, generation retention and retirement are resolved through that owner lineage. A new Worker conversation starts with the real semantic wake; response-start admission binds the machine-owned Worker ref. The shared lane/Project serializes the short physical create/delete transaction.
 
-A Worker or runtime must not reject, replace, fence, retire, or clean another task merely because that task already has Worker conversations, a pending handoff, or five retained generations in the same Project. Unknown conversations without exact task ownership remain outside every task-owned pool.
+A Worker or runtime must not reject, replace, fence, retire, or clean another task merely because that task already has Worker conversations, a pending handoff, or five retained generations in the same Project. Unknown conversations without exact task ownership remain outside every task-owned lineage.
 
 
 ## Task-local execution
@@ -134,8 +146,6 @@ When a restricted capability is necessary, explain the required effect, why exis
 
 ## Change tracking
 
-- **Tracked change required:** before any mutation to the CAH durable repository surface, an existing GitHub `#XXX` tracking item must state what will change and why it is necessary. The implementing PR must reference that tracking item.
-
 Reusable execution paths are CAH Tools, not role-prompt lore: when task work introduces a new reusable implementation path or execution capability, register it in `harness/tools/registry.json` with its provider refs instead of merely using it ad hoc. Cleanup targets exact task-owned disposable scope while preserving source/user assets and accepted evidence.
 
 After two equivalent no-progress attempts, change the experiment or surface the concrete blocker.
@@ -151,4 +161,4 @@ Cold-path references:
 - reusable execution tools: `harness/tools/registry.json`, `docs/TOOL_SYSTEM.md`
 - public/export: `docs/PUBLIC_EXPORT_CONTRACT.md`, `harness/public_export_required.json`
 
-This is an unconfigured public source distribution. Follow installation/README.md and verify a private operational repository before deployment.
+#50 publication remains blocked until explicit user authorization.

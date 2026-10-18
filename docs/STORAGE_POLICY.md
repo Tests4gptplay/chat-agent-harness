@@ -137,7 +137,7 @@ Never use broad cleanup commands against user project roots merely because they 
   runtime/     # tiny wake/state transport files
 ```
 
-A consumer such as `example-project` may keep its authoritative project source elsewhere and point the Harness only at dedicated evidence/cache/scratch roots.
+A consumer such as `3d-agent-lab` may keep its authoritative project source elsewhere and point the Harness only at dedicated evidence/cache/scratch roots.
 
 ## Janitor cadence
 

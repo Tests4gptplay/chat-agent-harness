@@ -4,8 +4,6 @@ param(
     [string]$NodePath = 'node',
     [string]$NpmCli = ''
 )
-& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Stop'
 $node = (Get-Command $NodePath -ErrorAction Stop).Source
 if ([int]((& $node --version).TrimStart('v').Split('.')[0]) -lt 20) { throw 'Pinned Playwright dependencies require Node.js 20 or newer.' }

@@ -14,7 +14,12 @@ from .config import BOOTSTRAP_LANES, TASK_CELL
 ROLE_NAMES = {"planner", "helper"}
 
 
-def _pool_key(task_id: str, epoch: int) -> str:
+from harness.worker_lineage_compat import (
+    WORKER_LINEAGES_KEY,
+)
+
+
+def _lineage_key(task_id: str, epoch: int) -> str:
     return f"{task_id}::{int(epoch)}"
 
 
@@ -39,7 +44,7 @@ class HostState:
                 "roles": {},
                 "planner_successors": {},
             },
-            "lanes": {lane["lane_id"]: {**lane, "task_pools": {}} for lane in BOOTSTRAP_LANES},
+            "lanes": {lane["lane_id"]: {**lane, WORKER_LINEAGES_KEY: {}} for lane in BOOTSTRAP_LANES},
             "foreground": {"conversation_url": None},
         }
 
@@ -95,7 +100,7 @@ class HostState:
                 "project_root_url": str(row.get("project_root_url") or ""),
                 "enabled": bool(row.get("enabled", True)),
                 "pending_remove": bool(row.get("pending_remove", False)),
-                "task_pools": deepcopy(old.get("task_pools") or {}) if same_project else {},
+                WORKER_LINEAGES_KEY: deepcopy(old.get(WORKER_LINEAGES_KEY) or {}) if same_project else {},
             }
         self.data["lanes"] = next_lanes
         self.save()
@@ -104,15 +109,15 @@ class HostState:
         value = self.data.get("lanes", {}).get(lane_id)
         return value if isinstance(value, dict) else None
 
-    def get_pool(self, lane_id: str, task_id: str, epoch: int, create: bool = False) -> dict[str, Any] | None:
+    def get_lineage(self, lane_id: str, task_id: str, epoch: int, create: bool = False) -> dict[str, Any] | None:
         lane = self.lane(lane_id)
         if lane is None:
             return None
-        pools = lane.setdefault("task_pools", {})
-        key = _pool_key(task_id, epoch)
-        pool = pools.get(key)
-        if pool is None and create:
-            pool = {
+        lineages = lane.setdefault(WORKER_LINEAGES_KEY, {})
+        key = _lineage_key(task_id, epoch)
+        lineage = lineages.get(key)
+        if lineage is None and create:
+            lineage = {
                 "v": 2,
                 "owner_task_id": task_id,
                 "owner_control_epoch": int(epoch),
@@ -120,28 +125,28 @@ class HostState:
                 "managed": [],
                 "handoff": None,
             }
-            pools[key] = pool
+            lineages[key] = lineage
             self.save()
-        return pool if isinstance(pool, dict) else None
+        return lineage if isinstance(lineage, dict) else None
 
-    def set_pool(self, lane_id: str, pool: dict[str, Any]) -> None:
+    def set_lineage(self, lane_id: str, lineage: dict[str, Any]) -> None:
         lane = self.lane(lane_id)
         if lane is None:
             raise KeyError(lane_id)
-        task_id = str(pool.get("owner_task_id") or "")
-        epoch = int(pool.get("owner_control_epoch") or 0)
+        task_id = str(lineage.get("owner_task_id") or "")
+        epoch = int(lineage.get("owner_control_epoch") or 0)
         if not task_id or epoch < 1:
-            raise ValueError("invalid pool owner")
-        lane.setdefault("task_pools", {})[_pool_key(task_id, epoch)] = deepcopy(pool)
+            raise ValueError("invalid lineage owner")
+        lane.setdefault(WORKER_LINEAGES_KEY, {})[_lineage_key(task_id, epoch)] = deepcopy(lineage)
         self.save()
 
-    def remove_pool(self, lane_id: str, task_id: str, epoch: int) -> bool:
+    def remove_lineage(self, lane_id: str, task_id: str, epoch: int) -> bool:
         lane = self.lane(lane_id)
         if lane is None:
             return False
-        pools = lane.setdefault("task_pools", {})
-        existed = _pool_key(task_id, epoch) in pools
-        pools.pop(_pool_key(task_id, epoch), None)
+        lineages = lane.setdefault(WORKER_LINEAGES_KEY, {})
+        existed = _lineage_key(task_id, epoch) in lineages
+        lineages.pop(_lineage_key(task_id, epoch), None)
         self.save()
         return existed
 

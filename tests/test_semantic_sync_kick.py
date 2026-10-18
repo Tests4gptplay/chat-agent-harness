@@ -18,6 +18,11 @@ from local_bridge.task_cell_ledgers import (
 )
 
 
+from harness.worker_lineage_compat import (
+    WORKER_LINEAGES_KEY,
+)
+
+
 def git(repo: Path, *args: str) -> str:
     return subprocess.check_output(
         ["git", "-C", str(repo), *args],
@@ -87,7 +92,7 @@ class SemanticSyncKickTests(unittest.TestCase):
                         "lane_id": "lane-00",
                         "project_key": "g-p-semantic-sync",
                         "enabled": True,
-                        "task_pools": {},
+                        WORKER_LINEAGES_KEY: {},
                     }],
                 },
             }

@@ -1,7 +1,5 @@
 # CAH Tool Runtime
 
-> Clean source distribution: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
-
 Status: active architecture contract.
 
 CAH Tools are reusable execution capabilities. They are not role prompts, Skills, task-local scripts, or Git state.
@@ -92,7 +90,7 @@ CAH uses pinned official packages, not a fork or a copy of upstream browser impl
 - `@playwright/mcp`: general semantic browser tools over an on-demand stdio child;
 - `@playwright/cli`: browser commands through the existing host/Runner execution path;
 - native Python `playwright_host`: deterministic DOM observation, exact role/wake binding,
-  Worker pools/rollover and task-owned conversation cleanup.
+  Worker lineages/rollover and task-owned conversation cleanup.
 
 All attach to the existing authenticated CAH Chrome over `http://127.0.0.1:9222`.
 They do not create another CAH profile or replace webpage AI with model APIs.

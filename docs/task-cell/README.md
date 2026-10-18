@@ -2,6 +2,7 @@
 
 Task Cell is CAH's managed mode for long-lived or multi-step work.
 
+Maintainer's host-local full design: `E:/CAH-Browser/DESIGN_USER_CLARIFIED_20260926.md` (the user-designated primary file). Update that file in place; deliverables are backups, not a replacement primary path. The portable role contracts remain the repository Markdown files below.
 
 ## Core model
 
@@ -77,7 +78,7 @@ Worker entries record work/results/blockers. Planner entries record review/accep
 
 Harness pre-binds each turn's writable surfaces before inference.
 
-A semantic role writes the supplied semantic body in CAH/Git, writes the applicable lowercase `turn_signal` in that exact pre-bound output as its final durable Git mutation, then emits a fixed `semantic_sync` syscall kick. Harness fetches canonical Git, validates the exact role/turn binding and required durable writes, maps the durable signal to internal state, and advances mechanically. Machine identity, versions, hashes, routing and internal outcome enums are not model-authored bookkeeping.
+A semantic role writes the supplied semantic body in CAH/Git, writes the applicable lowercase `turn_signal` in that exact pre-bound output as its final durable Git mutation, then stops. Harness fetches canonical Git, validates the exact role/turn binding and required durable writes, maps the durable signal to internal state, and advances mechanically. Machine identity, versions, hashes, routing and internal outcome enums are not model-authored bookkeeping.
 
 ## Managed turn rhythm
 
@@ -107,7 +108,7 @@ Worker generation review and 5+1 conversation retention are separate rules, neit
 
 ## Role-bound turn signals
 
-These lowercase values are written as `turn_signal` in the exact bound Result/Outcome artifact after all other semantic writes. The model then emits the fixed `semantic_sync` syscall block; the syscall contains no role signal or routing metadata.
+These lowercase values are written as `turn_signal` in the exact bound Result/Outcome artifact after all other semantic writes. Harness reads the bound file on its normal cycle; the model does not emit a second chat termination signal.
 
 | Bound role | `turn_signal` | Meaning and Harness action |
 | --- | --- | --- |
@@ -121,9 +122,9 @@ These lowercase values are written as `turn_signal` in the exact bound Result/Ou
 | Worker | `blocked` / `error` | Recorded blocker/failure; route the real condition, not false success. |
 | Helper | `done` | The Helper result has already been routed and the next legal semantic role has started; this durable signal requests deletion of only that single-use Helper conversation. |
 
-`done` is not a global deletion command. Harness identifies the role from its existing task/epoch/conversation/request binding before interpreting the durable signal; sharing the Task Cell Project does not make Planner and Helper interchangeable. The sync syscall is only a doorbell and is not a second identity or semantic source.
+`done` is not a global deletion command. Harness identifies the role from its existing task/epoch/conversation/request binding before interpreting the durable signal; sharing the Task Cell Project does not make Planner and Helper interchangeable. The Git write is the completion signal; no browser doorbell is required.
 
-For compatibility and recovery, Playwright may still read the legacy one-word ending from an ended bound response. That path is fallback only. A syscall or legacy ending without the required committed semantic content does not establish successful completion.
+Chat one-word endings, syscall blocks and response-end are not semantic completion sources. Planner, Worker and Helper outputs are consumed from their exact Git bindings. Actual browser Tool commands remain a separate transport capability.
 
 ## Lifecycle
 
@@ -142,7 +143,7 @@ Harness owns:
 
 Planner `done` keeps the current Planner. Helper uses a two-phase result: `diagnosis + repair_result` is routed first while Helper remains alive; only after the correct next role has actually started does Helper add durable `turn_signal=done`. Accepted Helper `done` immediately exact-deletes that single-use Helper without a response-end gate; the next incident gets a fresh conversation.
 
-Planner Helper and Worker Helper are visibly different canonical paths. Planner-requested recovery uses `WAIT_HELPER` / `helper_result` / `task_cell_role_prompt`. A managed Worker response-start arms a fixed 30-minute Playwright watchdog; expiry of an exact still-RUNNING Worker uses `WORKER_HELPER` / `WAIT_WORKER_HELPER` / `worker_helper_result` / `task_cell_worker_helper_prompt` and a `worker-helper-*` request id. Lease renewal does not reset that Worker deadline, and DOM turn-parsing failure cannot suppress it. Worker-watchdog recovery preserves the same generation unless normal semantic continuation/handoff later authorizes a successor generation.
+Planner-requested Helper and Worker-watchdog Helper are visibly different canonical paths. Planner-requested recovery uses `WAIT_HELPER` / `helper_result` / `task_cell_role_prompt`. A managed Worker response-start arms a fixed 30-minute Playwright watchdog; expiry of an exact still-RUNNING Worker uses `WORKER_HELPER` / `WAIT_WORKER_HELPER` / `worker_helper_result` / `task_cell_worker_helper_prompt`. A managed Planner response-start likewise arms a fixed 30-minute physical watchdog, but expiry is recovered directly by Harness: validate the exact unresolved Planner turn, Stop + replay the retained exact wake in the same physical conversation, and if that cannot response-start, exact-delete and replace only the physical conversation while preserving the same Planner generation/fence/request/output identity. Managed Worker lease renewal and Planner semantic-output timeout are not liveness owners. Worker watchdog recovery and Planner physical recovery both preserve their semantic generation; normal Worker continuation or Planner handoff/prompt-ceiling rotation are the paths that create successor generations.
 
 If internal state does not expose a clear stall, Helper may inspect the exact affected browser/host state through an already-authorized direct execution surface, but recovery remains driven by direct operational action plus canonical Git/runtime repair. Helper must restore the Task Cell to a self-running lifecycle and advance the task to a next runnable/wakeable semantic role before successful completion. See `docs/task-cell/HELPER.md` for the operational boundary.
 
@@ -154,6 +155,7 @@ Chat cleanup does not authorize destructive branch/worktree or task-sandbox recl
 
 ## General browser tools
 
-Worker, Planner and Foreground may use the conversational Playwright MCP Tool transport described in `docs/TOOL_SYSTEM.md`. Helper intentionally does not use that chat Tool-call control path. When browser evidence matters to an incident, Helper uses an already-authorized direct browser/host execution surface only as supporting evidence, then performs recovery through direct operational action, canonical Git/runtime correction and `semantic_sync`.
+Worker, Planner and Foreground may use the conversational Playwright MCP Tool transport described in `docs/TOOL_SYSTEM.md`. Helper intentionally does not use that chat Tool-call control path. When browser evidence matters to an incident, Helper uses an already-authorized direct browser/host execution surface only as supporting evidence, then performs recovery through direct operational action, canonical Git/runtime correction and bound Git result writes.
 
 Harness still owns role identity, wakes, monitoring, rollover and cleanup.
+

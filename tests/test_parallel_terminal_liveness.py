@@ -8,6 +8,12 @@ from local_bridge.scheduler import reconcile_dispatch_liveness
 from local_bridge.server import WakeStore
 
 
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    WORKER_LINEAGES_KEY,
+)
+
+
 def git(repo: Path, *args: str) -> str:
     return subprocess.check_output(
         ["git", "-C", str(repo), *args],
@@ -105,11 +111,11 @@ class ParallelTerminalLivenessTests(unittest.TestCase):
                     "lane_id": "lane-00",
                     "project_key": "g-p-test00",
                     "enabled": True,
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         "parallel-lane00::1": {
                             "owner_task_id": "parallel-lane00",
                             "owner_control_epoch": 1,
-                            "last_pool_takeover_id": "pool-parallel-worker",
+                            LAST_WORKER_REF_KEY: "pool-parallel-worker",
                             "worker_rollover_request": None,
                         },
                     },

@@ -245,6 +245,8 @@ Start here:
 
 **[installation/README.md](installation/README.md)**
 
+**v1.0.5 privacy and re-deployment notice:** The public source deliberately omits the maintainer's runtime state, paths, project/account bindings, runner credentials, personal Skills and private workflow payloads. Do not run it in place or assume it is preconfigured; follow [v1.0.5 private re-deployment plan](installation/UPGRADE_AND_REDEPLOY_V1_0_5.md) and create a separately configured private operational copy.
+
 The installation package contains:
 
 ```text
@@ -448,7 +450,7 @@ Professional applications such as Blender or Unreal Engine are **not** bundled o
 
 ## License
 
-Chat Agent Harness is released under the **MIT License**.
+The current v1.0.5 source edition is licensed under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Earlier MIT-licensed copies keep the rights originally granted under their earlier terms.
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 

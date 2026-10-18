@@ -5,6 +5,11 @@ from unittest.mock import MagicMock
 from playwright_host.worker import WORKER_WATCHDOG_SECONDS, WorkerManager
 
 
+from harness.worker_lineage_compat import (
+    WORKER_LINEAGES_KEY,
+)
+
+
 class WorkerWatchdogTests(unittest.TestCase):
     def test_create_worker_arms_30_minute_watchdog_at_response_start(self):
         manager = WorkerManager.__new__(WorkerManager)
@@ -20,7 +25,7 @@ class WorkerWatchdogTests(unittest.TestCase):
             "enabled": True,
             "pending_remove": False,
         }
-        pool = {
+        lineage = {
             "v": 2,
             "owner_task_id": "parent-task",
             "owner_control_epoch": 1,
@@ -29,9 +34,9 @@ class WorkerWatchdogTests(unittest.TestCase):
             "handoff": None,
         }
         manager.state.lane.return_value = lane
-        manager.state.get_pool.return_value = pool
-        manager.state.set_pool = MagicMock()
-        manager._trim_pool = MagicMock()
+        manager.state.get_lineage.return_value = lineage
+        manager.state.set_lineage = MagicMock()
+        manager._trim_lineage = MagicMock()
 
         page = MagicMock()
         page.url = "https://chatgpt.com/g/g-p-worker/c/worker-conv-001"
@@ -65,8 +70,8 @@ class WorkerWatchdogTests(unittest.TestCase):
         )
         self.assertTrue(result["ok"], result)
 
-        next_pool = manager.state.set_pool.call_args.args[1]
-        current = next_pool["current"]
+        next_lineage = manager.state.set_lineage.call_args.args[1]
+        current = next_lineage["current"]
         watchdog = current["worker_watchdog"]
         self.assertEqual(watchdog["kind"], "WORKER_HELPER")
         self.assertEqual(watchdog["state"], "ARMED")
@@ -79,6 +84,198 @@ class WorkerWatchdogTests(unittest.TestCase):
         started = datetime.fromisoformat(watchdog["started_at"])
         deadline = datetime.fromisoformat(watchdog["deadline_at"])
         self.assertEqual(int((deadline - started).total_seconds()), 30 * 60)
+
+    def test_same_generation_retry_replaces_local_current_pointer_without_new_owner(self):
+        manager = WorkerManager.__new__(WorkerManager)
+        manager.project_id = "git-agent-harness"
+        manager.bridge = MagicMock()
+        manager.ui = MagicMock()
+        manager.state = MagicMock()
+        manager._trim_lineage = MagicMock()
+
+        lane = {
+            "lane_id": "lane-01",
+            "project_key": "g-p-worker",
+            "project_root_url": "https://chatgpt.com/g/g-p-worker/project",
+            "enabled": True,
+            "pending_remove": False,
+        }
+        old = {
+            "conversation_id": "worker-old-conv",
+            "url": "https://chatgpt.com/g/g-p-worker/c/worker-old-conv",
+            "lane_id": "lane-01",
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "status": "current",
+            "handoff_verified": True,
+            "handoff_id": "pool-worker-same",
+            "wake_id": "wake-same",
+            "worker_watchdog": {"state": "SAME_GENERATION_RETRY_QUEUED"},
+        }
+        standby = {
+            "conversation_id": "worker-standby",
+            "status": "standby",
+            "handoff_verified": True,
+        }
+        lineage = {
+            "v": 2,
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "current": old,
+            "managed": [standby, old],
+            "handoff": None,
+        }
+        manager.state.lane.return_value = lane
+        manager.state.get_lineage.return_value = lineage
+        manager.state.set_lineage = MagicMock()
+
+        page = MagicMock()
+        page.url = "https://chatgpt.com/g/g-p-worker/c/worker-new-conv"
+        manager.ui.bootstrap_conversation.return_value = (
+            page,
+            "worker-new-conv",
+            page.url,
+        )
+        manager.bridge.call.return_value = {
+            "ok": True,
+            "accepted": False,
+            "idle": "already_accepted",
+            "state": "RUNNING",
+        }
+        manager.bridge.event = MagicMock()
+
+        wake = {
+            "v": 1,
+            "wake_id": "wake-same",
+            "project_id": "git-agent-harness",
+            "task_id": "child-task-001",
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "backend_cl": "cl/child-task-001.backend.json",
+            "dispatch_id": "dispatch-same",
+            "dispatch_generation": 32,
+            "fence_token": "fence-same-generation",
+            "_same_generation_retry": {
+                "request_id": "worker-retry-001",
+                "helper_request_id": "worker-helper-001",
+                "old_conversation_id": "worker-old-conv",
+                "worker_ref": "pool-worker-same",
+            },
+        }
+        result = manager.create_worker(
+            "lane-01",
+            "parent-task",
+            1,
+            wake,
+            handoff_id="pool-worker-same",
+        )
+        self.assertTrue(result["ok"], result)
+        next_lineage = manager.state.set_lineage.call_args.args[1]
+        self.assertEqual(next_lineage["current"]["conversation_id"], "worker-new-conv")
+        self.assertEqual(next_lineage["current"]["handoff_id"], "pool-worker-same")
+        self.assertEqual(next_lineage["current"]["wake_id"], "wake-same")
+        self.assertEqual(
+            [x["conversation_id"] for x in next_lineage["managed"]],
+            ["worker-standby", "worker-new-conv"],
+        )
+        self.assertEqual(
+            next_lineage["physical_retry"]["from_conversation_id"],
+            "worker-old-conv",
+        )
+        self.assertEqual(
+            next_lineage["physical_retry"]["to_conversation_id"],
+            "worker-new-conv",
+        )
+        self.assertEqual(next_lineage["physical_retry"]["dispatch_generation"], 32)
+
+    def test_retry_reentry_completes_existing_replacement_without_third_chat(self):
+        manager = WorkerManager.__new__(WorkerManager)
+        manager.project_id = "git-agent-harness"
+        manager.bridge = MagicMock()
+        manager.ui = MagicMock()
+        manager.state = MagicMock()
+
+        retry = {
+            "request_id": "worker-retry-001",
+            "helper_request_id": "worker-helper-001",
+            "old_conversation_id": "worker-old-conv",
+            "worker_ref": "pool-worker-same",
+        }
+        current = {
+            "conversation_id": "worker-new-conv",
+            "url": "https://chatgpt.com/g/g-p-worker/c/worker-new-conv",
+            "lane_id": "lane-01",
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "status": "current",
+            "handoff_verified": True,
+            "handoff_id": "pool-worker-same",
+            "wake_id": "wake-same",
+            "same_generation_retry": retry,
+        }
+        lineage = {
+            "v": 2,
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "current": current,
+            "managed": [current],
+            "handoff": None,
+            "physical_retry": {
+                "request_id": "worker-retry-001",
+                "from_conversation_id": "worker-old-conv",
+                "to_conversation_id": "worker-new-conv",
+            },
+        }
+        lane = {
+            "lane_id": "lane-01",
+            "project_key": "g-p-worker",
+            "project_root_url": "https://chatgpt.com/g/g-p-worker/project",
+            "enabled": True,
+            "pending_remove": False,
+        }
+        manager.state.get_lineage.return_value = lineage
+        manager.create_worker = MagicMock()
+        manager._complete_same_generation_retry = MagicMock(
+            return_value={"ok": True, "completed": True}
+        )
+        manager.bridge.call.side_effect = lambda op, **kwargs: (
+            {
+                "ok": True,
+                "matched": True,
+                "state": "RUNNING",
+                "suppress": True,
+            }
+            if op == "dispatch_status"
+            else {"ok": True}
+        )
+
+        wake = {
+            "v": 1,
+            "wake_id": "wake-same",
+            "project_id": "git-agent-harness",
+            "task_id": "child-task-001",
+            "owner_task_id": "parent-task",
+            "owner_control_epoch": 1,
+            "backend_cl": "cl/child-task-001.backend.json",
+            "dispatch_id": "dispatch-same",
+            "dispatch_generation": 32,
+            "fence_token": "fence-same-generation",
+            "_same_generation_retry": retry,
+        }
+
+        result = manager._route_claimed_wake(
+            "lane-01",
+            lane,
+            "wake-same",
+            wake,
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["deduped_physical_worker"])
+        manager.create_worker.assert_not_called()
+        manager._complete_same_generation_retry.assert_called_once_with(
+            wake,
+            new_conversation_id="worker-new-conv",
+        )
 
     def _expired_manager(self):
         manager = WorkerManager.__new__(WorkerManager)
@@ -109,7 +306,7 @@ class WorkerWatchdogTests(unittest.TestCase):
                 "wake_id": "wake-expired",
             },
         }
-        pool = {
+        lineage = {
             "v": 2,
             "owner_task_id": "parent-task",
             "owner_control_epoch": 1,
@@ -123,14 +320,14 @@ class WorkerWatchdogTests(unittest.TestCase):
             "project_root_url": "https://chatgpt.com/g/g-p-worker/project",
             "enabled": True,
             "pending_remove": False,
-            "task_pools": {"parent-task::1": pool},
+            WORKER_LINEAGES_KEY: {"parent-task::1": lineage},
         }
         manager.state.data = {"lanes": {"lane-01": lane}}
-        manager.state.set_pool = MagicMock()
-        return manager, pool, current
+        manager.state.set_lineage = MagicMock()
+        return manager, lineage, current
 
     def test_expired_watchdog_wakes_worker_helper_without_dom_dependency(self):
-        manager, _pool, _current = self._expired_manager()
+        manager, _lineage, _current = self._expired_manager()
         manager.bridge.call.return_value = {
             "ok": True,
             "staged": True,
@@ -151,18 +348,18 @@ class WorkerWatchdogTests(unittest.TestCase):
         manager.ui.conversation_page.assert_not_called()
         manager.ui.dispatch_turn_state.assert_not_called()
 
-        next_pool = manager.state.set_pool.call_args.args[1]
-        watchdog = next_pool["current"]["worker_watchdog"]
+        next_lineage = manager.state.set_lineage.call_args.args[1]
+        watchdog = next_lineage["current"]["worker_watchdog"]
         self.assertEqual(watchdog["state"], "WORKER_HELPER_REQUESTED")
         self.assertEqual(watchdog["helper_request_id"], "worker-helper-request-001")
 
     def test_lease_liveness_before_deadline_does_not_reset_watchdog(self):
-        manager, pool, current = self._expired_manager()
+        manager, lineage, current = self._expired_manager()
         watchdog = dict(current["worker_watchdog"])
         watchdog["started_at"] = "2999-01-01T00:00:00+00:00"
         watchdog["deadline_at"] = "2999-01-01T00:30:00+00:00"
         current["worker_watchdog"] = watchdog
-        pool["managed"] = [current]
+        lineage["managed"] = [current]
 
         page = MagicMock()
         manager.ui.conversation_page.return_value = page
@@ -182,14 +379,14 @@ class WorkerWatchdogTests(unittest.TestCase):
             "ok": True,
             "matched": True,
             "recovered": False,
-            "reason": "response_still_running_lease_renewed",
+            "reason": "managed_worker_response_running_watchdog_owned",
         }
 
         out = manager.liveness_sweep()
 
         self.assertEqual(len(out), 1)
-        self.assertEqual(out[0]["reason"], "response_still_running_lease_renewed")
-        manager.state.set_pool.assert_not_called()
+        self.assertEqual(out[0]["reason"], "managed_worker_response_running_watchdog_owned")
+        manager.state.set_lineage.assert_not_called()
         self.assertEqual(
             current["worker_watchdog"]["deadline_at"],
             "2999-01-01T00:30:00+00:00",

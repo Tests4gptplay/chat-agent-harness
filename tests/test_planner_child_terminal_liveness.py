@@ -5,8 +5,14 @@ import unittest
 from pathlib import Path
 
 from local_bridge.scheduler import _try_finalize_planner_worker_child, reconcile_dispatch_liveness
-from local_bridge.planner_runtime import stage_worker_watchdog_helper, sync_semantic_turn
+from local_bridge.planner_runtime import planner_runtime_tick, stage_worker_watchdog_helper, sync_semantic_turn
 from local_bridge.server import WakeStore
+
+
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    WORKER_LINEAGES_KEY,
+)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -148,11 +154,11 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
                 "lane_id": "lane-00",
                 "project_key": "g-p-test00",
                 "enabled": True,
-                "task_pools": {
+                WORKER_LINEAGES_KEY: {
                     "parent::1": {
                         "owner_task_id": "parent",
                         "owner_control_epoch": 1,
-                        "last_pool_takeover_id": "pool-worker",
+                        LAST_WORKER_REF_KEY: "pool-worker",
                         "worker_rollover_request": None,
                     },
                 },
@@ -186,7 +192,7 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
         subprocess.check_call(["git", "--git-dir", str(origin), "symbolic-ref", "HEAD", "refs/heads/main"])
         return work
 
-    def test_exact_planner_child_result_finalizes_before_redrive(self):
+    def test_exact_planner_child_result_finalizes_before_watchdog_reconciliation(self):
         with tempfile.TemporaryDirectory() as td:
             work = self._seed(Path(td), result_generation=2)
             store = WakeStore(Path(td) / "spool", repo_root=work)
@@ -279,7 +285,7 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
             })
             self.assertTrue(out["ok"])
             self.assertFalse(out["recovered"])
-            self.assertEqual(out["reason"], "response_still_running")
+            self.assertEqual(out["reason"], "managed_worker_response_running_watchdog_owned")
             self.assertEqual(git(work, "rev-parse", "HEAD"), before)
             bg = json.loads((work / "cl/planner-child-001.backend.json").read_text(encoding="utf-8"))
             self.assertEqual(
@@ -287,7 +293,7 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
                 "2099-01-01T00:00:00Z",
             )
 
-    def test_running_response_renews_expired_lease_without_recovery(self):
+    def test_running_managed_worker_does_not_renew_expired_semantic_lease(self):
         with tempfile.TemporaryDirectory() as td:
             work = self._seed(
                 Path(td),
@@ -311,7 +317,7 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
             })
             self.assertTrue(out["ok"])
             self.assertFalse(out["recovered"])
-            self.assertEqual(out["reason"], "response_still_running_lease_renewed")
+            self.assertEqual(out["reason"], "managed_worker_response_running_watchdog_owned")
 
             subprocess.check_call(
                 ["git", "-C", str(work), "fetch", "origin", "main"],
@@ -323,11 +329,10 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
             self.assertEqual(bg["dispatch"]["state"], "RUNNING")
             self.assertEqual(bg["dispatch"]["generation"], 2)
             self.assertEqual(bg["dispatch"]["acked_by_worker_ref"], "pool-worker")
-            self.assertNotEqual(
+            self.assertEqual(
                 bg["dispatch"]["lease_expires_at"],
                 "2000-01-01T00:00:00Z",
             )
-            self.assertTrue(bg["updated_at"])
 
     def test_worker_watchdog_stages_distinct_worker_helper_once(self):
         with tempfile.TemporaryDirectory() as td:
@@ -344,6 +349,8 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
                 "worker_ref": "pool-worker",
                 "lane_id": "lane-00",
                 "worker_project_key": "g-p-test00",
+                "conversation_id": "worker-conv-g2",
+                "wake_id": "wake-g2",
                 "reason": "worker_watchdog_30m",
                 "observed_at": "2026-09-29T00:30:00+00:00",
             }
@@ -382,6 +389,106 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
             self.assertEqual(control["helper_source"], "worker_watchdog")
             self.assertEqual(control["semantic_output_kind"], "WORKER_HELPER_RESULT")
             self.assertEqual(control["request_id"], first["helper_request_id"])
+
+    def test_worker_helper_incident_stages_exact_same_generation_retry_control(self):
+        with tempfile.TemporaryDirectory() as td:
+            work = self._seed(Path(td), result_generation=None)
+            store = WakeStore(Path(td) / "spool", repo_root=work)
+            staged = stage_worker_watchdog_helper(store, {
+                "parent_task_id": "parent",
+                "parent_control_epoch": 1,
+                "child_task_id": "planner-child-001",
+                "backend_cl": "cl/planner-child-001.backend.json",
+                "dispatch_id": "dispatch-g2",
+                "dispatch_generation": 2,
+                "fence_token": "fence-g2",
+                "worker_ref": "pool-worker",
+                "lane_id": "lane-00",
+                "worker_project_key": "g-p-test00",
+                "conversation_id": "worker-conv-g2",
+                "wake_id": "wake-g2",
+                "reason": "worker_watchdog_30m",
+                "observed_at": "2026-09-29T00:30:00+00:00",
+            })
+            self.assertTrue(staged["ok"], staged)
+            helper_id = staged["helper_request_id"]
+            output_ref = staged["helper_output_ref"]
+
+            subprocess.check_call(
+                ["git", "-C", str(work), "fetch", "origin", "main"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.check_call(
+                ["git", "-C", str(work), "reset", "--hard", "FETCH_HEAD"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            cell = json.loads(git(work, "show", "HEAD:state/task_cells/parent.json"))
+            state = json.loads(git(work, "show", "HEAD:state/chatgpt.json"))
+            reply_ref = "memory/worker/planner-child-001/reply.md"
+            reply_text = git(work, "show", f"FETCH_HEAD:{reply_ref}")
+            reply_text += (
+                f"\n## WORKER_HELPER INCIDENT {helper_id}\n"
+                "G2 was killed after the 30-minute Worker watchdog; "
+                "the same generation will be retried.\n"
+            )
+            state["control_request"]["status"] = "DONE"
+            state["control_request"]["result"] = {
+                "response_started": True,
+                "role": "helper",
+            }
+            result_payload = {
+                "diagnosis": "No concrete repairable fault found after watchdog inspection.",
+                "repair_result": "Old physical Worker conversation deleted with browser.cli; same-generation retry requested.",
+                "return_target": "worker",
+                "recovery_action": "same_generation_retry",
+                "deleted_conversation_id": "worker-conv-g2",
+            }
+            (work / reply_ref).write_text(reply_text, encoding="utf-8")
+            out_path = work / output_ref
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(result_payload, indent=2) + "\n", encoding="utf-8")
+            (work / "state/chatgpt.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+            subprocess.check_call(["git", "-C", str(work), "add", reply_ref, output_ref, "state/chatgpt.json"])
+            subprocess.check_call(["git", "-C", str(work), "commit", "-m", "write Worker Helper retry result"], stdout=subprocess.DEVNULL)
+            subprocess.check_call(["git", "-C", str(work), "push", "origin", "HEAD:main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            routed = planner_runtime_tick(store, {
+                "client_id": "client-planner-child",
+                "project_id": "git-agent-harness",
+            })
+            self.assertTrue(routed["ok"], routed)
+            self.assertEqual(routed["action"], "worker_same_generation_retry_staged")
+
+            subprocess.check_call(
+                ["git", "-C", str(work), "fetch", "origin", "main"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            state = json.loads(git(work, "show", "FETCH_HEAD:state/chatgpt.json"))
+            control = state["control_request"]
+            self.assertEqual(control["kind"], "worker_same_generation_retry")
+            self.assertEqual(control["status"], "PENDING")
+            self.assertEqual(control["child_task_id"], "planner-child-001")
+            self.assertEqual(control["dispatch_id"], "dispatch-g2")
+            self.assertEqual(control["dispatch_generation"], 2)
+            self.assertEqual(control["fence_token"], "fence-g2")
+            self.assertEqual(control["wake_id"], "wake-g2")
+            self.assertEqual(control["worker_ref"], "pool-worker")
+            self.assertEqual(control["old_conversation_id"], "worker-conv-g2")
+            self.assertTrue(control["exact_id_only"])
+            self.assertEqual(control["retry_mode"], "same_generation")
+
+            cell = json.loads(git(work, "show", "FETCH_HEAD:state/task_cells/parent.json"))
+            pending = next(
+                row for row in cell["planner_control"]["runtime"]["pending_role_outputs"]
+                if row["request_id"] == helper_id
+            )
+            self.assertEqual(pending["state"], "RETRY_STAGED")
+            self.assertEqual(pending["return_mode"], "WORKER_SAME_GENERATION")
+            self.assertEqual(pending["recovery_action"], "same_generation_retry")
+            self.assertEqual(pending["retry_request_id"], control["request_id"])
 
     def test_old_generation_result_path_cannot_satisfy_current_dispatch(self):
         with tempfile.TemporaryDirectory() as td:

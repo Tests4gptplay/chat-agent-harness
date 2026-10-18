@@ -12,6 +12,14 @@ from local_bridge.scheduler import reconcile_dispatch_liveness, stage_action_sub
 from local_bridge.server import WakeStore
 
 
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    TASK_LINEAGE_MISSING,
+    TASK_LINEAGE_OWNER,
+    WORKER_LINEAGES_KEY,
+)
+
+
 def git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(cwd), *args],
@@ -145,14 +153,14 @@ class TransportResilienceTests(unittest.TestCase):
         state = {
             "v": 1,
             "agent": "chatgpt",
-            "last_pool_takeover_id": top_owner,
+            LAST_WORKER_REF_KEY: top_owner,
         }
-        pool = None
+        lineage = None
         if lane_owner:
-            pool = {
+            lineage = {
                 "owner_task_id": "t-admit-001",
                 "owner_control_epoch": 1,
-                "last_pool_takeover_id": lane_owner,
+                LAST_WORKER_REF_KEY: lane_owner,
                 "worker_rollover_request": None,
             }
         lanes = {
@@ -160,10 +168,10 @@ class TransportResilienceTests(unittest.TestCase):
             "lanes": [{
                 "lane_id": "lane-00",
                 "project_key": "g-p-testlane",
-                "last_pool_takeover_id": lane_owner,
-                "task_pools": (
-                    {"t-admit-001::1": pool}
-                    if pool is not None
+                LAST_WORKER_REF_KEY: lane_owner,
+                WORKER_LINEAGES_KEY: (
+                    {"t-admit-001::1": lineage}
+                    if lineage is not None
                     else {}
                 ),
             }],
@@ -249,7 +257,7 @@ class TransportResilienceTests(unittest.TestCase):
             self.assertEqual(store.dispatch_accept({**req, "worker_ref": "pool-other-0003"})["error"], "DISPATCH_WORKER_MISMATCH")
             self.assertEqual(fx.remote_head(), after)
 
-    def test_dispatch_accept_task_pool_owner_ignores_stale_legacy_mirrors(self):
+    def test_dispatch_accept_task_lineage_owner_ignores_stale_legacy_mirrors(self):
         cases = [
             ("lane-new_top-old_old-rejected", "pool-owner-NEW1", "pool-owner-OLD1", "pool-owner-OLD1", False),
             ("lane-new_top-old_new-valid", "pool-owner-NEW1", "pool-owner-OLD1", "pool-owner-NEW1", True),
@@ -267,18 +275,18 @@ class TransportResilienceTests(unittest.TestCase):
                     self.assertTrue(result["ok"])
                     self.assertTrue(result["accepted"])
                     self.assertEqual(result["worker_ref"], claimant)
-                    self.assertEqual(result["owner_source"], "task_pool_owner")
+                    self.assertEqual(result["owner_source"], TASK_LINEAGE_OWNER)
                     self.assertFalse(result["owner_mirror_conflict"])
                     self.assertNotEqual(fx.remote_head(), before["head"])
                 else:
                     self.assertFalse(result["ok"])
                     self.assertEqual(result["error"], "DISPATCH_WORKER_MISMATCH")
                     self.assertEqual(result["canonical_owner"], lane_owner)
-                    self.assertEqual(result["owner_source"], "task_pool_owner")
+                    self.assertEqual(result["owner_source"], TASK_LINEAGE_OWNER)
                     self.assertFalse(result["owner_mirror_conflict"])
                     self.assertEqual(self._remote_projection(fx), before)
 
-    def test_dispatch_accept_missing_task_pool_binds_exact_response_start_owner(self):
+    def test_dispatch_accept_missing_task_lineage_binds_exact_response_start_owner(self):
         with tempfile.TemporaryDirectory() as td:
             fx, store = self._admission_repo(
                 Path(td), lane_owner="", top_owner="pool-owner-LEGACY1"
@@ -286,14 +294,14 @@ class TransportResilienceTests(unittest.TestCase):
             result = store.dispatch_accept(self._admission_request("pool-owner-NEW1"))
             self.assertTrue(result["ok"])
             self.assertTrue(result["accepted"])
-            self.assertEqual(result["owner_source"], "task_pool_missing")
+            self.assertEqual(result["owner_source"], TASK_LINEAGE_MISSING)
             self.assertFalse(result["owner_mirror_conflict"])
             head = fx.remote_head()
             lanes = json.loads(git(fx.remote, "show", f"{head}:state/lanes.json"))
-            pool = lanes["lanes"][0]["task_pools"]["t-admit-001::1"]
-            self.assertEqual(pool["last_pool_takeover_id"], "pool-owner-NEW1")
+            lineage = lanes["lanes"][0][WORKER_LINEAGES_KEY]["t-admit-001::1"]
+            self.assertEqual(lineage[LAST_WORKER_REF_KEY], "pool-owner-NEW1")
 
-    def test_scheduler_action_and_liveness_require_task_pool_owner_without_mutation(self):
+    def test_scheduler_action_and_liveness_require_task_lineage_owner_without_mutation(self):
         with tempfile.TemporaryDirectory() as td:
             fx, store = self._admission_repo(
                 Path(td), lane_owner="pool-owner-NEW1", top_owner="pool-owner-OLD1"
@@ -537,11 +545,11 @@ class TransportResilienceTests(unittest.TestCase):
                     "lane_id": "lane-00",
                     "project_key": "g-p-testlane",
                     "enabled": True,
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         "t-semantic::1": {
                             "owner_task_id": "t-semantic",
                             "owner_control_epoch": 1,
-                            "last_pool_takeover_id": "pool-owner-0001",
+                            LAST_WORKER_REF_KEY: "pool-owner-0001",
                             "worker_rollover_request": None,
                         },
                     },
@@ -601,7 +609,7 @@ class TransportResilienceTests(unittest.TestCase):
         }
         return fx, store, req
 
-    def test_nonparallel_terminal_artifact_finalizes_before_generation_bump(self):
+    def test_nonparallel_terminal_artifact_finalizes_without_generation_bump(self):
         with tempfile.TemporaryDirectory() as td:
             fx, store, req = self._semantic_repo(Path(td))
             result = reconcile_dispatch_liveness(store, req)
@@ -626,7 +634,7 @@ class TransportResilienceTests(unittest.TestCase):
                 self.assertTrue(result["ok"])
                 self.assertFalse(result["recovered"])
                 self.assertFalse(result["escalated"])
-                self.assertEqual(result["reason"], "liveness_fault_no_automatic_redrive")
+                self.assertEqual(result["reason"], "liveness_fault_no_automatic_successor")
                 self.assertEqual(result["dispatch_generation"], 1)
                 self.assertEqual(result["fence_token"], req["fence_token"])
                 self.assertEqual(git(fx.remote, "rev-parse", "main"), before)

@@ -172,7 +172,7 @@ The provider accepts the root only when `Build.version` reports:
 
 A folder named `UE5.6` containing 5.5 is rejected.
 
-`X:\CAH_TEST\UnrealEngine` is a synthetic test-only path, not an installed engine. The installer must discover and verify the actual authorized engine location; no machine-specific path is a universal default.
+For the current development host, generic roots such as `D:\UE5` are valid fallback candidates, but no machine-specific path is a universal default.
 
 ## Workload rule
 

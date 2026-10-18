@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 try:
@@ -147,7 +147,10 @@ def complete_task_cell_role_prompt(store: Any, req: dict[str, Any]) -> dict[str,
                 return {"ok": False, "error": "GIT_CONTROL_STATE_FAILED"}
             current_control = state.get("control_request") if isinstance(state, dict) else None
             control_kind = str(current_control.get("kind") or "") if isinstance(current_control, dict) else ""
-            if control_kind not in {"task_cell_role_prompt", "task_cell_worker_helper_prompt"}:
+            if control_kind not in {
+                "task_cell_role_prompt",
+                "task_cell_worker_helper_prompt",
+            }:
                 return {"ok": False, "error": "CONTROL_KIND_MISMATCH"}
             matched, status = _matching_control(state, x, control_kind)
             if not matched:
@@ -167,13 +170,6 @@ def complete_task_cell_role_prompt(store: Any, req: dict[str, Any]) -> dict[str,
                 if not isinstance(current_control, dict) or str(current_control.get("request_id") or "") != x["request_id"]:
                     return {"ok": False, "error": "CONTROL_CHANGED_DURING_ROLE_PROMPT"}
                 required_output_ref = str(current_control.get("required_output_ref") or "").strip()
-                semantic_timeout_seconds = int(current_control.get("semantic_output_timeout_seconds") or 300)
-                semantic_deadline = (
-                    datetime.now(timezone.utc) + timedelta(seconds=max(1, semantic_timeout_seconds))
-                    if required_output_ref
-                    else None
-                )
-                semantic_deadline_at = semantic_deadline.isoformat() if semantic_deadline is not None else None
                 current["control_request"] = {
                     **current_control,
                     "status": "DONE",
@@ -189,22 +185,23 @@ def complete_task_cell_role_prompt(store: Any, req: dict[str, Any]) -> dict[str,
                         "transport_status": "RESPONSE_STARTED",
                         "semantic_output_state": "WAITING" if required_output_ref else "NOT_DECLARED",
                         "semantic_output_ref": required_output_ref or None,
-                        "semantic_output_deadline_at": semantic_deadline_at,
                     },
                 }
 
-                # Planner liveness/rotation accounting is canonical and task-scoped.
-                # A transport response-start is not semantic completion: when the
-                # runtime declares required_output_ref we retain a durable deadline
-                # until that artifact appears. Harness uses that deadline for
-                # mechanical Planner liveness without Foreground polling.
+                # Planner response-start is transport admission, not semantic completion.
+                # Playwright owns the 30-minute physical Planner watchdog; canonical
+                # pending_output retains only the exact required-output binding.
                 cell_rel = f"state/task_cells/{x['task_id']}.json"
                 cell_path = worktree / cell_rel
                 if x["role"] == "helper" and cell_path.exists():
                     cell = json.loads(cell_path.read_text(encoding="utf-8"))
                     cell.setdefault("roles", {})["helper"] = {
-                        "conversation_id": x["conversation_id"], "request_id": x["request_id"],
-                        "challenge": x["challenge"], "project_key": x["project_key"],
+                        "conversation_id": x["conversation_id"],
+                        "request_id": x["request_id"],
+                        "challenge": x["challenge"],
+                        "project_key": x["project_key"],
+                        "helper_source": str(current_control.get("helper_source") or "planner"),
+                        "control_kind": control_kind,
                     }
                     cell_path.write_text(json.dumps(cell, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 if x["role"] == "planner" and cell_path.exists():
@@ -222,11 +219,6 @@ def complete_task_cell_role_prompt(store: Any, req: dict[str, Any]) -> dict[str,
                         runtime["prompt_count"] = int(runtime.get("prompt_count") or 0) + 1
                         runtime["last_response_started_at"] = utc_now()
                         if required_output_ref:
-                            runtime_timeout_seconds = int(runtime.get("semantic_output_timeout_seconds") or 300)
-                            if runtime_timeout_seconds != semantic_timeout_seconds:
-                                semantic_deadline = datetime.now(timezone.utc) + timedelta(seconds=max(1, runtime_timeout_seconds))
-                                semantic_deadline_at = semantic_deadline.isoformat()
-                                current["control_request"]["result"]["semantic_output_deadline_at"] = semantic_deadline_at
                             runtime["pending_output"] = {
                                 "kind": str(current_control.get("semantic_output_kind") or "PLANNER_REQUIRED_OUTPUT"),
                                 "ref": required_output_ref,
@@ -234,7 +226,6 @@ def complete_task_cell_role_prompt(store: Any, req: dict[str, Any]) -> dict[str,
                                 "conversation_id": x["conversation_id"],
                                 "status": "WAITING",
                                 "started_at": utc_now(),
-                                "deadline_at": semantic_deadline_at,
                                 "wake_prompt": str(current_control.get("prompt") or ""),
                             }
                         planner_control["runtime"] = runtime

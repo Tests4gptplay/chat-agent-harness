@@ -26,6 +26,11 @@ except ImportError:
     )
 
 
+from harness.worker_lineage_compat import (
+    OUTGOING_WORKER_REF_KEY,
+)
+
+
 class PlannerJanitorError(ValueError):
     def __init__(self, code: str, detail: str | None = None):
         self.code = code
@@ -269,7 +274,7 @@ def compact_terminal_control_records(
                 "kind": "worker_handoff_tombstone",
                 "task_id": str(packet.get("task_id") or ""),
                 "status": "RETIRED",
-                "handoff_id": packet.get("handoff_id") or packet.get("outgoing_pool_id"),
+                "handoff_id": packet.get("handoff_id") or packet.get(OUTGOING_WORKER_REF_KEY),
                 "lane_id": packet.get("lane_id"),
                 "generation": packet.get("generation") or dispatch.get("generation"),
                 "fence_token": packet.get("fence_token") or dispatch.get("fence_token"),

@@ -13,6 +13,12 @@ except ImportError:
     from topology import _run, utc_now
 
 
+from harness.worker_lineage_compat import (
+    LANE_LINEAGE_RESET_KIND,
+    LOCAL_LINEAGE_RESET_KEY,
+)
+
+
 def control_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     store._safe_client(req.get("client_id"))
     project_id = str(req.get("project_id") or "").strip()
@@ -358,7 +364,7 @@ def _complete_simple_control(
     return {"ok": False, "error": "CONTROL_COMPLETION_RETRY_EXHAUSTED"}
 
 
-def complete_lane_pool_reset(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+def complete_lane_lineage_reset(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     lane_id = str(req.get("lane_id") or "").strip()
     project_key = str(req.get("worker_project_key") or "").strip()
     if not lane_id.startswith("lane-") or not project_key.startswith("g-p-"):
@@ -366,8 +372,8 @@ def complete_lane_pool_reset(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     return _complete_simple_control(
         store,
         req,
-        expected_kind="lane_pool_reset",
-        result={"lane_id": lane_id, "project_key": project_key, "local_pool_reset": True},
+        expected_kind=LANE_LINEAGE_RESET_KIND,
+        result={"lane_id": lane_id, "project_key": project_key, LOCAL_LINEAGE_RESET_KEY: True},
     )
 
 

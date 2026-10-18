@@ -13,6 +13,8 @@ $RunnerRoots = @(
     @{ Name = 'Managed'; Root = '__CAH_MANAGED_RUNNER_ROOT__' },
     @{ Name = 'Shot'; Root = '__CAH_SHOT_RUNNER_ROOT__' }
 )
+$ColdBurstRoot = '__CAH_COLD_RUNNER_ROOT__'
+$ColdBurstName = '__CAH_COLD_RUNNER_NAME__'
 $Port = 8765
 $BrowserRoot = '__CAH_BROWSER_ROOT__'
 
@@ -45,6 +47,51 @@ function Ensure-Runner {
     Write-Host ('      ' + $Name + ' Runner: ' + $expectedListener)
 }
 
+function Report-ColdBurstRunner {
+    $runCmd = Join-Path $ColdBurstRoot 'run.cmd'
+    $configPath = Join-Path $ColdBurstRoot '.runner'
+    $listenerPath = Join-Path $ColdBurstRoot 'bin\Runner.Listener.exe'
+    $workerPath = Join-Path $ColdBurstRoot 'bin\Runner.Worker.exe'
+
+    $listeners = @(
+        Get-CimInstance Win32_Process -Filter "Name='Runner.Listener.exe'" |
+            Where-Object { $_.ExecutablePath -eq $listenerPath }
+    )
+    $workers = @(
+        Get-CimInstance Win32_Process -Filter "Name='Runner.Worker.exe'" |
+            Where-Object { $_.ExecutablePath -eq $workerPath }
+    )
+
+    if (-not (Test-Path -LiteralPath $ColdBurstRoot) -or -not (Test-Path -LiteralPath $runCmd) -or -not (Test-Path -LiteralPath $configPath)) {
+        $state = 'MISSING'
+        $name = $ColdBurstName
+    } else {
+        try { $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json }
+        catch { $config = $null }
+
+        $name = if ($config) { [string]$config.agentName } else { '<invalid-config>' }
+        if (
+            $null -eq $config -or
+            $name -ne $ColdBurstName -or
+            $listeners.Count -gt 1 -or
+            ($listeners.Count -eq 0 -and $workers.Count -gt 0)
+        ) {
+            $state = 'DIRTY'
+        } elseif ($listeners.Count -eq 0) {
+            $state = 'READY_OFF'
+        } elseif ($workers.Count -gt 0) {
+            $state = 'ACTIVE_BUSY'
+        } else {
+            $state = 'ACTIVE_IDLE'
+        }
+    }
+
+    Write-Host (
+        '      Cold/Burst Runner: state={0}; name={1}; root={2}; listener_count={3}; worker_count={4}' -f
+        $state,$name,$ColdBurstRoot,$listeners.Count,$workers.Count
+    )
+}
+
 function Read-Cdp {
     try { return Invoke-RestMethod 'http://127.0.0.1:9222/json/version' -TimeoutSec 2 }
     catch { return $null }
@@ -58,15 +105,141 @@ function Get-NativeHost {
     })
 }
 
+function Get-CahBrowser {
+    $profile = Join-Path $env:LOCALAPPDATA 'CAH\PlaywrightChrome'
+    @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object {
+        $_.CommandLine -match ('(?:^|\s)"?--user-data-dir=(?:"' + [regex]::Escape($profile) + '"|' + [regex]::Escape($profile) + ')(?:"?\s|$)') -and
+        $_.CommandLine -match '(?:^|\s)--remote-debugging-port=9222(?:\s|$)' -and
+        $_.CommandLine -notmatch '(?:^|\s)--type='
+    })
+}
+
+function Assert-CahCdpOwner {
+    $owners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object { $_.LocalPort -eq 9222 } | Select-Object -ExpandProperty OwningProcess -Unique)
+    $browsers = @(Get-CahBrowser)
+    foreach ($owner in $owners) {
+        if ($owner -notin @($browsers.ProcessId)) {
+            throw "CDP 9222 belongs to an unverified process (PID $owner); no processes were replaced."
+        }
+    }
+    if ($browsers.Count -gt 1) { throw 'Multiple CAH browser roots found; refusing ambiguous recovery.' }
+}
+
+function Assert-CahRecoveryIdle {
+    $health = Read-Bridge
+    if (-not $health -or -not $health.ok -or $health.service -ne 'gah-local-wake-bridge' -or
+        $health.root -ne $BridgeRoot -or $null -eq $health.pending -or $null -eq $health.claimed -or
+        $health.pending -ne 0 -or $health.claimed -ne 0) {
+        throw 'CAH recovery requires a healthy idle bridge with no pending or claimed work.'
+    }
+    $workerPaths = @($RunnerRoots | ForEach-Object { Join-Path $_.Root 'bin\Runner.Worker.exe' })
+    $workerPaths += Join-Path $ColdBurstRoot 'bin\Runner.Worker.exe'
+    $workers = @(Get-CimInstance Win32_Process -Filter "Name='Runner.Worker.exe'" | Where-Object {
+        -not $_.ExecutablePath -or $_.ExecutablePath -in $workerPaths
+    })
+    if ($workers.Count) { throw 'CAH Runner work is active or ownership is unknown; browser recovery was not performed.' }
+    $state = Get-Content -LiteralPath (Join-Path $Repo 'state\chatgpt.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($field in @('active_task', 'active_action', 'active_dispatch_ref', 'paused_work')) {
+        if ($null -eq $state.PSObject.Properties[$field] -or $state.$field) {
+            throw "CAH state is active or unknown ($field); browser recovery was not performed."
+        }
+    }
+    if ($state.control_request -and $state.control_request.status -notin @('DONE', 'CANCELLED')) {
+        throw 'CAH control request is unresolved; browser recovery was not performed.'
+    }
+    $topology = Get-Content -LiteralPath (Join-Path $Repo 'state\lanes.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $topology.lanes) { throw 'CAH lane state is unknown.' }
+    foreach ($lane in $topology.lanes) {
+        if ($lane.status -ne 'IDLE' -or @($lane.task_pools.PSObject.Properties).Count) {
+            throw 'CAH lane has retained work or is not idle; browser recovery was not performed.'
+        }
+    }
+    $runtimePath = Join-Path $BrowserRoot 'state.json'
+    if (Test-Path -LiteralPath $runtimePath) {
+        $runtime = Get-Content -LiteralPath $runtimePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($lane in $runtime.lanes.PSObject.Properties) {
+            if (@($lane.Value.task_pools.PSObject.Properties).Count) { throw 'CAH host retains Worker work; recovery stopped.' }
+        }
+        if (@($runtime.task_cell.planner_successors.PSObject.Properties).Count) { throw 'CAH host retains a Planner successor; recovery stopped.' }
+        foreach ($role in $runtime.task_cell.roles.PSObject.Properties) {
+            # A completed error Helper may remain bound until browser cleanup succeeds.
+            $record = $role.Value
+            $ref = [string]$record.active_output_ref
+            if ($record.helper_source -ne 'harness_error' -or $ref -notmatch '^evidence/harness-errors/[A-Za-z0-9_-]+\.json$') {
+                throw 'CAH host retains an unresolved role; recovery stopped.'
+            }
+            $result = Get-Content -LiteralPath (Join-Path $Repo $ref) -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($result.request_id -ne $record.active_request_id -or $result.turn_signal -ne 'done') {
+                throw 'CAH Helper has not completed; recovery stopped.'
+            }
+        }
+    }
+}
+
+function Stop-StaleCahBrowserRuntime {
+    Assert-CahRecoveryIdle
+    Assert-CahCdpOwner
+    # Snapshot only exact roots plus known browser/Playwright children. Never taskkill /IM or /T.
+    $roots = @((Get-NativeHost)) + @((Get-CahBrowser))
+    $snapshot = @(Get-CimInstance Win32_Process)
+    $targets = @($roots)
+    for ($index = 0; $index -lt $targets.Count; $index++) {
+        $parent = $targets[$index]
+        foreach ($child in @($snapshot | Where-Object { $_.ParentProcessId -eq $parent.ProcessId -and $_.CreationDate -ge $parent.CreationDate })) {
+            if ($child.ProcessId -in @($targets.ProcessId)) { continue }
+            $browserChild = $parent.Name -eq 'chrome.exe' -and $child.Name -eq 'chrome.exe' -and $child.ExecutablePath -eq $parent.ExecutablePath
+            $driverChild = $parent.Name -eq 'python.exe' -and $child.Name -eq 'node.exe' -and $child.ExecutablePath -match '[\\/]playwright[\\/]driver[\\/]node\.exe$'
+            if (-not ($browserChild -or $driverChild)) {
+                throw "Unknown child of CAH process (PID $($child.ProcessId)); no processes were replaced."
+            }
+            $targets += $child
+        }
+    }
+    # Recheck immediately before the first stop; never infer idleness just from missing CDP.
+    Assert-CahRecoveryIdle
+    if (Read-Cdp) { throw 'CDP recovered during inspection; retry startup to reuse it.' }
+    foreach ($target in $targets) {
+        $current = Get-CimInstance Win32_Process -Filter "ProcessId=$($target.ProcessId)"
+        if (-not $current) { continue }
+        if ($current.CreationDate -ne $target.CreationDate -or $current.CommandLine -ne $target.CommandLine -or $current.ExecutablePath -ne $target.ExecutablePath) {
+            throw "Process identity changed for PID $($target.ProcessId); recovery stopped."
+        }
+        Write-Host ('      Stopping stale CAH process: ' + $target.Name + ' PID ' + $target.ProcessId) -ForegroundColor Yellow
+        Stop-Process -Id $target.ProcessId -Force -ErrorAction Stop
+        Wait-Process -Id $target.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+        if (Get-Process -Id $target.ProcessId -ErrorAction SilentlyContinue) { throw "CAH process $($target.ProcessId) did not stop." }
+    }
+    Assert-CahCdpOwner
+}
+
 function Ensure-NativeHost {
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\CAH.NativeStartup.9222')
+    $locked = $false
+    try {
+        try { $locked = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $locked = $true }
+        if (-not $locked) { throw 'Another CAH native startup is in progress; retry after it completes.' }
+        Ensure-NativeHostCore
+    } finally {
+        if ($locked) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
+
+function Ensure-NativeHostCore {
     $hosts = @(Get-NativeHost)
     if ($hosts.Count -gt 1) { throw 'Multiple native Playwright hosts own the CAH browser runtime.' }
-    if ($hosts.Count -eq 1) {
-        if (-not (Read-Cdp)) { throw 'Native host exists but CDP 9222 is unavailable; existing processes were not replaced.' }
+    Assert-CahCdpOwner
+    $cdp = Read-Cdp
+    if ($NoBrowser -and -not $cdp) { throw '-NoBrowser requires the existing CAH CDP browser on port 9222.' }
+    if ($hosts.Count -eq 1 -and $cdp) {
         Write-Host ('      Native Playwright host reused: PID ' + $hosts[0].ProcessId)
         return
     }
-    if ($NoBrowser -and -not (Read-Cdp)) { throw '-NoBrowser requires the existing CAH CDP browser on port 9222.' }
+    if (-not $cdp -and ($hosts.Count -or @(Get-CahBrowser).Count)) {
+        Write-Host '      CDP 9222 is unavailable; checking idle CAH runtime for safe restart...' -ForegroundColor Yellow
+        Stop-StaleCahBrowserRuntime
+    }
     $launcher = Join-Path $Repo 'host\start_playwright_host.ps1'
     if (-not (Test-Path -LiteralPath $launcher)) { throw "Native Playwright launcher missing: $launcher" }
     New-Item -ItemType Directory -Force -Path $BrowserRoot | Out-Null
@@ -89,6 +262,7 @@ function Ensure-NativeHost {
         $cdp = Read-Cdp
     } while (($hosts.Count -ne 1 -or -not $cdp) -and (Get-Date) -lt $deadline)
     if ($hosts.Count -ne 1 -or -not $cdp) { throw "Native host/CDP did not become available. See $BrowserRoot\host.stderr.log" }
+    Assert-CahCdpOwner
     Write-Host ('      Native Playwright host: PID ' + $hosts[0].ProcessId + '; CDP 9222 available.')
 }
 
@@ -184,7 +358,8 @@ try {
         $health.service -eq 'gah-local-wake-bridge' -and
         $health.root -ne $BridgeRoot
     ) {
-        throw 'Port 8765 belongs to a different CAH bridge root. No process was stopped. Resolve instance ownership explicitly before launch.'
+        Stop-Stale-CahBridge -Port $Port -ExpectedRoot $BridgeRoot
+        $health = $null
     }
 
     if (-not $health) {
@@ -223,11 +398,15 @@ try {
     foreach ($runner in $RunnerRoots) {
         Ensure-Runner -Name $runner.Name -Root $runner.Root
     }
+    # Cold/Burst is intentionally not part of $RunnerRoots: startup knows and
+    # reports its state but never starts or stops it. Semantic roles decide when
+    # the extra capacity is useful; exact operational changes remain incident work.
+    Report-ColdBurstRunner
 
     Write-Host '[4/4] Checking the native Playwright host and CAH CDP browser...'
     Ensure-NativeHost
     # Startup is not a workload acceptance test and must not wait for an old demo.
-    Write-Host 'CAH startup complete. Bridge, runners, native Playwright host and CDP are available.' -ForegroundColor Green
+    Write-Host 'CAH startup complete. Bridge, active runners, Cold/Burst status, native Playwright host and CDP are available.' -ForegroundColor Green
     exit 0
 } catch {
     Write-Host ('CAH startup failed: ' + $_.Exception.Message) -ForegroundColor Red

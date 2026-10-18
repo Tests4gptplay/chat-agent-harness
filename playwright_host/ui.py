@@ -437,6 +437,20 @@ class ChatGPTUI:
     def response_running(self, page: Any) -> bool:
         return page.locator(", ".join(STOP_SELECTORS)).filter(visible=True).count() > 0
 
+    def stop_response(self, page: Any, *, timeout_ms: int = 10000) -> dict[str, bool]:
+        """Stop only the exact open conversation response, if it is still running."""
+        self.dismiss_history_rate_limit(page)
+        if not self.response_running(page):
+            return {"stopped": False, "already_idle": True}
+        stop = page.locator(", ".join(STOP_SELECTORS)).filter(visible=True)
+        stop.first.click()
+        deadline = time.monotonic() + timeout_ms / 1000.0
+        while time.monotonic() < deadline:
+            if not self.response_running(page):
+                return {"stopped": True, "already_idle": False}
+            page.wait_for_timeout(120)
+        raise RuntimeError("ChatGPT response remained running after Stop")
+
     def message_nodes(self, page: Any) -> Any:
         messages = page.locator('[data-message-author-role="user"], [data-message-author-role="assistant"]')
         return messages if messages.count() else page.locator(MESSAGE_SELECTOR)
@@ -461,8 +475,7 @@ class ChatGPTUI:
                 return body.last.inner_text() or ""
             # Current fallback search-unit nodes include a screen-reader heading
             # such as "ChatGPT 说：" before the actual assistant text. Strip only
-            # that explicit accessibility heading so one-word CAH signals remain
-            # exact even while the markdown wrapper is being attached.
+            # that explicit accessibility heading while the wrapper attaches.
             headings = node.locator('h4[data-conversation-role="assistant"]')
             text = node.inner_text() or ""
             if headings.count():
@@ -530,17 +543,12 @@ class ChatGPTUI:
         )
         running = not superseded and page_running and not local_complete
         ended = not superseded and bool(texts) and (local_complete or not page_running)
-        # Only the current completed reply can carry a control word. Quoted
-        # examples, historical messages and tool results are not instructions.
-        word = texts[-1].strip().lower() if ended else ""
-        signal = word if word in {"done", "continue", "complete", "handoff", "rework", "wait", "need_user", "blocked", "error"} else None
         return {
             "response_started": assistant_seen or page_running,
             "current_response_started": bool(texts) or page_running,
             "response_ended": ended,
             "superseded": superseded,
             "assistant_texts": texts if not superseded else [],
-            "signal": signal,
             "assistant_complete": local_complete,
         }
 
@@ -567,7 +575,6 @@ class ChatGPTUI:
             "response_ended": False,
             "dispatch_context": None,
             "assistant_texts": [],
-            "signal": None,
         }
 
     def dispatch_turn_state(self, page: Any) -> dict[str, Any] | None:
@@ -669,7 +676,6 @@ class ChatGPTUI:
         *,
         timeout_ms: int = 25000,
         before_submit: Any | None = None,
-        require_existing: bool = False,
     ) -> tuple[Any, str, str]:
         # Recover the already-submitted wake before creating another context.
         # The browser can finish after the host's response-start timeout.
@@ -680,8 +686,6 @@ class ChatGPTUI:
             if location and location.conversation_id and observed.get("response_started"):
                 return candidate, location.conversation_id, candidate.url
             raise RuntimeError("Existing bootstrap wake is awaiting response start; retained for recovery")
-        if require_existing:
-            raise RuntimeError("BOOTSTRAP_TARGET_MISSING")
         page = self.project_root(project_key, project_root_url, reuse=False)
         try:
             if before_submit is not None:
@@ -796,18 +800,17 @@ class ChatGPTUI:
         project_key: str,
         conversation_id: str,
         *,
-        witness_conversation_ids: list[str] | tuple[str, ...],
+        witness_conversation_ids: list[str] | tuple[str, ...] = (),
         timeout_ms: int = 15000,
     ) -> bool:
-        """Confirm one externally-deleted chat without trusting an unloaded Project list.
+        """Confirm one exact Project conversation is absent after refresh.
 
-        Absence is accepted only after a refresh and after at least one other
-        known managed sibling is visible in the same Project. An empty or
-        otherwise unproven list fails closed.
+        A sibling conversation is useful corroboration but is not required:
+        a lineage containing only the deleted Worker must still be recoverable.
+        To avoid treating a transiently empty async list as proof, require two
+        consecutive absence observations after the Project main surface loads.
         """
         witnesses = {str(value) for value in witness_conversation_ids if str(value)}
-        if not witnesses:
-            return False
 
         page.reload(wait_until="domcontentloaded", timeout=30000)
         page.locator(':is(main, [role="main"]):visible').first.wait_for(
@@ -816,6 +819,7 @@ class ChatGPTUI:
         )
 
         deadline = time.monotonic() + max(1000, int(timeout_ms)) / 1000.0
+        consecutive_absent = 0
         while time.monotonic() < deadline:
             visible = {
                 item["conversation_id"]
@@ -823,9 +827,13 @@ class ChatGPTUI:
             }
             if conversation_id in visible:
                 return False
+
+            consecutive_absent += 1
             if visible.intersection(witnesses):
                 return True
-            page.wait_for_timeout(250)
+            if consecutive_absent >= 2:
+                return True
+            page.wait_for_timeout(300)
         return False
 
     def delete_project_conversation(self, page: Any, project_key: str, conversation_id: str) -> bool:

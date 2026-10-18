@@ -16,8 +16,6 @@ def main() -> int:
     parser.add_argument("--foreground-url", default="")
     args = parser.parse_args()
 
-    import subprocess, sys
-    subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'installation/preflight.py')], check=True)
     runtime = BrowserRuntime(HostConfig(
         bridge_url=args.bridge_url,
         cdp_url=args.cdp_url,

@@ -145,3 +145,4 @@ When discussing CAH:
 | Accepted durable policy / architecture rule | Canonical `docs/` update |
 | Implemented user-visible behavior | Docs/release note backed by evidence |
 | Routine execution progress | Existing task/CL/evidence only; do not create unrelated project records |
+

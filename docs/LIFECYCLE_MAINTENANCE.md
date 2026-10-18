@@ -25,7 +25,7 @@ That creates two different cleanup problems:
 
 These operations must not be conflated.
 
-Normal retirement is automatic pool housekeeping. `lane_clear` is an explicit maintenance operation.
+Normal retirement is automatic lineage housekeeping. `lane_clear` is an explicit maintenance operation.
 
 ## Semantic contract
 
@@ -137,7 +137,7 @@ Use normal rollover/retirement for:
 
 - context-compaction handoff;
 - routine generation replacement;
-- bounded pool housekeeping;
+- bounded lineage housekeeping;
 - continuity-preserving Worker rotation.
 
 Use `lane_clear` for:
@@ -224,8 +224,8 @@ AGENTS.md
 docs/LIFECYCLE_MAINTENANCE.md
   -> low-frequency maintenance/control semantics
 
-docs/CONVERSATION_POOL.md
-  -> normal Worker pool/rollover lifecycle
+docs/WORKER_GENERATIONS.md
+  -> normal Worker lineage/rollover lifecycle
 ```
 
 This keeps one-time or low-frequency operational knowledge out of the high-frequency Worker context path.

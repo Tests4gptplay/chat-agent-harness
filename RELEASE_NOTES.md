@@ -1,3 +1,19 @@
+# CAH v1.0.5 — sanitized source update (2026-10-18)
+
+## Highlights
+
+- Refreshed the public Git-canonical Planner/Worker/Helper contracts and current runtime code for immediate Harness error recovery, same-generation Worker watchdog recovery, durable Git semantic completion, task-scoped handoff, safer exact cleanup, and Cold/Burst Runner coordination.
+- Migrated only reviewed, de-identified code/protocol files. Private live tasks, user/host identities, evidence, requests, memory, browser state, personal Skills, secrets, workflow payloads and private history are excluded.
+- Changed **current** CAH original-code licensing to **AGPL-3.0-only**, matching the maintained private-source legal notice. Historical MIT-distributed copies retain their earlier license rights; third-party components retain their own licenses.
+- Installation remains an **unconfigured source template**. The installer must re-plan and verify a new private repository, host paths, runner topology (Managed, Short Task, normally-off Cold/Burst), ChatGPT Projects/Foreground identity and workflow/tool capabilities before claiming readiness. See [installation/UPGRADE_AND_REDEPLOY_V1_0_5.md](installation/UPGRADE_AND_REDEPLOY_V1_0_5.md).
+- Existing approved public donations and curated historical public showcase assets remain; the active private movie/other operational experiments remain private.
+
+## Verification boundary
+
+This release is gated on newly run, recorded privacy and offline source tests. It does **not** claim independent fresh-PC setup, owner-account browser login, new-runner registration, complete live Helper fault injection, or end-to-end installation under another user's credentials. Missing private workflow payloads require explicitly authorized provisioning during a new private deployment; no live CAH workload should run from the public source repository.
+
+## Previous clean source publication (historical)
+
 # Clean source edition — 2026-09-29
 
 ## Scope

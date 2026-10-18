@@ -123,7 +123,7 @@ installation/README.md
 LIFECYCLE_MAINTENANCE.md
   lane_clear and maintenance controls
 
-CONVERSATION_POOL.md
+WORKER_GENERATIONS.md
   Worker generation/rollover lifecycle
 
 SCHEDULER_MODEL.md

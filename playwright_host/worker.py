@@ -14,8 +14,14 @@ from .state import HostState
 from .ui import ChatGPTUI, tool_call_blocks, syscall_blocks
 
 
-WORKER_HEALTHY_BUDGET_SECONDS = 10 * 60
 WORKER_WATCHDOG_SECONDS = 30 * 60
+
+
+from harness.worker_lineage_compat import (
+    NO_TASK_LINEAGE,
+    WORKER_LINEAGES_KEY,
+    WORKER_REF_PREFIX,
+)
 
 
 def now() -> str:
@@ -54,9 +60,9 @@ def wake_text(wake: dict[str, Any], project_id: str) -> str:
         "If the tools or writes fail, use turn_signal=blocked or error, never success. "
         "Treat about 10 minutes as this Worker generation's healthy work budget. Around that limit, stop starting new substantial steps and prepare handoff: persist completed work, exact artifact/evidence refs, any in-flight external operations with their exact run/job refs and current status, remaining work, and the next useful action, then use turn_signal=continue in the final Result if the Child remains incomplete. "
         "An independently running Cook, Runner job, render, workflow, or similar external operation is not a reason to keep this Worker merely to watch it; record it so the successor can inspect the same operation. "
-        "After the durable Result write succeeds, actively kick local Harness sync by emitting exactly one final syscall block and then stop: "
-        "GAH_SYSCALL_BEGIN\n{\"v\":1,\"kind\":\"semantic_sync\",\"call_id\":\"semantic-sync-001\"}\nGAH_SYSCALL_END. "
-        "Do not append the legacy one-word ending after this block. Harness owns the metadata below; do not echo it, increment it, or send a readiness reply.",
+        "After the durable Result write succeeds, stop. "
+        "Harness observes the bound final Git write directly; no chat ending or syscall is required. "
+        "Harness owns the metadata below; do not echo it, increment it, or send a readiness reply.",
     ]
     task_id = str(wake.get("task_id") or "")
     task_ref = f"tasks/{task_id}.json" if task_id else ""
@@ -113,7 +119,7 @@ class WorkerManager:
 
     @staticmethod
     def _handoff_id() -> str:
-        return "pool-" + str(uuid.uuid4())
+        return WORKER_REF_PREFIX + str(uuid.uuid4())
 
     def _lane(self, lane_id: str) -> dict[str, Any]:
         lane = self.state.lane(lane_id)
@@ -134,25 +140,25 @@ class WorkerManager:
         lane = self._lane(lane_id)
         if not lane.get("enabled", True) and not lane.get("pending_remove"):
             raise RuntimeError(f"Lane {lane_id} is disabled")
-        existing_pool = self.state.get_pool(
+        existing_lineage = self.state.get_lineage(
             lane_id,
             owner_task_id,
             owner_control_epoch,
             create=False,
         )
-        pool = existing_pool or self.state.get_pool(
+        lineage = existing_lineage or self.state.get_lineage(
             lane_id,
             owner_task_id,
             owner_control_epoch,
             create=True,
         )
-        if not pool:
-            raise RuntimeError("failed to materialize Worker pool")
+        if not lineage:
+            raise RuntimeError("failed to materialize Worker lineage")
 
         # Retrying one wake must retain one candidate identity, not create an
         # unbounded series of competing chats after a late admission failure.
-        worker_ref = handoff_id or "pool-" + str(uuid.uuid5(uuid.NAMESPACE_URL, str(wake.get("wake_id"))))
-        prior = deepcopy(pool)
+        worker_ref = handoff_id or WORKER_REF_PREFIX + str(uuid.uuid5(uuid.NAMESPACE_URL, str(wake.get("wake_id"))))
+        prior = deepcopy(lineage)
         dispatch_wake = deepcopy(wake)
         if handoff_packet_ref:
             dispatch_wake["handoff_packet_ref"] = handoff_packet_ref
@@ -194,9 +200,19 @@ class WorkerManager:
                 if admitted.get("ok") is False:
                     raise RuntimeError(str(admitted.get("error") or "dispatch admission failed"))
 
+            retry_meta = (
+                dispatch_wake.get("_same_generation_retry")
+                if isinstance(dispatch_wake.get("_same_generation_retry"), dict)
+                else {}
+            )
+            retry_old_conversation_id = str(retry_meta.get("old_conversation_id") or "")
             managed = [
                 item for item in (prior.get("managed") or [])
                 if str(item.get("conversation_id") or "") != conversation_id
+                and (
+                    not retry_old_conversation_id
+                    or str(item.get("conversation_id") or "") != retry_old_conversation_id
+                )
             ]
             watchdog_started = datetime.now(timezone.utc)
             watchdog = None
@@ -229,52 +245,52 @@ class WorkerManager:
                 "wake_id": dispatch_wake.get("wake_id"),
                 "verified_at": now(),
                 "worker_watchdog": watchdog,
+                "same_generation_retry": deepcopy(retry_meta) if retry_meta else None,
             }
             next_managed = [
                 ({**item, "status": "standby"} if item.get("status") == "current" else item)
                 for item in managed
             ]
             next_managed.append(promoted)
-            next_pool = {
-                **prior,
-                "current": promoted,
-                "managed": next_managed,
-                "handoff": {
-                    "handoff_id": worker_ref,
-                    "status": "verified",
-                    "from_conversation_id": (prior.get("current") or {}).get("conversation_id"),
-                    "to_conversation_id": conversation_id,
-                    "handoff_packet_ref": handoff_packet_ref,
-                    "verified_at": now(),
-                },
-            }
-            self.state.set_pool(lane_id, next_pool)
-            self._trim_pool(lane_id, owner_task_id, owner_control_epoch)
-            self.bridge.event(
-                "worker.chat_created",
-                owner_task_id=owner_task_id,
-                owner_control_epoch=owner_control_epoch,
-                lane_id=lane_id,
-                worker_project_key=lane["project_key"],
-                handoff_id=worker_ref,
-                conversation_id=conversation_id,
-                wake_id=dispatch_wake.get("wake_id"),
-                attachment_ref=attachment.get("artifact_ref") if isinstance(attachment, dict) else None,
-            )
-            return {
-                "ok": True,
-                "lane_id": lane_id,
-                "handoff_id": worker_ref,
-                "conversation_id": conversation_id,
-                "status": "current",
-                "response_started": True,
-                "page_url": page.url,
-            }
-        except Exception as exc:
-            if existing_pool is None:
-                self.state.remove_pool(lane_id, owner_task_id, owner_control_epoch)
+            if retry_meta:
+                next_lineage = {
+                    **prior,
+                    "current": promoted,
+                    "managed": next_managed,
+                    "physical_retry": {
+                        "request_id": str(retry_meta.get("request_id") or ""),
+                        "helper_request_id": str(retry_meta.get("helper_request_id") or ""),
+                        "worker_ref": worker_ref,
+                        "wake_id": str(dispatch_wake.get("wake_id") or ""),
+                        "dispatch_id": str(dispatch_wake.get("dispatch_id") or ""),
+                        "dispatch_generation": int(dispatch_wake.get("dispatch_generation") or 0),
+                        "from_conversation_id": retry_old_conversation_id,
+                        "to_conversation_id": conversation_id,
+                        "status": "response_started",
+                        "verified_at": now(),
+                    },
+                }
             else:
-                self.state.set_pool(lane_id, prior)
+                next_lineage = {
+                    **prior,
+                    "current": promoted,
+                    "managed": next_managed,
+                    "physical_retry": None,
+                    "handoff": {
+                        "handoff_id": worker_ref,
+                        "status": "verified",
+                        "from_conversation_id": (prior.get("current") or {}).get("conversation_id"),
+                        "to_conversation_id": conversation_id,
+                        "handoff_packet_ref": handoff_packet_ref,
+                        "verified_at": now(),
+                    },
+                }
+            self.state.set_lineage(lane_id, next_lineage)
+        except Exception as exc:
+            if existing_lineage is None:
+                self.state.remove_lineage(lane_id, owner_task_id, owner_control_epoch)
+            else:
+                self.state.set_lineage(lane_id, prior)
             self.bridge.event(
                 "worker.create_error",
                 "error",
@@ -286,14 +302,40 @@ class WorkerManager:
             )
             return {"ok": False, "error": str(exc), "lane_id": lane_id}
 
-    def _trim_pool(self, lane_id: str, owner_task_id: str, owner_control_epoch: int) -> None:
+        try:
+            self._trim_lineage(lane_id, owner_task_id, owner_control_epoch)
+        except Exception as exc:
+            self.bridge.event("worker.retention_error", "error", lane_id=lane_id,
+                              owner_task_id=owner_task_id, message=str(exc)[:1000])
+        self.bridge.event(
+            "worker.chat_created",
+            owner_task_id=owner_task_id,
+            owner_control_epoch=owner_control_epoch,
+            lane_id=lane_id,
+            worker_project_key=lane["project_key"],
+            handoff_id=worker_ref,
+            conversation_id=conversation_id,
+            wake_id=dispatch_wake.get("wake_id"),
+            attachment_ref=attachment.get("artifact_ref") if isinstance(attachment, dict) else None,
+        )
+        return {
+            "ok": True,
+            "lane_id": lane_id,
+            "handoff_id": worker_ref,
+            "conversation_id": conversation_id,
+            "status": "current",
+            "response_started": True,
+            "page_url": url,
+        }
+
+    def _trim_lineage(self, lane_id: str, owner_task_id: str, owner_control_epoch: int) -> None:
         lane = self._lane(lane_id)
-        pool = self.state.get_pool(lane_id, owner_task_id, owner_control_epoch, create=False)
-        if not pool:
+        lineage = self.state.get_lineage(lane_id, owner_task_id, owner_control_epoch, create=False)
+        if not lineage:
             return
-        managed = list(pool.get("managed") or [])
+        managed = list(lineage.get("managed") or [])
         while len(managed) > 5:
-            current_id = str((pool.get("current") or {}).get("conversation_id") or "")
+            current_id = str((lineage.get("current") or {}).get("conversation_id") or "")
             eligible = [
                 item for item in managed
                 if item.get("conversation_id") != current_id
@@ -349,8 +391,8 @@ class WorkerManager:
             )
             for page in self.ui.matching_pages(project_key=lane["project_key"], conversation_id=str(victim["conversation_id"])):
                 page.close()
-        pool["managed"] = managed
-        self.state.set_pool(lane_id, pool)
+        lineage["managed"] = managed
+        self.state.set_lineage(lane_id, lineage)
 
     def maybe_auto_rollover(
         self,
@@ -359,18 +401,15 @@ class WorkerManager:
         owner_control_epoch: int,
     ) -> dict[str, Any]:
         lane = self._lane(lane_id)
-        pool = self.state.get_pool(lane_id, owner_task_id, owner_control_epoch, create=False)
-        if not pool:
-            return {"ok": True, "idle": "no_task_pool"}
-        current = pool.get("current")
-        handoff = pool.get("handoff")
+        lineage = self.state.get_lineage(lane_id, owner_task_id, owner_control_epoch, create=False)
+        if not lineage:
+            return {"ok": True, "idle": NO_TASK_LINEAGE}
+        current = lineage.get("current")
         if (
             not isinstance(current, dict)
             or current.get("status") != "current"
             or current.get("handoff_verified") is not True
-            or not isinstance(handoff, dict)
-            or handoff.get("status") != "verified"
-            or str(handoff.get("handoff_id") or "") != str(current.get("handoff_id") or "")
+            or not str(current.get("handoff_id") or "")
         ):
             return {"ok": True, "idle": "no_verified_current_worker"}
 
@@ -386,7 +425,7 @@ class WorkerManager:
         requested = (
             lifecycle.get("rollover_requested") is True
             and str(lifecycle.get("rollover_request_handoff_id") or "") == current_ref
-            and str(lifecycle.get("rollover_reason") or "") in {"context_compacted", "semantic_stall"}
+            and str(lifecycle.get("rollover_reason") or "") == "context_compacted"
         )
         if not requested:
             return {"ok": True, "idle": "no_rollover_request"}
@@ -424,11 +463,11 @@ class WorkerManager:
     def _defer_if_current_is_outgoing(
         self,
         lane: dict[str, Any],
-        pool: dict[str, Any],
+        lineage: dict[str, Any],
         message_id: str,
         wake_id: str,
     ) -> dict[str, Any] | None:
-        current = pool.get("current") if isinstance(pool, dict) else None
+        current = lineage.get("current") if isinstance(lineage, dict) else None
         if not isinstance(current, dict) or not current.get("handoff_verified"):
             return None
         worker_ref = str(current.get("handoff_id") or "")
@@ -439,21 +478,21 @@ class WorkerManager:
             handoff_id=worker_ref,
             lane_id=lane["lane_id"],
             worker_project_key=lane["project_key"],
-            owner_task_id=str(pool.get("owner_task_id") or ""),
-            owner_control_epoch=int(pool.get("owner_control_epoch") or 0),
+            owner_task_id=str(lineage.get("owner_task_id") or ""),
+            owner_control_epoch=int(lineage.get("owner_control_epoch") or 0),
         )
         outgoing = (
             lifecycle.get("rollover_requested") is True
             and str(lifecycle.get("rollover_request_handoff_id") or "") == worker_ref
-            and str(lifecycle.get("rollover_reason") or "") in {"context_compacted", "semantic_stall"}
+            and str(lifecycle.get("rollover_reason") or "") == "context_compacted"
         )
         if not outgoing:
             return None
 
         action = self.maybe_auto_rollover(
             lane["lane_id"],
-            str(pool.get("owner_task_id") or ""),
-            int(pool.get("owner_control_epoch") or 0),
+            str(lineage.get("owner_task_id") or ""),
+            int(lineage.get("owner_control_epoch") or 0),
         )
         self.bridge.call("release", message_id=message_id)
         return {
@@ -511,6 +550,31 @@ class WorkerManager:
             )
         return status
 
+    def _complete_same_generation_retry(
+        self,
+        wake: dict[str, Any],
+        *,
+        new_conversation_id: str,
+    ) -> dict[str, Any] | None:
+        retry = wake.get("_same_generation_retry")
+        if not isinstance(retry, dict):
+            return None
+        return self.bridge.call(
+            "worker_same_generation_retry_complete",
+            request_id=str(retry.get("request_id") or ""),
+            helper_request_id=str(retry.get("helper_request_id") or ""),
+            task_id=str(wake.get("owner_task_id") or ""),
+            child_task_id=str(wake.get("task_id") or ""),
+            backend_cl=str(wake.get("backend_cl") or ""),
+            dispatch_id=str(wake.get("dispatch_id") or ""),
+            dispatch_generation=int(wake.get("dispatch_generation") or 0),
+            fence_token=str(wake.get("fence_token") or ""),
+            wake_id=str(wake.get("wake_id") or ""),
+            worker_ref=str(retry.get("worker_ref") or ""),
+            old_conversation_id=str(retry.get("old_conversation_id") or ""),
+            new_conversation_id=new_conversation_id,
+        )
+
     def poll_lane(self, lane_id: str) -> dict[str, Any]:
         lane = self._lane(lane_id)
         if not lane.get("enabled", True) or lane.get("pending_remove"):
@@ -539,6 +603,59 @@ class WorkerManager:
         wake: dict[str, Any],
     ) -> dict[str, Any]:
 
+        retry_meta = (
+            wake.get("_same_generation_retry")
+            if isinstance(wake.get("_same_generation_retry"), dict)
+            else {}
+        )
+        owner_task_id, owner_epoch = worker_owner(wake)
+        lineage = self.state.get_lineage(lane_id, owner_task_id, owner_epoch, create=False)
+        current = lineage.get("current") if isinstance(lineage, dict) else None
+
+        if retry_meta and isinstance(current, dict) and current.get("handoff_verified") is True:
+            current_retry = (
+                current.get("same_generation_retry")
+                if isinstance(current.get("same_generation_retry"), dict)
+                else {}
+            )
+            same_retry = (
+                str(current_retry.get("request_id") or "")
+                == str(retry_meta.get("request_id") or "")
+                and str(current.get("handoff_id") or "")
+                == str(retry_meta.get("worker_ref") or "")
+                and str(current.get("wake_id") or "")
+                == str(wake.get("wake_id") or "")
+                and str(current.get("conversation_id") or "")
+                != str(retry_meta.get("old_conversation_id") or "")
+            )
+            if same_retry:
+                completion = self._complete_same_generation_retry(
+                    wake,
+                    new_conversation_id=str(current.get("conversation_id") or ""),
+                )
+                if not isinstance(completion, dict) or not completion.get("ok"):
+                    self.bridge.call("release", message_id=message_id)
+                    return {
+                        "ok": False,
+                        "error": "WORKER_SAME_GENERATION_RETRY_COMPLETE_FAILED",
+                        "same_generation_retry": True,
+                        "deduped_physical_worker": True,
+                        "wake_id": wake.get("wake_id"),
+                        "lane_id": lane_id,
+                        "conversation_id": current.get("conversation_id"),
+                        "retry_complete": completion,
+                    }
+                self.bridge.call("consume", message_id=message_id)
+                return {
+                    "ok": True,
+                    "same_generation_retry": True,
+                    "deduped_physical_worker": True,
+                    "wake_id": wake.get("wake_id"),
+                    "lane_id": lane_id,
+                    "conversation_id": current.get("conversation_id"),
+                    "retry_complete": completion,
+                }
+
         if self._dispatch_aware(wake):
             status = self.bridge.call(
                 "dispatch_status",
@@ -548,25 +665,42 @@ class WorkerManager:
                 dispatch_generation=int(wake.get("dispatch_generation") or 0),
                 fence_token=str(wake.get("fence_token") or ""),
             )
-            if status.get("suppress"):
+            if retry_meta:
+                if not status.get("matched") or str(status.get("state") or "") != "RUNNING":
+                    self.bridge.call("consume", message_id=message_id)
+                    return {
+                        "ok": True,
+                        "suppressed": True,
+                        "same_generation_retry": True,
+                        "state": status.get("state"),
+                    }
+            elif status.get("suppress"):
                 self.bridge.call("consume", message_id=message_id)
                 return {"ok": True, "suppressed": True, "state": status.get("state")}
 
-        owner_task_id, owner_epoch = worker_owner(wake)
-        pool = self.state.get_pool(lane_id, owner_task_id, owner_epoch, create=False)
-        current = pool.get("current") if isinstance(pool, dict) else None
-        if isinstance(pool, dict) and isinstance(current, dict) and current.get("handoff_verified"):
+
+        if (
+            not retry_meta
+            and isinstance(lineage, dict)
+            and isinstance(current, dict)
+            and current.get("handoff_verified")
+        ):
             deferred = self._defer_if_current_is_outgoing(
-                lane, pool, message_id, str(wake.get("wake_id") or "")
+                lane, lineage, message_id, str(wake.get("wake_id") or "")
             )
             if deferred is not None:
                 return deferred
 
-        if not isinstance(current, dict) or not current.get("handoff_verified") or wake.get("replace_conversation"):
-            if pool and len(pool.get("managed") or []) > 5:
-                self._trim_pool(lane_id, owner_task_id, owner_epoch)
-                pool = self.state.get_pool(lane_id, owner_task_id, owner_epoch, create=False)
-                if pool and len(pool.get("managed") or []) > 5:
+        if (
+            not isinstance(current, dict)
+            or not current.get("handoff_verified")
+            or wake.get("replace_conversation")
+            or bool(retry_meta)
+        ):
+            if lineage and len(lineage.get("managed") or []) > 5:
+                self._trim_lineage(lane_id, owner_task_id, owner_epoch)
+                lineage = self.state.get_lineage(lane_id, owner_task_id, owner_epoch, create=False)
+                if lineage and len(lineage.get("managed") or []) > 5:
                     self.bridge.call("release", message_id=message_id)
                     return {"ok": False, "error": "WORKER_RETENTION_DELETE_PENDING", "wake_id": wake.get("wake_id")}
             action = self.create_worker(
@@ -574,9 +708,31 @@ class WorkerManager:
                 owner_task_id,
                 owner_epoch,
                 wake,
+                handoff_id=(
+                    str(retry_meta.get("worker_ref") or "") or None
+                    if retry_meta
+                    else None
+                ),
                 handoff_packet_ref=str(wake.get("handoff_packet_ref") or "") or None,
             )
             if action.get("ok"):
+                completion = self._complete_same_generation_retry(
+                    wake,
+                    new_conversation_id=str(action.get("conversation_id") or ""),
+                )
+                if retry_meta and (
+                    not isinstance(completion, dict) or not completion.get("ok")
+                ):
+                    self.bridge.call("release", message_id=message_id)
+                    return {
+                        "ok": False,
+                        "error": "WORKER_SAME_GENERATION_RETRY_COMPLETE_FAILED",
+                        "created_worker": True,
+                        "same_generation_retry": True,
+                        "wake_id": wake.get("wake_id"),
+                        "create_result": action,
+                        "retry_complete": completion,
+                    }
                 self.bridge.call("consume", message_id=message_id)
             else:
                 self.bridge.call("release", message_id=message_id)
@@ -661,6 +817,10 @@ class WorkerManager:
                     worker_project_key=lane["project_key"],
                 )
 
+            self._complete_same_generation_retry(
+                wake,
+                new_conversation_id=conversation_id,
+            )
             self.bridge.call("consume", message_id=message_id)
             return {
                 "ok": True,
@@ -704,6 +864,10 @@ class WorkerManager:
                 lane_id=lane_id,
                 worker_project_key=lane["project_key"],
             )
+        self._complete_same_generation_retry(
+            wake,
+            new_conversation_id=conversation_id,
+        )
         self.bridge.call("consume", message_id=message_id)
         self.bridge.event(
             "wake.submitted",
@@ -825,10 +989,12 @@ class WorkerManager:
         owner_control_epoch: int,
     ) -> dict[str, Any]:
         lane = self._lane(lane_id)
-        pool = self.state.get_pool(lane_id, owner_task_id, owner_control_epoch, create=False)
-        current = pool.get("current") if isinstance(pool, dict) else None
+        lineage = self.state.get_lineage(lane_id, owner_task_id, owner_control_epoch, create=False)
+        current = lineage.get("current") if isinstance(lineage, dict) else None
         if not isinstance(current, dict) or not current.get("handoff_verified"):
             return {"ok": True, "idle": "no_current"}
+        if current.get("final_signal"):
+            return {"ok": True, "idle": "git_turn_consumed"}
         page = self.ui.find_page(
             project_key=lane["project_key"],
             conversation_id=str(current.get("conversation_id") or ""),
@@ -848,37 +1014,6 @@ class WorkerManager:
             return {"ok": True, "idle": "stale_dispatch"}
 
         texts = turn.get("assistant_texts") or []
-        for text in reversed(texts):
-            for syscall in syscall_blocks(text):
-                if syscall.get("v") != 1 or syscall.get("kind") != "semantic_sync":
-                    continue
-                call_id = str(syscall.get("call_id") or "")
-                if not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", call_id):
-                    continue
-                key = "|".join([
-                    "semantic_sync",
-                    str(ctx["dispatch_id"]),
-                    str(ctx["dispatch_generation"]),
-                    call_id,
-                ])
-                if key in self._seen_syscalls:
-                    continue
-                result = self.bridge.call(
-                    "semantic_turn_sync",
-                    role="worker",
-                    **ctx,
-                    worker_ref=str(current.get("handoff_id") or ""),
-                    lane_id=lane_id,
-                    worker_project_key=lane["project_key"],
-                )
-                self._seen_syscalls.add(key)
-                return {
-                    "ok": True,
-                    "semantic_sync": call_id,
-                    "accepted": bool(result.get("accepted")),
-                    "result": result,
-                }
-
         if turn.get("response_ended"):
             for text in reversed(texts):
                 for call in tool_call_blocks(text):
@@ -968,26 +1103,6 @@ class WorkerManager:
                     self._seen_syscalls.add(key)
                     return {"ok": True, "syscall": action_id}
 
-            fallback_sync = self.bridge.call(
-                "semantic_turn_sync",
-                role="worker",
-                **ctx,
-                worker_ref=str(current.get("handoff_id") or ""),
-                lane_id=lane_id,
-                worker_project_key=lane["project_key"],
-            )
-            if fallback_sync.get("accepted"):
-                return {"ok": True, "semantic_sync_fallback": True, "result": fallback_sync}
-
-            if turn.get("signal"):
-                result = self.bridge.call(
-                    "semantic_turn_observe", role="worker", signal=turn["signal"],
-                    **ctx, worker_ref=str(current.get("handoff_id") or ""),
-                    lane_id=lane_id, worker_project_key=lane["project_key"],
-                )
-                if result.get("accepted"):
-                    return {"ok": True, "signal": turn["signal"], "result": result}
-
             liveness_key = "|".join([
                 str(ctx["backend_cl"]),
                 str(ctx["dispatch_id"]),
@@ -1022,13 +1137,18 @@ class WorkerManager:
         for lane_id, lane in list((self.state.data.get("lanes") or {}).items()):
             if not isinstance(lane, dict):
                 continue
-            for pool in list((lane.get("task_pools") or {}).values()):
-                if not isinstance(pool, dict):
+            for lineage in list((lane.get(WORKER_LINEAGES_KEY) or {}).values()):
+                if not isinstance(lineage, dict):
                     continue
-                task_id = str(pool.get("owner_task_id") or "")
-                epoch = int(pool.get("owner_control_epoch") or 0)
+                task_id = str(lineage.get("owner_task_id") or "")
+                epoch = int(lineage.get("owner_control_epoch") or 0)
                 if task_id and epoch > 0:
-                    out.append(self.process_worker_page(lane_id, task_id, epoch))
+                    try:
+                        out.append(self.process_worker_page(lane_id, task_id, epoch))
+                    except Exception as exc:
+                        self.bridge.event("worker.observe_error", "error", lane_id=lane_id,
+                                          task_id=task_id, control_epoch=epoch,
+                                          exception_type=type(exc).__name__, message=str(exc)[:1000])
         return out
 
     @staticmethod
@@ -1047,14 +1167,14 @@ class WorkerManager:
     def _set_worker_watchdog_state(
         self,
         lane_id: str,
-        pool: dict[str, Any],
+        lineage: dict[str, Any],
         current: dict[str, Any],
         watchdog: dict[str, Any],
     ) -> None:
         conversation_id = str(current.get("conversation_id") or "")
         updated_current = {**current, "worker_watchdog": deepcopy(watchdog)}
         managed = []
-        for item in list(pool.get("managed") or []):
+        for item in list(lineage.get("managed") or []):
             if (
                 isinstance(item, dict)
                 and str(item.get("conversation_id") or "") == conversation_id
@@ -1062,19 +1182,51 @@ class WorkerManager:
                 managed.append({**item, "worker_watchdog": deepcopy(watchdog)})
             else:
                 managed.append(item)
-        next_pool = {**pool, "current": updated_current, "managed": managed}
-        self.state.set_pool(lane_id, next_pool)
+        next_lineage = {**lineage, "current": updated_current, "managed": managed}
+        self.state.set_lineage(lane_id, next_lineage)
+
+    def restore_after_helper(self, request_id: str, recovery: dict[str, Any]) -> None:
+        """Post-accept bookkeeping; this is not an additional Helper exit gate."""
+        lane_id = str(recovery.get("lane_id") or "")
+        lineage = self.state.get_lineage(lane_id, str(recovery.get("parent_task_id") or ""),
+                                   int(recovery.get("parent_control_epoch") or 0), create=False)
+        current = lineage.get("current") if isinstance(lineage, dict) else None
+        if not isinstance(current, dict):
+            return
+        watchdog = current.get("worker_watchdog") or {}
+        if (watchdog.get("state") != "WORKER_HELPER_REQUESTED"
+                or watchdog.get("helper_request_id") != request_id
+                or current.get("conversation_id") != recovery.get("old_conversation_id")
+                or current.get("handoff_id") != recovery.get("worker_ref")
+                or current.get("wake_id") != recovery.get("wake_id")):
+            return
+        started = self._watchdog_deadline(recovery.get("resumed_at")) or datetime.now(timezone.utc)
+        self._set_worker_watchdog_state(lane_id, lineage, current, {
+            **watchdog, "state": recovery["watchdog_state"],
+            "started_at": started.isoformat(timespec="seconds"),
+            "deadline_at": (started + timedelta(seconds=WORKER_WATCHDOG_SECONDS)).isoformat(timespec="seconds"),
+            "helper_request_id": None, "helper_output_ref": None,
+        })
+
+    def finish_git_turn(self, lane_id: str, lineage: dict[str, Any],
+                        current: dict[str, Any], signal: str) -> None:
+        """Local projection of an already accepted canonical result."""
+        completed = {**current, "final_signal": signal,
+                     "worker_watchdog": {**(current.get("worker_watchdog") or {}), "state": "DISARMED"}}
+        self.state.set_lineage(lane_id, {**lineage, "current": completed,
+            "managed": [completed if item.get("conversation_id") == current.get("conversation_id") else item
+                        for item in lineage.get("managed") or []]})
 
     def liveness_sweep(self) -> list[dict[str, Any]]:
         out = []
         for lane_id, lane in list((self.state.data.get("lanes") or {}).items()):
             if not isinstance(lane, dict) or not lane.get("enabled", True) or lane.get("pending_remove"):
                 continue
-            for pool in list((lane.get("task_pools") or {}).values()):
-                if not isinstance(pool, dict):
+            for lineage in list((lane.get(WORKER_LINEAGES_KEY) or {}).values()):
+                if not isinstance(lineage, dict):
                     continue
-                current = pool.get("current")
-                if not isinstance(current, dict) or current.get("status") != "current" or current.get("handoff_verified") is not True:
+                current = lineage.get("current")
+                if not isinstance(current, dict) or current.get("status") != "current" or current.get("handoff_verified") is not True or current.get("final_signal"):
                     continue
 
                 watchdog = current.get("worker_watchdog")
@@ -1083,8 +1235,8 @@ class WorkerManager:
                     if deadline is not None and datetime.now(timezone.utc) >= deadline:
                         result = self.bridge.call(
                             "worker_watchdog_expired",
-                            parent_task_id=str(pool.get("owner_task_id") or ""),
-                            parent_control_epoch=int(pool.get("owner_control_epoch") or 0),
+                            parent_task_id=str(lineage.get("owner_task_id") or ""),
+                            parent_control_epoch=int(lineage.get("owner_control_epoch") or 0),
                             child_task_id=str(watchdog.get("child_task_id") or ""),
                             backend_cl=str(watchdog.get("backend_cl") or ""),
                             dispatch_id=str(watchdog.get("dispatch_id") or ""),
@@ -1093,6 +1245,9 @@ class WorkerManager:
                             worker_ref=str(current.get("handoff_id") or ""),
                             lane_id=lane_id,
                             worker_project_key=lane["project_key"],
+                            conversation_id=str(current.get("conversation_id") or ""),
+                            wake_id=str(watchdog.get("wake_id") or current.get("wake_id") or ""),
+                            watchdog_started_at=str(watchdog.get("started_at") or ""),
                             reason="worker_watchdog_30m",
                             observed_at=now(),
                         )
@@ -1118,7 +1273,7 @@ class WorkerManager:
                                 "terminal_reason": result.get("idle"),
                             }
                             self._set_worker_watchdog_state(
-                                lane_id, pool, current, next_watchdog
+                                lane_id, lineage, current, next_watchdog
                             )
                             continue
 
@@ -1158,23 +1313,24 @@ class WorkerManager:
         for lane_id, lane in list((self.state.data.get("lanes") or {}).items()):
             if not isinstance(lane, dict):
                 continue
-            for pool in list((lane.get("task_pools") or {}).values()):
-                if not isinstance(pool, dict):
+            for lineage in list((lane.get(WORKER_LINEAGES_KEY) or {}).values()):
+                if not isinstance(lineage, dict):
                     continue
-                task_id = str(pool.get("owner_task_id") or "")
-                epoch = int(pool.get("owner_control_epoch") or 0)
+                task_id = str(lineage.get("owner_task_id") or "")
+                epoch = int(lineage.get("owner_control_epoch") or 0)
                 if not task_id or epoch < 1:
                     continue
                 try:
-                    self._trim_pool(lane_id, task_id, epoch)
+                    self._trim_lineage(lane_id, task_id, epoch)
                     out.append(self.maybe_auto_rollover(lane_id, task_id, epoch))
                 except Exception as exc:
                     self.bridge.event(
                         "worker.maintenance_error",
-                        "warn",
+                        "error",
                         lane_id=lane_id,
                         owner_task_id=task_id,
                         owner_control_epoch=epoch,
                         message=str(exc)[:800],
                     )
         return out
+

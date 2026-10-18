@@ -4,11 +4,12 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 
 READ_OPS = {
     "health",
+    "harness_errors",
     "dispatch_status",
     "worker_takeover_status",
     "foreground_task_status",
@@ -28,6 +29,7 @@ class BridgeClient:
     url: str
     client_id: str
     project_id: str
+    on_error: Callable[[str, dict[str, Any]], None] | None = None
 
     @staticmethod
     def timeout_for(op: str) -> float:
@@ -38,6 +40,21 @@ class BridgeClient:
         return 45.0
 
     def call(self, op: str, **payload: Any) -> dict[str, Any]:
+        try:
+            return self._request(op, **payload)
+        except BridgeError as exc:
+            if self.on_error is not None:
+                context = {key: payload[key] for key in (
+                    "task_id", "child_task_id", "lane_id", "request_id",
+                    "conversation_id", "dispatch_id", "role",
+                ) if key in payload}
+                self.on_error("bridge." + op, {
+                    **context, "operation": op,
+                    "exception_type": type(exc).__name__, "message": str(exc),
+                })
+            raise
+
+    def _request(self, op: str, **payload: Any) -> dict[str, Any]:
         body = {
             "op": op,
             "client_id": self.client_id,
@@ -71,6 +88,10 @@ class BridgeClient:
         return value
 
     def event(self, event: str, level: str = "info", **data: Any) -> None:
+        if level == "error" and self.on_error is not None:
+            # Deliver locally before logging: a broken Bridge must not prevent
+            # its own error from opening the operational Helper.
+            self.on_error(event, data)
         try:
             self.call("event", event=event, level=level, data=data)
         except BridgeError:

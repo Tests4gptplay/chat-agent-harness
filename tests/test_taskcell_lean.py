@@ -93,7 +93,7 @@ class RuntimeGitTests(unittest.TestCase):
                           'challenge': f'{r}-challenge', 'response_started': True, 'semantic_ready': True,
                           'status': 'BOUND'} for r in ('planner', 'helper')}
         self.control = fx.base_control()
-        self.control['runtime'] = {'foreground_runtime_dependency': False, 'semantic_output_timeout_seconds': 30}
+        self.control['runtime'] = {'foreground_runtime_dependency': False}
         self.cell = {'v': 1, 'task_id': TASK, 'task_cell_id': TASK, 'control_epoch': 1,
                      'task_cell_project_key': 'g-p-task-cell', 'status': 'ACTIVE',
                      'roles': self.roles, 'planner_control': self.control}
@@ -169,24 +169,14 @@ class RuntimeGitTests(unittest.TestCase):
             '# Planner Plan Note',
         )
 
-    def test_expired_planner_delivery_releases_control_slot_once(self):
+    def test_old_pending_planner_delivery_age_does_not_release_control_slot(self):
         first = self.tick()
-        self.assertEqual(first.get('action'), 'planner_delivery_recovered', first)
-        evidence = self.read(first['recovery_ref'])
-        self.assertEqual(evidence['request'], self.request)
-        self.assertFalse(evidence['output_exists'])
-        self.assertTrue(first['helper']['ok'], first)
-        self.assertTrue(first['helper']['staged'], first)
-        request = self.read('state/chatgpt.json')['control_request']
-        self.assertEqual(request['kind'], 'task_cell_role_prompt')
-        self.assertEqual(request['role'], 'helper')
-        self.assertEqual(request['status'], 'PENDING')
-        rotated = self.read(CELL)['planner_control']
-        self.assertEqual(rotated['authority']['conversation_id'], self.control['authority']['conversation_id'])
-        self.assertEqual(rotated['successor']['state'], 'NONE')
-        self.assertIsNone(rotated['runtime'].get('pending_output'))
-        second = self.tick()
-        self.assertEqual(second.get('idle'), 'control_slot_busy')
+        self.assertEqual(first.get('idle'), 'control_slot_busy', first)
+        self.assertEqual(self.read('state/chatgpt.json')['control_request'], self.request)
+        cell = self.read(CELL)
+        self.assertEqual(cell['planner_control']['authority'], self.control['authority'])
+        self.assertEqual(cell['planner_control']['successor']['state'], 'NONE')
+        self.assertFalse(cell['planner_control']['runtime'].get('pending_role_requests'))
 
     def test_fresh_pending_delivery_keeps_control_slot_busy(self):
         request = {**self.request, 'requested_at': datetime.now(timezone.utc).isoformat()}
@@ -210,16 +200,13 @@ class RuntimeGitTests(unittest.TestCase):
                 self.assertEqual(self.tick().get('idle'), 'control_slot_busy')
                 self.assertEqual(self.read('state/chatgpt.json')['control_request'], self.request)
 
-    def test_available_noncommitted_output_does_not_block_helper_recovery(self):
+    def test_pending_delivery_age_and_output_presence_do_not_invoke_timeout_helper(self):
         self.commit({self.request['required_output_ref']: {'fixture': 'durable output'}})
         result = self.tick()
-        self.assertEqual(result.get('action'), 'planner_delivery_recovered')
-        self.assertTrue(result['output_exists'])
-        self.assertTrue(result['helper']['ok'], result)
-        self.assertTrue(result['helper']['staged'], result)
-        request = self.read('state/chatgpt.json')['control_request']
-        self.assertEqual(request['kind'], 'task_cell_role_prompt')
-        self.assertEqual(request['status'], 'PENDING')
+        self.assertEqual(result.get('idle'), 'control_slot_busy', result)
+        self.assertEqual(self.read('state/chatgpt.json')['control_request'], self.request)
+        cell = self.read(CELL)
+        self.assertFalse(cell['planner_control']['runtime'].get('pending_role_requests'))
 
     def test_retirement_failure_does_not_disable_successor(self):
         bundle = promoted_bundle()
@@ -298,7 +285,6 @@ class RuntimeGitTests(unittest.TestCase):
             'handoff_id': 'h1',
             'to_generation': 2,
             'pending_fence_token': 'planner-fence-g2',
-            'transport_bootstrap_only': True,
         }
         self.commit({
             CELL: cell,
@@ -345,6 +331,7 @@ class RuntimeGitTests(unittest.TestCase):
         self.assertTrue(browser_promoted['completed'], browser_promoted)
         after_browser = self.read(CELL)
         self.assertTrue(after_browser['planner_control']['runtime']['browser_promotion_complete'])
+        self.assertEqual(after_browser['planner_control']['runtime']['prompt_count'], 1)
         self.assertEqual(after_browser['roles']['planner']['conversation_id'], 'planner-new')
         self.assertEqual(after_browser['roles']['planner']['status'], 'BOUND_ROTATING')
         self.assertFalse(after_browser['roles']['planner']['semantic_ready'])
@@ -377,13 +364,7 @@ class RuntimeGitTests(unittest.TestCase):
         next_req = self.read('state/chatgpt.json')['control_request']
         self.assertEqual(next_req['role'], 'planner')
         self.assertEqual(next_req['planner_generation'], 2)
-        prompt = next_req.get('prompt', '')
-        self.assertIn(f'Act as PLANNER for managed task {TASK}', prompt)
-        self.assertIn(f'tasks/{TASK}.json', prompt)
-        self.assertIn(next_req['required_output_ref'], prompt)
-        self.assertIn('gen2-output', prompt)
-        self.assertIn('turn_signal', prompt)
-        self.assertIn('semantic_sync', prompt)
+        self.assertNotIn('reply briefly', next_req.get('prompt', '').lower())
 
     def test_handoff_first_message_is_real_work_and_keeps_pending_memory(self):
         cell = copy.deepcopy(self.cell)
@@ -401,7 +382,6 @@ class RuntimeGitTests(unittest.TestCase):
         result = rt.request_planner_rotation(self.store, {'task_id': TASK, 'reason': 'context_compacted', 'caller_role': 'harness'})
         self.assertTrue(result['staged'], result)
         request = self.read('state/chatgpt.json')['control_request']
-        self.assertFalse(request['transport_bootstrap_only'])
         self.assertIn('Foreground requirements:', request['prompt'])
         self.assertNotIn('Reply briefly', request['prompt'])
         updated = self.read(CELL)['planner_control']
@@ -426,7 +406,7 @@ class RuntimeGitTests(unittest.TestCase):
         cell['planner_control']['runtime']['owned_children'] = [owned]
         self.commit({CELL: cell, 'state/chatgpt.json': {'control_request': None},
             child['task_ref']: child['task'], child['backend_cl']: child['cl'],
-            child['task']['expected_result_ref']: {**child['task']['result_contract'], 'summary': ''}})
+            child['task']['expected_result_ref']: {**child['task']['result_contract'], 'summary': '', 'turn_signal': 'complete'}})
         self.sync()
         p = self.work / child['worker_reply_entry_ref']; p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(child['worker_reply_entry_initial'] + body, encoding='utf8')
@@ -441,6 +421,9 @@ class RuntimeGitTests(unittest.TestCase):
     def test_empty_reply_signal_cannot_succeed(self):
         for signal in ('continue', 'complete'):
             child, req = self._signal_child('   \n')
+            ref = child['task']['expected_result_ref']
+            output = self.read(ref); output['turn_signal'] = signal
+            self.commit({ref: output})
             result = rt.observe_semantic_turn(self.store, {**req, 'signal':signal})
             self.assertTrue(result['accepted'], result)
             output = self.read(child['task']['expected_result_ref'])

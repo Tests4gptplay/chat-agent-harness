@@ -48,7 +48,8 @@ class ChatGPTUITerminalTests(unittest.TestCase):
 
         self.assertTrue(result["response_ended"])
         self.assertTrue(result["assistant_complete"])
-        self.assertEqual(result["signal"], "done")
+        self.assertEqual(result["assistant_texts"], ["done"])
+        self.assertNotIn("signal", result)  # DOM text is not semantic completion.
 
     def test_submit_prefers_visible_send_button_over_enter(self):
         page = MagicMock()

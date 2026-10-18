@@ -20,7 +20,9 @@
     "TASK_CELL_KEY": "g-p-CAHTASKCELLPLACEHOLDER",
     "LANE00_KEY": "g-p-CAHLANE00PLACEHOLDER",
     "LANE01_KEY": "g-p-CAHLANE01PLACEHOLDER",
-    "FOREGROUND_URL": "https://chatgpt.com/c/CAHFOREGROUNDPLACEHOLDER"
+    "FOREGROUND_URL": "https://chatgpt.com/c/CAHFOREGROUNDPLACEHOLDER",
+    "COLD_RUNNER_ROOT": "__CAH_COLD_RUNNER_ROOT__",
+    "COLD_RUNNER_NAME": "__CAH_COLD_RUNNER_NAME__"
   },
   "files": {
     "Reset_CAH_Hot_State.bat": [
@@ -31,7 +33,9 @@
       "BRIDGE_ROOT",
       "MANAGED_RUNNER_ROOT",
       "SHOT_RUNNER_ROOT",
-      "BROWSER_ROOT"
+      "BROWSER_ROOT",
+      "COLD_RUNNER_ROOT",
+      "COLD_RUNNER_NAME"
     ],
     "browser/playwright/README.md": [
       "TOOLS_ROOT",
@@ -93,7 +97,8 @@
       "FOREGROUND_URL"
     ],
     "local_bridge/planner_runtime.py": [
-      "REPOSITORY"
+      "REPOSITORY",
+      "COLD_RUNNER_NAME"
     ],
     "local_bridge/scheduler.py": [
       "REPOSITORY"
@@ -145,6 +150,27 @@
     "tests/test_wake_protocol.py": [
       "REPOSITORY",
       "LANE00_KEY"
+    ],
+    "AGENTS.md": [
+      "COLD_RUNNER_NAME"
+    ],
+    "docs/task-cell/PLANNER.md": [
+      "COLD_RUNNER_NAME"
+    ],
+    "docs/task-cell/WORKER.md": [
+      "COLD_RUNNER_NAME"
+    ],
+    "docs/task-cell/HELPER.md": [
+      "COLD_RUNNER_ROOT",
+      "COLD_RUNNER_NAME"
+    ],
+    "tests/test_cold_burst_runner.py": [
+      "COLD_RUNNER_ROOT",
+      "COLD_RUNNER_NAME"
+    ],
+    "tests/test_helper_recovery.py": [
+      "COLD_RUNNER_ROOT",
+      "COLD_RUNNER_NAME"
     ]
   },
   "locations": {

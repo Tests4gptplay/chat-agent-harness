@@ -1,7 +1,8 @@
 {
   "v": 1,
-  "enabled": false,
+  "kind": "record_store",
+  "status": "DISABLED",
   "repository": "CAH_OWNER/CAH_RECORD_REPOSITORY",
-  "index_ref": "INDEX.json",
-  "note": "Optional; configure and authorize separately. No old records copied."
+  "index": "INDEX.json",
+  "read_policy": "explicit_history_audit_recovery_or_user_archive_only"
 }

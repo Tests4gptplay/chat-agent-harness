@@ -1,4 +1,5 @@
 @echo off
+REM Worker lineage state retains task_pools on disk; see harness/worker_lineage_compat.py.
 setlocal EnableExtensions
 cd /d "%~dp0"
 py installation\preflight.py
@@ -76,6 +77,8 @@ powershell.exe -NoLogo -NoProfile -Command ^
   "    $s.task_cell.roles=[pscustomobject]@{};" ^
   "    $s.task_cell.planner_successors=[pscustomobject]@{}" ^
   "  };" ^
+  "  $s.PSObject.Properties.Remove('harness_error');" ^
+  "  $s.PSObject.Properties.Remove('harness_error_acks');" ^
   "  $json=$s | ConvertTo-Json -Depth 100;" ^
   "  $tmp=$p + '.reset.tmp';" ^
   "  [System.IO.File]::WriteAllText($tmp,$json+[Environment]::NewLine,(New-Object System.Text.UTF8Encoding($false)));" ^
@@ -86,7 +89,7 @@ powershell.exe -NoLogo -NoProfile -Command ^
   "}"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-echo [4/7] Clearing disposable pending/claimed wake transport so old wakes cannot recreate pools...
+echo [4/7] Clearing disposable pending/claimed wake transport so old wakes cannot recreate lineages...
 powershell.exe -NoLogo -NoProfile -Command ^
   "$wake=Join-Path '%BRIDGE_ROOT%' 'wake';" ^
   "$removed=0;" ^
@@ -97,10 +100,12 @@ powershell.exe -NoLogo -NoProfile -Command ^
   "    foreach($f in $files){Remove-Item -LiteralPath $f.FullName -Force; $removed++}" ^
   "  }" ^
   "};" ^
+  "$errorInbox=Join-Path '%BRIDGE_ROOT%' 'errors\pending.json';" ^
+  "if(Test-Path -LiteralPath $errorInbox){Remove-Item -LiteralPath $errorInbox -Force};" ^
   "[Console]::WriteLine(('Removed pending/claimed wake files: ' + $removed))"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-echo [5/7] Clearing canonical lane pools and resetting canonical hot state to IDLE...
+echo [5/7] Clearing canonical lane lineages and resetting canonical hot state to IDLE...
 if defined TASK_ID (
   del /q "tasks\%TASK_ID%.json" 2>nul
   del /q "tasks\%TASK_ID%.plan.json" 2>nul
@@ -202,11 +207,11 @@ powershell.exe -NoLogo -NoProfile -Command ^
   "$s=Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'state\chatgpt.json') | ConvertFrom-Json;" ^
   "if($s.phase -ne 'IDLE' -or $null -ne $s.active_task -or $null -ne $s.control_request){throw 'Canonical chatgpt hot state is not clean IDLE.'};" ^
   "$l=Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'state\lanes.json') | ConvertFrom-Json;" ^
-  "foreach($lane in @($l.lanes)){if(@($lane.task_pools.PSObject.Properties).Count -ne 0){throw ('Canonical lane pool residue remains: ' + $lane.lane_id)}};" ^
+  "foreach($lane in @($l.lanes)){if(@($lane.task_pools.PSObject.Properties).Count -ne 0){throw ('Canonical lane lineage residue remains: ' + $lane.lane_id)}};" ^
   "$hp='%HOST_STATE%';" ^
   "if(-not (Test-Path -LiteralPath $hp)){throw 'Playwright Host state.json was not recreated.'};" ^
   "$h=Get-Content -Raw -Encoding UTF8 -LiteralPath $hp | ConvertFrom-Json;" ^
-  "foreach($lp in @($h.lanes.PSObject.Properties)){if(@($lp.Value.task_pools.PSObject.Properties).Count -ne 0){throw ('Local Host pool residue remains: ' + $lp.Name)}};" ^
+  "foreach($lp in @($h.lanes.PSObject.Properties)){if(@($lp.Value.task_pools.PSObject.Properties).Count -ne 0){throw ('Local Host lineage residue remains: ' + $lp.Name)}};" ^
   "if(@($h.task_cell.roles.PSObject.Properties).Count -ne 0){throw 'Local Task Cell role bindings remain.'};" ^
   "if(@($h.task_cell.planner_successors.PSObject.Properties).Count -ne 0){throw 'Local Planner successor bindings remain.'};" ^
   "$wake=Join-Path '%BRIDGE_ROOT%' 'wake';" ^
@@ -217,7 +222,7 @@ powershell.exe -NoLogo -NoProfile -Command ^
   "});" ^
   "if($hosts.Count -ne 1){throw ('Expected exactly one native Playwright Host after reset; observed ' + $hosts.Count)};" ^
   "try{$cdp=Invoke-RestMethod 'http://127.0.0.1:9222/json/version' -TimeoutSec 3}catch{throw 'CDP 9222 is unavailable after reset.'};" ^
-  "[Console]::WriteLine('CAH hot state reset core invariants verified: canonical IDLE, zero canonical/local Worker pools, zero Task Cell bindings, zero pending wakes, one Host, CDP available.')"
+  "[Console]::WriteLine('CAH hot state reset core invariants verified: canonical IDLE, zero canonical/local Worker lineages, zero Task Cell bindings, zero pending wakes, one Host, CDP available.')"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 echo CAH hot state reset to clean IDLE.

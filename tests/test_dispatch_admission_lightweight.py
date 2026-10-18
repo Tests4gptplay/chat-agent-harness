@@ -9,6 +9,12 @@ from pathlib import Path
 from local_bridge.server import WakeStore
 
 
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    WORKER_LINEAGES_KEY,
+)
+
+
 class LightweightDispatchAdmissionTests(unittest.TestCase):
     def test_dispatch_accept_updates_git_without_worktree_checkout(self):
         with tempfile.TemporaryDirectory() as td:
@@ -82,7 +88,7 @@ class LightweightDispatchAdmissionTests(unittest.TestCase):
                     "lanes": [{
                         "lane_id": lane_id,
                         "project_key": project_key,
-                        "task_pools": {},
+                        WORKER_LINEAGES_KEY: {},
                     }],
                 },
             }
@@ -137,14 +143,14 @@ class LightweightDispatchAdmissionTests(unittest.TestCase):
                 encoding="utf-8",
             )
             lanes = json.loads(lanes_raw)
-            pool = lanes["lanes"][0]["task_pools"][f"{task_id}::1"]
-            self.assertEqual(pool["last_pool_takeover_id"], worker_ref)
+            lineage = lanes["lanes"][0][WORKER_LINEAGES_KEY][f"{task_id}::1"]
+            self.assertEqual(lineage[LAST_WORKER_REF_KEY], worker_ref)
 
             leftovers = list(spool.joinpath("runtime").glob("dispatch-accept-*"))
             self.assertEqual(leftovers, [])
 
 
-    def test_recovery_successor_can_replace_exact_predecessor_owner(self):
+    def test_handoff_successor_can_replace_exact_predecessor_owner(self):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             origin = base / "origin.git"
@@ -210,15 +216,16 @@ class LightweightDispatchAdmissionTests(unittest.TestCase):
                         "continuation_ref": f"tasks/{task_id}.json",
                         "wait_ref": None,
                         "ack_source": None,
-                        "recovered_from": {
-                            "dispatch_id": "dispatch-recovery-g1",
+                        "predecessor_worker_ref": predecessor,
+                        "predecessor_dispatch": {
+                            "dispatch_id": "dispatch-handoff-g1",
                             "generation": 1,
-                            "fence_token": "fence-recovery-g1",
+                            "fence_token": "fence-handoff-g1",
                             "state": "RUNNING",
                             "acked_at": "2026-09-22T00:00:01+00:00",
                             "acked_by_worker_ref": predecessor,
-                            "reason": "semantic_lease_expired",
-                            "recovered_at": "2026-09-22T00:10:00+00:00",
+                            "reason": "worker_handoff",
+                            "handoff_at": "2026-09-22T00:10:00+00:00",
                         },
                     },
                 },
@@ -228,11 +235,11 @@ class LightweightDispatchAdmissionTests(unittest.TestCase):
                     "lanes": [{
                         "lane_id": lane_id,
                         "project_key": project_key,
-                        "task_pools": {
+                        WORKER_LINEAGES_KEY: {
                             f"{task_id}::1": {
                                 "owner_task_id": task_id,
                                 "owner_control_epoch": 1,
-                                "last_pool_takeover_id": predecessor,
+                                LAST_WORKER_REF_KEY: predecessor,
                                 "worker_rollover_request": None,
                             },
                         },
@@ -278,8 +285,8 @@ class LightweightDispatchAdmissionTests(unittest.TestCase):
                 text=True,
                 encoding="utf-8",
             ))
-            pool = lanes["lanes"][0]["task_pools"][f"{task_id}::1"]
-            self.assertEqual(pool["last_pool_takeover_id"], successor)
+            lineage = lanes["lanes"][0][WORKER_LINEAGES_KEY][f"{task_id}::1"]
+            self.assertEqual(lineage[LAST_WORKER_REF_KEY], successor)
 
 
 if __name__ == "__main__":

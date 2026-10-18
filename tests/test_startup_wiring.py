@@ -21,8 +21,10 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile('SOURCE',[ref]$to
 if ($errors.Count) { throw ($errors | Out-String) }
 $ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]},$false) | ForEach-Object { Invoke-Expression $_.Extent.Text }
 $Repo=Split-Path -Parent 'SOURCE'
-$BrowserRoot='__CAH_BROWSER_ROOT__'
+$BrowserRoot='X:\CAH_TEST\playwright-host'
 $NoBrowser=$false; $script:starts=0
+function Assert-CahCdpOwner {}
+function Get-CahBrowser {}
 function New-Item { param($ItemType,$Path,[switch]$Force) }
 function Start-Sleep { param($Milliseconds) }
 """.replace('SOURCE', source)
@@ -59,11 +61,68 @@ function Start-Process { throw 'must not launch' }
 try { Ensure-NativeHost; throw 'expected failure was missed' } catch { if($_.Exception.Message -notlike '*-NoBrowser requires*') { throw } }
 ''')
 
-    def test_existing_host_without_cdp_is_not_healthy(self):
+    def test_stale_host_is_recovered_then_repeated_start_is_reused(self):
+        self.run_case(r'''
+$script:stops=0
+function Get-NativeHost { [pscustomobject]@{ProcessId=123} }
+function Read-Cdp { if($script:starts) { @{Browser='Chrome'} } }
+function Stop-StaleCahBrowserRuntime { $script:stops++ }
+function Start-Process {
+ $script:starts++; $p=[pscustomobject]@{HasExited=$false;ExitCode=0};$p|Add-Member ScriptMethod Refresh {};return $p
+}
+Ensure-NativeHost
+Ensure-NativeHost
+if($script:starts -ne 1 -or $script:stops -ne 1) { throw 'incorrect recovery/reuse count' }
+''')
+
+    def test_no_browser_does_not_stop_stale_host(self):
         self.run_case('''
+$NoBrowser=$true
 function Get-NativeHost { [pscustomobject]@{ProcessId=123} }
 function Read-Cdp {}
-try { Ensure-NativeHost; throw 'expected failure was missed' } catch { if($_.Exception.Message -notlike '*CDP 9222 is unavailable*') { throw } }
+function Stop-StaleCahBrowserRuntime { throw 'must not stop' }
+try { Ensure-NativeHost; throw 'missed failure' } catch { if($_.Exception.Message -notlike '*-NoBrowser requires*') { throw } }
+''')
+
+    def test_busy_bridge_prevents_any_stop(self):
+        self.run_case('''
+function Read-Bridge { @{ok=$true;service='gah-local-wake-bridge';root=$BridgeRoot;pending=1;claimed=0} }
+function Stop-Process { throw 'must not stop' }
+try { Stop-StaleCahBrowserRuntime; throw 'missed failure' } catch { if($_.Exception.Message -notlike '*idle bridge*') { throw } }
+''')
+
+    def test_foreign_port_owner_is_rejected(self):
+        self.run_case('''
+$ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-CahCdpOwner'},$false) | ForEach-Object { Invoke-Expression $_.Extent.Text }
+function Get-NetTCPConnection { [pscustomobject]@{LocalPort=9222;OwningProcess=999} }
+function Get-CahBrowser { [pscustomobject]@{ProcessId=123} }
+try { Assert-CahCdpOwner; throw 'missed failure' } catch { if($_.Exception.Message -notlike '*unverified process*') { throw } }
+''')
+
+    def test_only_exact_cah_profile_and_port_match(self):
+        self.run_case(r'''
+$ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-CahBrowser'},$false) | ForEach-Object { Invoke-Expression $_.Extent.Text }
+$profile=Join-Path $env:LOCALAPPDATA 'CAH\PlaywrightChrome'
+function Get-CimInstance {
+ @(
+ [pscustomobject]@{ProcessId=1;CommandLine='chrome.exe --user-data-dir="'+$profile+'" --remote-debugging-port=9222'},
+ [pscustomobject]@{ProcessId=2;CommandLine='chrome.exe --user-data-dir="'+$profile+'-other" --remote-debugging-port=9222'},
+ [pscustomobject]@{ProcessId=3;CommandLine='chrome.exe --user-data-dir="'+$profile+'" --remote-debugging-port=9333'},
+ [pscustomobject]@{ProcessId=4;CommandLine='chrome.exe --remote-debugging-port=9222'},
+ [pscustomobject]@{ProcessId=5;CommandLine='chrome.exe "--user-data-dir='+$profile+'" --remote-debugging-port=9222'}
+ )
+}
+$found=@(Get-CahBrowser)
+if(($found.ProcessId -join ',') -ne '1,5') { throw 'browser ownership mismatch' }
+''')
+
+    def test_unknown_child_prevents_all_stops(self):
+        self.run_case('''
+function Assert-CahRecoveryIdle {}
+function Get-NativeHost { [pscustomobject]@{ProcessId=123;Name='python.exe';CreationDate=1} }
+function Get-CimInstance { [pscustomobject]@{ProcessId=456;ParentProcessId=123;Name='unrelated.exe';CreationDate=2} }
+function Stop-Process { throw 'must not stop' }
+try { Stop-StaleCahBrowserRuntime; throw 'missed failure' } catch { if($_.Exception.Message -notlike '*Unknown child*') { throw } }
 ''')
 
     def test_process_match_excludes_unrelated_python_and_other_runtime(self):
@@ -71,8 +130,8 @@ try { Ensure-NativeHost; throw 'expected failure was missed' } catch { if($_.Exc
 function Get-CimInstance {
  param($ClassName,$Filter)
  @(
- [pscustomobject]@{ProcessId=1;CommandLine='python.exe -m playwright_host --runtime-root __CAH_BROWSER_ROOT__'},
- [pscustomobject]@{ProcessId=2;CommandLine='python.exe -m playwright_host --runtime-root E:\Other'},
+ [pscustomobject]@{ProcessId=1;CommandLine='python.exe -m playwright_host --runtime-root X:\CAH_TEST\playwright-host'},
+ [pscustomobject]@{ProcessId=2;CommandLine='python.exe -m playwright_host --runtime-root X:\CAH_TEST\Other'},
  [pscustomobject]@{ProcessId=3;CommandLine='python.exe unrelated.py'}
  )
 }

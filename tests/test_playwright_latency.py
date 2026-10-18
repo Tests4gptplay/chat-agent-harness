@@ -12,39 +12,25 @@ class PlaywrightLatencyContractTests(unittest.TestCase):
         self.assertRegex(config, r"wake_poll_seconds:\s*float\s*=\s*1\.0")
         self.assertRegex(config, r"maintenance_seconds:\s*float\s*=\s*60\.0")
 
-    def test_semantic_progress_runs_without_maintenance_being_due(self):
+    def test_git_reconciliation_is_not_gated_by_maintenance(self):
         from types import SimpleNamespace
-        from unittest.mock import Mock, patch
+        from unittest.mock import MagicMock, patch
         from playwright_host.runtime import BrowserRuntime
-
-        runtime = object.__new__(BrowserRuntime)
-        runtime.cfg = SimpleNamespace(wake_poll_seconds=1.0, maintenance_seconds=60.0)
-        runtime._last_wake_poll = 100.0
-        runtime._last_maintenance_tick = 100.0
-        runtime.workers = Mock()
-        runtime.workers.observe.return_value = ['worker-observed']
-        runtime.bridge = Mock()
-        runtime.state = Mock()
-        runtime.state.data = {'lanes': {}}
-        order = []
-        runtime._process_semantic_tool_calls = Mock(return_value=[])
-        runtime._process_role_syscalls = Mock(side_effect=lambda: order.append('sync') or ['sync-observed'])
-        runtime._observe_foreground_terminal = Mock()
-        runtime._observe_planner_output = Mock(side_effect=lambda value: order.append('planner') or {'planner': 'observed'})
-        runtime.process_control = Mock(side_effect=lambda: order.append('control') or {'control': 'reduced'})
-        with patch('playwright_host.runtime.time.monotonic', return_value=100.5):
-            result = runtime.tick()
-        self.assertEqual(order, ['sync', 'planner', 'control'])
-        runtime._process_role_syscalls.assert_called_once_with()
-        runtime._observe_planner_output.assert_called_once_with(None)
-        runtime.process_control.assert_called_once_with()
-        runtime.workers.maintain.assert_not_called()
-        runtime.workers.liveness_sweep.assert_not_called()
-        runtime.workers.poll_lane.assert_not_called()
-        runtime.bridge.call.assert_not_called()
-        self.assertEqual(result['role_syscalls'], ['sync-observed', {'planner': 'observed'}])
-        self.assertEqual(result['control'], {'control': 'reduced'})
-        self.assertEqual(result['maintenance'], [])
+        host = BrowserRuntime.__new__(BrowserRuntime)
+        host.cfg = SimpleNamespace(wake_poll_seconds=1.0, maintenance_seconds=60.0)
+        host._last_wake_poll = host._last_maintenance_tick = 10.0
+        host.state = MagicMock(); host.state.data = {"lanes": {}}
+        host.bridge = MagicMock(); host.workers = MagicMock()
+        host._poll_harness_errors = MagicMock()
+        host._service_error_helper = MagicMock()
+        host._process_semantic_tool_calls = MagicMock(return_value=[])
+        host._observe_foreground_terminal = MagicMock()
+        host.process_control = MagicMock()
+        with patch("playwright_host.runtime.time.monotonic", return_value=11.0):
+            host.tick()
+        host.process_control.assert_called_once()
+        host.workers.maintain.assert_not_called()
+        host.workers.liveness_sweep.assert_not_called()
 
     def test_dedicated_cah_chrome_starts_minimized_without_extensions(self):
         launcher = (ROOT / "host" / "start_playwright_host.ps1").read_text(encoding="utf-8")

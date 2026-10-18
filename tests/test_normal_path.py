@@ -4,12 +4,12 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from harness.request_scan import git, scan, discover, hydrate, read_receipts
 from harness.request_drain import drain
-from local_bridge.planner_runtime import planner_git_cli_fallback
-import threading
+from playwright_host.bridge import BridgeClient, BridgeError
+from semantic_runtime_fixture import HarnessCase, PARENT
 
 
 class NormalPathTests(unittest.TestCase):
@@ -46,26 +46,16 @@ class NormalPathTests(unittest.TestCase):
             rs = discover(self.root, after=head, kinds=['worker_wake'])
         self.assertEqual(len(rs), 4)
         self.assertTrue(all('payload' not in r for r in rs))
-    def test_batch_scan_has_constant_git_process_budget(self):
-        # Mock the actual execution boundary, not the retired per-request path.
-        # Increasing fixture sizes make prior pending entries completed history.
-        for count in (0, 40, 400):
-            with self.subTest(completed_history=count):
-                head = self.fixture(count)
-                run = subprocess.run
-                def completed_batch(repo, records, **kwargs):
-                    return {record['request_key']: {'phase': 'DONE'} for record in records}
-                with patch('harness.request_drain.latest', return_value=head), patch('harness.request_drain.process_worker_wake_batch', side_effect=completed_batch) as batch, patch('harness.request_drain.process', side_effect=AssertionError('Worker requests must use the batch path')), patch('subprocess.run', wraps=run) as calls:
-                    out = drain(self.root, kinds=['worker_wake'], max_requests=1)
-                self.assertEqual(out['processed'], 1)
-                self.assertEqual(out['already_recorded_or_backoff'], count)
-                self.assertEqual(out['payloads_read'], 1)
-                self.assertLessEqual(calls.call_count, 5)
-                batch.assert_called_once()
-                selected = batch.call_args.args[1]
-                self.assertEqual(len(selected), 1)
-                self.assertEqual(selected[0]['payload']['index'], count)
-                self.assertEqual(out['results'][0]['phase'], 'DONE')
+    def test_completed_history_needs_constant_git_processes(self):
+        head = self.fixture()
+        run = subprocess.run
+        with patch('harness.request_drain.latest', return_value=head), patch('harness.request_drain.process_worker_wake_batch', side_effect=lambda repo, records, **kw: {row['request_key']: {'phase': 'DONE'} for row in records}) as process, patch('subprocess.run', wraps=run) as calls:
+            out = drain(self.root, kinds=['worker_wake'], max_requests=1)
+        self.assertEqual(out['processed'], 1)
+        self.assertEqual(out['already_recorded_or_backoff'], 40)
+        self.assertEqual(out['payloads_read'], 1)
+        self.assertLessEqual(calls.call_count, 5)
+        self.assertEqual(process.call_args.args[1][0]['payload']['index'], 40)
     def test_corrupt_receipt_does_not_hide_request(self):
         head = self.fixture(1)
         receipt = next((self.root / 'state/request_receipts').glob('*.json'))
@@ -88,98 +78,74 @@ class NormalPathTests(unittest.TestCase):
         self.assertEqual(result[0]['error'], 'REQUEST_TOO_LARGE')
 
 
-class PlannerGitCliFallbackTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.repo = self.root / 'repo'; self.remote = self.root / 'remote.git'
-        subprocess.run(['git', 'init', '--bare', str(self.remote)], check=True, stdout=subprocess.PIPE)
-        subprocess.run(['git', 'init', str(self.repo)], check=True, stdout=subprocess.PIPE)
-        subprocess.run(['git', '-C', str(self.repo), 'config', 'user.name', 'test'], check=True)
-        subprocess.run(['git', '-C', str(self.repo), 'config', 'user.email', 'test@example.invalid'], check=True)
-        self.task_id = 'planner-cli-test-001'
-        self.conversation_id = '11111111-2222-3333-4444-555555555555'
-        self.fence = 'planner-fence-cli-test-001'
-        self.output_ref = f'evidence/{self.task_id}/roles/planner/takeover.json'
-        cell = {
-            'v': 1, 'task_id': self.task_id, 'task_cell_id': self.task_id,
-            'task_cell_project_key': 'g-p-test', 'control_epoch': 1,
-            'planner_control': {
-                'enabled': True,
-                'authority': {
-                    'planner_generation': 1,
-                    'planner_fence_token': self.fence,
-                    'conversation_id': self.conversation_id,
-                },
-                'successor': {'state': 'NONE'},
-                'runtime': {'pending_output': {
-                    'kind': 'FOREGROUND_TAKEOVER_ACK',
-                    'ref': self.output_ref,
-                    'conversation_id': self.conversation_id,
-                    'status': 'WAITING',
-                }},
-            },
+class RetiredPlannerCompletionTests(unittest.TestCase):
+    def case(self):
+        case = HarnessCase()
+        self.addCleanup(case.close)
+        case.tick()
+        # Finish the normal bootstrap bookkeeping before measuring idle writes.
+        case.tick()
+        return case
+
+    def test_retired_chat_syscalls_cannot_complete_or_write_current_turn(self):
+        case = self.case()
+        role = case.planner()
+        output_ref = role['active_output_ref']
+        output = case.read(output_ref)
+        self.assertTrue(output_ref.startswith(f'state/planner_turns/{PARENT}/'))
+        self.assertFalse(output.get('turn_signal'))
+        page = case.ui.page_for(role['conversation_id'])
+        syscall = {
+            'v': 1, 'kind': 'planner_git_cli', 'call_id': 'retired-planner-call',
+            'task_id': PARENT, 'control_epoch': 1,
+            'planner_generation': role['planner_generation'],
+            'planner_fence_token': role['planner_fence_token'],
+            'conversation_id': role['conversation_id'], 'output_ref': output_ref,
+            'artifact': {**output, 'turn_signal': 'done'},
         }
-        path = self.repo / 'state' / 'task_cells' / f'{self.task_id}.json'
-        path.parent.mkdir(parents=True); path.write_text(json.dumps(cell, indent=2) + '\n', encoding='utf-8')
-        subprocess.run(['git', '-C', str(self.repo), 'add', '.'], check=True)
-        subprocess.run(['git', '-C', str(self.repo), 'commit', '-m', 'seed'], check=True, stdout=subprocess.PIPE)
-        subprocess.run(['git', '-C', str(self.repo), 'branch', '-M', 'main'], check=True)
-        subprocess.run(['git', '-C', str(self.repo), 'remote', 'add', 'origin', str(self.remote)], check=True)
-        subprocess.run(['git', '-C', str(self.repo), 'push', '-u', 'origin', 'main'], check=True, stdout=subprocess.PIPE)
-        runtime = self.root / 'runtime'; runtime.mkdir()
-        class Store:
-            pass
-        self.store = Store()
-        self.store.repo_root = self.repo
-        self.store.runtime = runtime
-        self.store.git_remote = 'origin'
-        self.store.git_branch = 'main'
-        self.store.git_lock = threading.RLock()
-        def run_git(*args):
-            return subprocess.run(
-                ['git', '-C', str(self.repo), *args], check=True,
-                text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            )
-        self.store._git = run_git
+        texts = [
+            'GAH_SYSCALL_BEGIN\n' + json.dumps(syscall) + '\nGAH_SYSCALL_END',
+            'GAH_SYSCALL_BEGIN\n' + json.dumps({**syscall, 'kind': 'semantic_sync',
+                'role': 'planner', 'request_id': role['active_request_id']}) + '\nGAH_SYSCALL_END',
+            'done', 'handoff', 'complete',
+        ]
+        assistant = MagicMock()
+        assistant.count.return_value = 1
+        before = case.git('rev-parse', 'origin/main')
+        with patch.object(page, 'locator', return_value=assistant):
+            for text in texts:
+                with self.subTest(text=text):
+                    page.answer = [text]
+                    page.running = False
+                    assistant.nth.return_value.inner_text.return_value = text
+                    assistant.last.inner_text.return_value = text
+                    case.tick()
+                    self.assertEqual(case.children(), [])
+                    self.assertEqual(case.read(output_ref), output)
+                    self.assertIsNotNone(case.cell()['planner_control']['runtime'].get('active_turn'))
+                    self.assertEqual(case.git('rev-parse', 'origin/main'), before)
+        self.assertFalse({'planner_git_cli', 'semantic_turn_sync', 'semantic_turn_observe'}
+                         & {item['op'] for item in case.ops})
 
-    def request(self, **overrides):
-        value = {
-            'task_id': self.task_id,
-            'control_epoch': 1,
-            'planner_generation': 1,
-            'planner_fence_token': self.fence,
-            'conversation_id': self.conversation_id,
-            'observed_conversation_id': self.conversation_id,
-            'output_ref': self.output_ref,
-            'artifact': {'v': 1, 'task_id': self.task_id, 'status': 'TAKEOVER_ACK'},
-        }
-        value.update(overrides)
-        return value
+        # The same pre-bound, already-existing output still completes normally
+        # when the Planner writes its semantic content and final Git signal.
+        case.decide(['lane-00'])
+        for _ in range(6):
+            case.tick()
+            if case.current('lane-00') is not None:
+                break
+        self.assertEqual(len(case.children()), 1)
+        self.assertIsNotNone(case.current('lane-00'))
+        self.assertEqual(case.read(output_ref)['turn_signal'], 'done')
 
-    def remote_show(self, ref):
-        return subprocess.run(
-            ['git', '--git-dir', str(self.remote), 'show', f'main:{ref}'],
-            text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-
-    def test_exact_pending_output_uses_host_git_cli(self):
-        result = planner_git_cli_fallback(self.store, self.request())
-        self.assertTrue(result['ok']); self.assertFalse(result['duplicate'])
-        self.assertEqual(json.loads(self.remote_show(self.output_ref).stdout)['status'], 'TAKEOVER_ACK')
-        duplicate = planner_git_cli_fallback(self.store, self.request())
-        self.assertTrue(duplicate['ok']); self.assertTrue(duplicate['duplicate'])
-
-    def test_stale_identity_and_wrong_path_do_not_mutate(self):
-        for overrides in (
-            {'planner_generation': 2},
-            {'planner_fence_token': 'planner-fence-stale'},
-            {'observed_conversation_id': 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'},
-            {'output_ref': f'evidence/{self.task_id}/roles/planner/wrong.json'},
-        ):
-            result = planner_git_cli_fallback(self.store, self.request(**overrides))
-            self.assertFalse(result['ok'])
-        self.assertNotEqual(self.remote_show(self.output_ref).returncode, 0)
+    def test_retired_planner_git_cli_bridge_operation_is_unknown(self):
+        case = self.case()
+        before = case.git('rev-parse', 'origin/main')
+        bridge = BridgeClient(case.cfg.bridge_url, case.runtime.state.client_id,
+                              case.cfg.project_id)
+        with self.assertRaisesRegex(BridgeError, 'planner_git_cli: UNKNOWN_OP'):
+            bridge.call('planner_git_cli', task_id=PARENT)
+        self.assertEqual(case.git('rev-parse', 'origin/main'), before)
 
 
 if __name__ == '__main__': unittest.main()

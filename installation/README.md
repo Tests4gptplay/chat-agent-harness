@@ -1,6 +1,10 @@
 # CAH 纯净发行版安装说明 / AI-led onboarding
 
-> 本目录是公开发行的未配置源码模板，不是运行实例。先核验目标运行仓库为 private，再配置、启动。保留源机制，不附带个人 Skills、GitHub workflows、toolbox、showcases 或运行历史。
+> 本目录是公开发行的未配置源码模板，不是运行实例。先核验目标运行仓库为 private，再配置、启动。保留源机制，不附带个人 Skills、私有 GitHub workflows/toolbox、私有 showcases 或运行历史；已批准的独立公开展示素材另行保留。
+
+
+
+**v1.0.5 必读 — 公开源码已脱敏，安装时必须重新规划用户自己的私有绑定：** [隐私脱敏与重新部署/升级验收](UPGRADE_AND_REDEPLOY_V1_0_5.md)。不能恢复原维护者的 GitHub 仓库身份、Project Key、本机路径、浏览器 Profile、Runner/工作流和私人 Skill；新实例需重新配置三个 Runner 角色（Cold/Burst 可保持关闭）并通过真实权限和执行验证。
 
 先读 `AGENTS.md`、本文件、`CONFIGURATION_MAP.md` 和 `OMITTED_COMPONENTS.md`。部署 AI 必须先确认目标操作系统、用户授权、已有软件与已有任务。Windows 是此版本启动脚本的参考平台；不要把文档存在当作全新 Windows/新账户安装已经实测成功。
 
@@ -88,3 +92,8 @@ The six obsolete test expectations have been retired; they are not current open 
 ## 从旧公开版本升级
 
 旧公开 main 已通过 `archive/pre-clean-20260929` 保存。本版采用完整文件树替换，不叠加保留旧 Extension、workflow、showcase 或旧安装脚本。已配置的私有实例不能仅覆盖这些文件后直接启动：应先保留活动任务、私有工作流和本机绑定，再按本指南从未配置模板建立新副本。旧 Release 下载包仍为历史版本，不代表当前 main；参见 [发行说明](../RELEASE_NOTES.md)。
+
+
+## v1.0.5 新增配置与恢复验证
+
+三种 Runner 使用 MANAGED_RUNNER_ROOT、SHOT_RUNNER_ROOT、COLD_RUNNER_ROOT 和 COLD_RUNNER_NAME 重新规划；Cold/Burst 身份和根目录必须由新用户独立选择并验证，默认 READY_OFF。验证 Helper 即时 Harness error 恢复、Worker generation 交接、正常 Result 回执、异常 watchdog、Runner 占用与准确清理需在已完成用户自己的私有 workflows/Tool 配置后进行。公开版故意不附带私人 workflows，不能把仅有文档/源码当作全链路安装完成。详见 [专门部署/隐私指引](UPGRADE_AND_REDEPLOY_V1_0_5.md)。

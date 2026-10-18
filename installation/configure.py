@@ -29,6 +29,7 @@ def main():
   if key.endswith('_ROOT') or key.endswith('_BASE') or key=='CHROME_PATH':
    if not (PureWindowsPath(value).is_absolute() or Path(value).is_absolute()): raise SystemExit('Absolute path required: '+key)
   if key.endswith('REPOSITORY') and not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',value): raise SystemExit('owner/repository required: '+key)
+ if not re.fullmatch(r'[A-Za-z0-9_.-]+',values['COLD_RUNNER_NAME']):raise SystemExit('Invalid Cold/Burst runner name')
  for key in ('TASK_CELL_KEY','LANE00_KEY','LANE01_KEY'):
   if not re.fullmatch(r'g-p-[A-Za-z0-9]+',values[key]):raise SystemExit('Invalid Project key: '+key)
  real=[values['TASK_CELL_KEY'],values['LANE00_KEY']]+([] if absent_lane1 else [values['LANE01_KEY']])
@@ -40,10 +41,10 @@ def main():
  if out==ROOT or ROOT in out.parents or out in ROOT.parents:raise SystemExit('Output must be separate from source')
  if Path(values['REPO_ROOT']).resolve()!=out:raise SystemExit('REPO_ROOT must match --output on this host')
  if out.exists():raise SystemExit('Refusing to overwrite an existing destination')
- for key in ('BRIDGE_ROOT','BROWSER_ROOT','TOOLS_ROOT','PROFILE_ROOT','MANAGED_RUNNER_ROOT','SHOT_RUNNER_ROOT','WORK_ROOT','TEMP_ROOT'):
+ for key in ('BRIDGE_ROOT','BROWSER_ROOT','TOOLS_ROOT','PROFILE_ROOT','MANAGED_RUNNER_ROOT','SHOT_RUNNER_ROOT','COLD_RUNNER_ROOT','WORK_ROOT','TEMP_ROOT'):
   target=Path(values[key]).resolve()
   if target==out or out in target.parents:raise SystemExit('Private runtime/data must remain outside the source checkout: '+key)
- if Path(values['MANAGED_RUNNER_ROOT']).resolve()==Path(values['SHOT_RUNNER_ROOT']).resolve():raise SystemExit('Runner roots must be distinct')
+ if len({str(Path(values[k]).resolve()).lower() for k in ('MANAGED_RUNNER_ROOT','SHOT_RUNNER_ROOT','COLD_RUNNER_ROOT')})!=3:raise SystemExit('Runner roots must all be distinct')
  if any(p.is_symlink() for p in ROOT.rglob('*')):raise SystemExit('Symlink in template is not allowed')
  index=json.loads((ROOT/'audit/file-manifest.json').read_text(encoding='utf-8'))
  actual={x.relative_to(ROOT).as_posix() for x in ROOT.rglob('*') if x.is_file() and '__pycache__' not in x.parts and '.git' not in x.parts}

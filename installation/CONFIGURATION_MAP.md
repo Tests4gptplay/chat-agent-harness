@@ -7,6 +7,8 @@
 | REPO_ROOT | CAH 源码 checkout / 命令工作目录 | bridge_supervisor 的 TargetRepo、角色文档中的 BAT 调用；与 Start_CAH -RepoRoot、Git remote/main 对齐 | .git 在正确目录；不指向中转目录；fetch/ff-only 不丢改动 |
 | BRIDGE_ROOT | 本机消息队列、监督器、能力缓存、日志 | Start_CAH、Reset BAT、local_bridge/server.py、host/capabilities.py、bridge_supervisor.ps1；选仓库外可写根 | /health.root；runtime/bridge-supervisor.json 与启动参数一致 |
 | MANAGED_RUNNER_ROOT | 普通作业 Runner 安装 | Start_CAH RunnerRoots；用户授权注册到新 private repo | run.cmd、bin/Runner.Listener.exe；在线及真实作业执行 |
+| COLD_RUNNER_ROOT | Cold/Burst Runner 独立安装根 | Start_CAH ColdBurstRoot；由授权流程控制启停 | 与代码/Managed/Shot 路径独立；run.cmd/bin 有效且 READY_OFF 不被误判为 BUSY |
+| COLD_RUNNER_NAME | 新私有实例的 Cold/Burst Runner 名称 | Start_CAH 与角色协议中的 Runner 身份 | 由新用户注册并实际核对，不复制维护者旧名 |
 | SHOT_RUNNER_ROOT | 独立短任务 Runner 安装 | Start_CAH RunnerRoots；独立目录与凭据；仅 cah-shot 标签 | 不被普通工作流选中；无害短任务实际完成 |
 | RUNNER_BASE | Runner 系统和 short-task-cache 的父目录 | Foreground 短任务缓存说明；不是某个 Runner 的 _work | 任务缓存可写且清理只覆盖本任务 |
 | BROWSER_ROOT | 原生 Host 状态、绑定、日志与 endpoint | Start_CAH、Reset、playwright_host/config.py、__main__.py、mcp.py | 只有一个 Host；state.json 的 Task Cell/lanes/Foreground 属于新账户 |
@@ -26,7 +28,7 @@
 
 ## 不应还原的删除项
 
-个人 Skills/import 快照：不恢复，Registry 从零开始。私人 workflows/toolbox：不恢复旧 payload，按新任务在新私库配置。历史任务、memory、case、evidence、results、request receipts、conversation IDs、机器 capabilities cache：不迁移到新实例。showcases、旧迁移/交接记录：本轮不附带。作者 MIT 版权署名是法律归属，不是运行账户配置，保留 LICENSE/NOTICE。
+个人 Skills/import 快照：不恢复，Registry 从零开始。私人 workflows/toolbox：不恢复旧 payload，按新任务在新私库配置。历史任务、memory、case、evidence、results、request receipts、conversation IDs、机器 capabilities cache：不迁移到新实例。showcases、旧迁移/交接记录：本轮不附带。作者版权署名不属于用户运行绑定。当前源码许可为 AGPL-3.0-only，早期已分发的 MIT 副本保留其既有授权；见 LICENSE/NOTICE。
 
 ## 不属于个人路径的保留项
 
@@ -34,3 +36,8 @@ ProgramFiles/ProgramData 等操作系统标准发现位置、Windows 驱动器�
 
 
 单 lane 安装：LANE01_KEY 允许空值，未提供的 lane 不注册、不参与 reset。可选记录/中转仓库允许空值并保持未启用。合成单元测试路径 `X:\CAH_TEST\UnrealEngine` 不是安装默认值。
+
+
+## v1.0.5 脱敏后重新规划
+
+本文件只描述用途，不提供维护者的原始个人路径或账户值。三个 Runner 的重新部署、Cold/Burst 的根和名称、Browser/ChatGPT Project 身份、Tool/Workflow 缺省情况与用户私有资产隔离必须在目标 Windows 环境重新规划核验。阅读 [UPGRADE_AND_REDEPLOY_V1_0_5.md](UPGRADE_AND_REDEPLOY_V1_0_5.md)。

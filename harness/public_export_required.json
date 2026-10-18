@@ -47,6 +47,8 @@
     "playwright_host/config.py",
     "playwright_host/runtime.py",
     "playwright_host/state.py",
+    "harness/worker_lineage_compat.py",
+    "docs/WORKER_GENERATIONS.md",
     "playwright_host/ui.py",
     "playwright_host/worker.py",
     "host/start_playwright_host.ps1",

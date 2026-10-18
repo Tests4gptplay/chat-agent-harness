@@ -9,6 +9,12 @@ from local_bridge.server import WakeStore
 from local_bridge.topology import stage_topology_request, topology_status
 
 
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    WORKER_LINEAGES_KEY,
+)
+
+
 class LaneTopologyTests(unittest.TestCase):
     def test_lane_addressed_wake(self):
         wake = make_wake(
@@ -16,7 +22,7 @@ class LaneTopologyTests(unittest.TestCase):
             repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
             result_ref="state/topology_request.json",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHLANE00PLACEHOLDER",
+            worker_project_key="g-p-CAHTESTB86CD70AB2",
             kind="topology_reconcile",
         )
         validate_wake(wake)
@@ -56,11 +62,11 @@ class LaneTopologyTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                     "enabled": True,
                     "status": "IDLE",
-                    "task_pools": {},
+                    WORKER_LINEAGES_KEY: {},
                 }],
             }), encoding="utf-8")
             subprocess.check_call(["git", "-C", str(work), "add", "state"])
@@ -74,20 +80,20 @@ class LaneTopologyTests(unittest.TestCase):
                 "request_id": "topo-12345678",
                 "desired_version": 2,
                 "control_lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHLANE00PLACEHOLDER",
+                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
                 "lanes": [
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                        "project_key": "g-p-CAHTESTB86CD70AB2",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                         "enabled": True,
                     },
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-CAHLANE01PLACEHOLDER",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01PLACEHOLDER-cah-sandbox1/project",
+                        "project_key": "g-p-CAHTEST5B0313A208",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTEST5B0313A208-cah-sandbox1/project",
                         "enabled": True,
                     },
                 ],
@@ -130,15 +136,15 @@ class LaneTopologyTests(unittest.TestCase):
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-CAHLANE00PLACEHOLDER",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00PLACEHOLDER-cah-sandbox0/project",
+                        "project_key": "g-p-CAHTESTB86CD70AB2",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
                         "enabled": True,
                         "status": "IDLE",
-                        "task_pools": {
+                        WORKER_LINEAGES_KEY: {
                             "topology-task::1": {
                                 "owner_task_id": "topology-task",
                                 "owner_control_epoch": 1,
-                                "last_pool_takeover_id": "pool-12345678-abcd",
+                                LAST_WORKER_REF_KEY: "pool-12345678-abcd",
                                 "worker_rollover_request": None,
                             },
                         },
@@ -146,11 +152,11 @@ class LaneTopologyTests(unittest.TestCase):
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-CAHLANE01PLACEHOLDER",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01PLACEHOLDER-cah-sandbox1/project",
+                        "project_key": "g-p-CAHTEST5B0313A208",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTEST5B0313A208-cah-sandbox1/project",
                         "enabled": True,
                         "status": "IDLE",
-                        "task_pools": {},
+                        WORKER_LINEAGES_KEY: {},
                     },
                 ],
             }

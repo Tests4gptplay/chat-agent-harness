@@ -102,7 +102,7 @@ class HostCapabilityTests(unittest.TestCase):
             source="runtime",
             validation="Build.version",
         )
-        projection["reason"] = r"X:\\CAH_TEST\\UnrealEngine"
+        projection["reason"] = r"D:\\UE5"
         with self.assertRaises(ValueError):
             validate_projection(projection)
 

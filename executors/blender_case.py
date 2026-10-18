@@ -101,6 +101,8 @@ def locate_blender() -> tuple[Path | None, str]:
     roots = [
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
+        Path(r"E:\Program Files"),
+        Path(r"E:\Blender"),
     ]
     for root in roots:
         if not root.exists():

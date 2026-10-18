@@ -6,20 +6,31 @@ import json
 import re
 import time
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .bridge import BridgeClient, BridgeError
+from .error_helper import ERROR_HELPER_OWNER, helper_control, record_error
 from .config import HostConfig, TASK_CELL
 from .state import HostState
-from .ui import ChatGPTUI, chatgpt_location, syscall_blocks, tool_call_blocks
+from .ui import ChatGPTUI, chatgpt_location, tool_call_blocks
 from .worker import WorkerManager
 from .mcp import MCPCallPending
 from harness.tool_runtime import ToolRegistry
 
 
+from harness.worker_lineage_compat import (
+    LANE_LINEAGE_RESET_COMPLETE_OP,
+    LANE_LINEAGE_RESET_KIND,
+    WORKER_LINEAGES_KEY,
+)
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+PLANNER_WATCHDOG_SECONDS = 30 * 60
 
 
 class BrowserRuntime:
@@ -30,11 +41,12 @@ class BrowserRuntime:
         "task_cell_project_clear": "_handle_task_cell_project_clear",
         "task_cell_role_prompt": "_handle_role_prompt",
         "task_cell_worker_helper_prompt": "_handle_role_prompt",
+        "worker_same_generation_retry": "_handle_worker_same_generation_retry",
         "task_cell_planner_foreground_handoff": "_handle_planner_foreground_handoff",
         "task_cell_planner_successor_bootstrap": "_handle_planner_successor_bootstrap",
         "task_cell_planner_successor_promote": "_handle_planner_successor_promote",
         "task_cell_planner_predecessor_retire": "_handle_planner_predecessor_retire",
-        "lane_pool_reset": "_handle_lane_pool_reset",
+        LANE_LINEAGE_RESET_KIND: "_handle_lane_lineage_reset",
         "task_cell_clear": "_handle_task_cell_clear",
         "task_cell_prompt": "_handle_task_cell_prompt",
     }
@@ -42,14 +54,62 @@ class BrowserRuntime:
     def __init__(self, cfg: HostConfig):
         self.cfg = cfg
         self.state = HostState(cfg.state_path)
-        self.bridge = BridgeClient(cfg.bridge_url, self.state.client_id, cfg.project_id)
+        self._delivering_error_helper = False
+        self.bridge = BridgeClient(cfg.bridge_url, self.state.client_id, cfg.project_id, self._on_harness_error)
         self.ui = ChatGPTUI(cfg.cdp_url, cfg.browser_endpoint_path)
         self.workers = WorkerManager(self.bridge, self.state, self.ui, cfg.project_id)
         self.tool_registry = ToolRegistry()
         self._last_wake_poll = 0.0
         self._last_maintenance_tick = 0.0
-        self._seen_role_syscalls: set[str] = set()
         self._seen_role_tool_calls: set[str] = set()
+
+    def _on_harness_error(self, event: str, data: dict[str, Any]) -> None:
+        record_error(self.state, event, data)
+        self._service_error_helper()
+
+    def _service_error_helper(self) -> None:
+        # Reuse one live incident, including if its own delivery fails. This is
+        # re-entrancy/idempotency, not a threshold for the first error.
+        if self._delivering_error_helper:
+            return
+        control = helper_control(self.state, TASK_CELL["project_key"])
+        if control is None:
+            return
+        if self.state.get_role(ERROR_HELPER_OWNER, 1, "helper") is not None:
+            return
+        self._delivering_error_helper = True
+        try:
+            self._handle_role_prompt(control)
+        except Exception as exc:
+            record_error(self.state, "playwright.error_helper_delivery", {
+                "exception_type": type(exc).__name__, "message": str(exc)[:1000],
+            })
+        finally:
+            self._delivering_error_helper = False
+
+    def _poll_harness_errors(self) -> dict[str, Any]:
+        result = self.bridge.call("harness_errors", ack=self.state.data.get("harness_error_acks") or [])
+        self.state.data["harness_git_branch"] = result.get("git_branch") or "main"
+        rows = result.get("errors") or []
+        for row in rows:
+            self._on_harness_error(str(row["event"]), row.get("data") or {})
+        self.state.data["harness_error_acks"] = [row["error_id"] for row in rows]
+        self.state.save()
+        return result
+
+    def _run_stage(self, stage: str, operation: Any, default: Any = None) -> Any:
+        try:
+            result = operation()
+        except Exception as exc:
+            self.bridge.event("playwright." + stage + "_error", "error",
+                              operation=stage, exception_type=type(exc).__name__,
+                              message=str(exc)[:1000])
+            return default
+        for item in result if isinstance(result, list) else [result]:
+            if isinstance(item, dict) and item.get("ok") is False:
+                self.bridge.event("playwright." + stage + "_error", "error",
+                                  operation=stage, message=str(item.get("error") or item)[:1000])
+        return result
 
     def connect(self) -> None:
         self.ui.connect()
@@ -148,7 +208,7 @@ class BrowserRuntime:
                 worker_project_key=project_key,
             )
         drained = self.ui.drain_project(project_key, str(lane["project_root_url"]))
-        lane["task_pools"] = {}
+        lane[WORKER_LINEAGES_KEY] = {}
         self.state.save()
         return self.bridge.call(
             "lane_clear_complete",
@@ -207,6 +267,279 @@ class BrowserRuntime:
             except Exception:
                 pass
 
+    @staticmethod
+    def _planner_watchdog_deadline(value: Any) -> datetime | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    def _arm_planner_watchdog(
+        self,
+        role: dict[str, Any],
+        *,
+        request_id: str,
+        output_ref: str,
+        generation: int,
+        fence_token: str,
+        wake_text: str,
+        replay_attempt: int = 0,
+    ) -> dict[str, Any]:
+        started = datetime.now(timezone.utc)
+        return {
+            **role,
+            "planner_generation": int(generation),
+            "planner_fence_token": str(fence_token),
+            "planner_watchdog": {
+                "kind": "PLANNER_PHYSICAL_WATCHDOG",
+                "state": "ARMED",
+                "timeout_seconds": PLANNER_WATCHDOG_SECONDS,
+                "started_at": started.isoformat(timespec="seconds"),
+                "deadline_at": (
+                    started + timedelta(seconds=PLANNER_WATCHDOG_SECONDS)
+                ).isoformat(timespec="seconds"),
+                "request_id": str(request_id),
+                "output_ref": str(output_ref),
+                "planner_generation": int(generation),
+                "planner_fence_token": str(fence_token),
+                "conversation_id": str(role.get("conversation_id") or ""),
+                "wake_text": str(wake_text),
+                "replay_attempt": int(replay_attempt),
+            },
+        }
+
+    def _recover_planner_watchdog(
+        self,
+        record: dict[str, Any],
+        watchdog: dict[str, Any],
+    ) -> dict[str, Any]:
+        task_id = str(record.get("task_id") or "")
+        epoch = int(record.get("control_epoch") or 0)
+        old_conversation_id = str(record.get("conversation_id") or "")
+        request_id = str(watchdog.get("request_id") or "")
+        output_ref = str(watchdog.get("output_ref") or "")
+        generation = int(watchdog.get("planner_generation") or 0)
+        fence = str(watchdog.get("planner_fence_token") or "")
+        wake_text = str(watchdog.get("wake_text") or "")
+        if not wake_text:
+            return {"ok": False, "error": "PLANNER_WATCHDOG_WAKE_TEXT_MISSING"}
+
+        status = self.bridge.call(
+            "planner_watchdog_status",
+            task_id=task_id,
+            control_epoch=epoch,
+            conversation_id=old_conversation_id,
+            request_id=request_id,
+            output_ref=output_ref,
+            planner_generation=generation,
+            planner_fence_token=fence,
+        )
+        if not status.get("ok"):
+            return status
+        if not status.get("active"):
+            return {"ok": True, "idle": status.get("idle") or "planner_watchdog_target_not_current"}
+
+        marker = self._marker(request_id)
+        replay_attempt = int(watchdog.get("replay_attempt") or 0) + 1
+        replay_id = (
+            f"planner-watchdog-replay-{task_id}-{epoch}-{generation}-"
+            f"{request_id}-{replay_attempt}"
+        )
+
+        page = None
+        try:
+            page = self.ui.conversation_page(
+                project_key=TASK_CELL["project_key"],
+                conversation_id=old_conversation_id,
+                url=str(record.get("url") or ""),
+            )
+            self.ui.stop_response(page)
+            result = self.ui.submit_text(
+                page,
+                wake_text,
+                marker=marker,
+                wait_response_start=True,
+                replace_existing=True,
+                require_new_turn=True,
+            )
+            if result.get("response_started"):
+                recorded = self.bridge.call(
+                    "planner_watchdog_replay_started",
+                    replay_id=replay_id,
+                    task_id=task_id,
+                    control_epoch=epoch,
+                    request_id=request_id,
+                    output_ref=output_ref,
+                    old_conversation_id=old_conversation_id,
+                    new_conversation_id=old_conversation_id,
+                    new_conversation_url=str(record.get("url") or ""),
+                    planner_generation=generation,
+                    planner_fence_token=fence,
+                    replacement=False,
+                )
+                if not recorded.get("ok"):
+                    raise RuntimeError(str(recorded.get("error") or "PLANNER_WATCHDOG_REPLAY_RECORD_FAILED"))
+                next_role = {
+                    **record,
+                    "request_id": request_id,
+                    "active_request_id": request_id,
+                    "active_output_ref": output_ref,
+                    "response_started": True,
+                    "observed_at": now(),
+                    "status": "BOUND",
+                    "watchdog_recovery": {
+                        "replay_id": replay_id,
+                        "mode": "same_conversation_replay",
+                        "prompt_count": recorded.get("prompt_count"),
+                    },
+                }
+                next_role = self._arm_planner_watchdog(
+                    next_role,
+                    request_id=request_id,
+                    output_ref=output_ref,
+                    generation=generation,
+                    fence_token=fence,
+                    wake_text=wake_text,
+                    replay_attempt=replay_attempt,
+                )
+                self.state.set_role(next_role)
+                return {
+                    "ok": True,
+                    "recovered": True,
+                    "mode": "same_conversation_replay",
+                    "conversation_id": old_conversation_id,
+                    "prompt_count": recorded.get("prompt_count"),
+                }
+        except Exception as replay_exc:
+            replay_error = str(replay_exc)
+        else:
+            replay_error = "PLANNER_WATCHDOG_REPLAY_DID_NOT_START"
+
+        try:
+            deleted = self._delete_exact(
+                TASK_CELL["project_key"],
+                TASK_CELL["project_root_url"],
+                old_conversation_id,
+            )
+            if not deleted:
+                raise RuntimeError("PLANNER_WATCHDOG_EXACT_DELETE_FAILED")
+            new_page, new_conversation_id, new_url = self.ui.bootstrap_conversation(
+                TASK_CELL["project_key"],
+                TASK_CELL["project_root_url"],
+                wake_text,
+                marker,
+            )
+            recorded = self.bridge.call(
+                "planner_watchdog_replay_started",
+                replay_id=replay_id,
+                task_id=task_id,
+                control_epoch=epoch,
+                request_id=request_id,
+                output_ref=output_ref,
+                old_conversation_id=old_conversation_id,
+                new_conversation_id=new_conversation_id,
+                new_conversation_url=new_url,
+                planner_generation=generation,
+                planner_fence_token=fence,
+                replacement=True,
+            )
+            if not recorded.get("ok"):
+                raise RuntimeError(str(recorded.get("error") or "PLANNER_WATCHDOG_REPLACEMENT_RECORD_FAILED"))
+            next_role = {
+                **record,
+                "conversation_id": new_conversation_id,
+                "url": new_url,
+                "request_id": request_id,
+                "active_request_id": request_id,
+                "active_output_ref": output_ref,
+                "response_started": True,
+                "observed_at": now(),
+                "status": "BOUND",
+                "watchdog_recovery": {
+                    "replay_id": replay_id,
+                    "mode": "physical_conversation_replacement",
+                    "old_conversation_id": old_conversation_id,
+                    "prompt_count": recorded.get("prompt_count"),
+                    "replay_error": replay_error,
+                },
+            }
+            next_role = self._arm_planner_watchdog(
+                next_role,
+                request_id=request_id,
+                output_ref=output_ref,
+                generation=generation,
+                fence_token=fence,
+                wake_text=wake_text,
+                replay_attempt=replay_attempt,
+            )
+            self.state.set_role(next_role)
+            return {
+                "ok": True,
+                "recovered": True,
+                "mode": "physical_conversation_replacement",
+                "old_conversation_id": old_conversation_id,
+                "new_conversation_id": new_conversation_id,
+                "prompt_count": recorded.get("prompt_count"),
+                "replay_error": replay_error,
+            }
+        except Exception as replacement_exc:
+            return {
+                "ok": False,
+                "error": "PLANNER_WATCHDOG_RECOVERY_FAILED",
+                "replay_error": replay_error,
+                "replacement_error": str(replacement_exc),
+            }
+
+    def _planner_watchdog_sweep(self) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        roles = list((self.state.data.get("task_cell") or {}).get("roles", {}).values())
+        for record in roles:
+            if not isinstance(record, dict) or str(record.get("role") or "") != "planner":
+                continue
+            watchdog = record.get("planner_watchdog")
+            if not isinstance(watchdog, dict) or str(watchdog.get("state") or "") != "ARMED":
+                continue
+            deadline = self._planner_watchdog_deadline(watchdog.get("deadline_at"))
+            if deadline is None or datetime.now(timezone.utc) < deadline:
+                continue
+            result = self._recover_planner_watchdog(record, watchdog)
+            results.append({"ok": bool(result.get("ok")), "planner_watchdog": True, "result": result})
+            if result.get("ok") and result.get("idle"):
+                self.state.set_role({
+                    **record,
+                    "planner_watchdog": {
+                        **watchdog,
+                        "state": "DISARMED",
+                        "expired_at": now(),
+                        "terminal_reason": result.get("idle"),
+                    },
+                })
+            elif not result.get("ok"):
+                restarted = datetime.now(timezone.utc)
+                self.state.set_role({
+                    **record,
+                    "planner_watchdog": {
+                        **watchdog,
+                        "state": "ARMED",
+                        "started_at": restarted.isoformat(timespec="seconds"),
+                        "deadline_at": (
+                            restarted + timedelta(seconds=PLANNER_WATCHDOG_SECONDS)
+                        ).isoformat(timespec="seconds"),
+                        "last_recovery_failed_at": restarted.isoformat(timespec="seconds"),
+                        "recovery_failure_count": int(watchdog.get("recovery_failure_count") or 0) + 1,
+                        "last_error": result.get("error"),
+                        "last_replay_error": result.get("replay_error"),
+                        "last_replacement_error": result.get("replacement_error"),
+                    },
+                })
+        return results
+
     def _handle_role_prompt(self, control: dict[str, Any]) -> dict[str, Any]:
         x = self._role_fields(control)
         binding = self._task_cell_binding()
@@ -248,6 +581,8 @@ class BrowserRuntime:
                 "active_request_id": x["request_id"],
                 "active_output_ref": str(control.get("required_output_ref") or ""),
                 "active_decision_ref": str(control.get("planner_decision_ref") or ""),
+                "helper_source": str(control.get("helper_source") or "planner"),
+                "control_kind": str(control.get("kind") or "task_cell_role_prompt"),
             }
             self.state.set_role(role)
         else:
@@ -262,9 +597,10 @@ class BrowserRuntime:
                 return {"ok": True, "idle": "role_response_running"}
 
             selected = self._select_thinking(page, x)
+            submitted_text = self._role_text(marker, x, selected)
             result = self.ui.submit_text(
                 page,
-                self._role_text(marker, x, selected),
+                submitted_text,
                 marker=marker,
                 wait_response_start=True,
                 replace_existing=True,
@@ -281,8 +617,21 @@ class BrowserRuntime:
                     "response_started": True,
                     "observed_at": now(),
                 }
+                if x["role"] == "planner":
+                    role = self._arm_planner_watchdog(
+                        role,
+                        request_id=x["request_id"],
+                        output_ref=str(control.get("required_output_ref") or ""),
+                        generation=int(control.get("planner_generation") or role.get("planner_generation") or 0),
+                        fence_token=str(control.get("planner_fence_token") or role.get("planner_fence_token") or ""),
+                        wake_text=submitted_text,
+                    )
                 self.state.set_role(role)
 
+        if control.get("helper_source") == "harness_error":
+            # This direct-bounded Helper has no business Task Cell to admit and
+            # must start even when Git or the control slot is the broken part.
+            return {"ok": True, "response_started": True, "conversation_id": role["conversation_id"]}
         return self.bridge.call(
             "task_cell_role_prompt_complete",
             request_id=x["request_id"],
@@ -335,11 +684,14 @@ class BrowserRuntime:
                 task_contract_ref=str(control.get("task_contract_ref") or f"tasks/{task_id}.json"),
                 plan_ref=str(control.get("plan_ref") or f"tasks/{task_id}.plan.json"),
             )
-        if not control.get("bootstrap_recovery_ref"):
-            self.bridge.call(
-                "planner_foreground_handoff_attempt",
-                source_request_id=request_id,
-                task_id=task_id,
+        attempt_result = self.bridge.call(
+            "planner_foreground_handoff_attempt",
+            source_request_id=request_id,
+            task_id=task_id,
+        )
+        if attempt_result.get("ok") is False:
+            raise RuntimeError(
+                str(attempt_result.get("error") or "initial Planner creation attempt rejected")
             )
         marker = self._marker(staged["request_id"])
         page, conversation_id, url = self.ui.bootstrap_conversation(
@@ -347,9 +699,8 @@ class BrowserRuntime:
             TASK_CELL["project_root_url"],
             marker + "\n" + str(staged["prompt"]),
             marker,
-            require_existing=bool(control.get("bootstrap_recovery_ref")),
         )
-        self.state.set_role({
+        initial_role = self._arm_planner_watchdog({
             "v": 1,
             "task_id": task_id,
             "control_epoch": epoch,
@@ -364,7 +715,14 @@ class BrowserRuntime:
             "active_request_id": staged["request_id"],
             "active_output_ref": str(staged.get("required_output_ref") or ""),
             "active_decision_ref": str(staged.get("required_output_ref") or ""),
-        })
+        },
+            request_id=staged["request_id"],
+            output_ref=str(staged.get("required_output_ref") or ""),
+            generation=int(staged["planner_generation"]),
+            fence_token=str(staged["planner_fence_token"]),
+            wake_text=marker + "\n" + str(staged["prompt"]),
+        )
+        self.state.set_role(initial_role)
         return self.bridge.call(
             "planner_foreground_handoff_bind",
             source_request_id=request_id,
@@ -412,9 +770,12 @@ class BrowserRuntime:
             )
 
         marker = self._marker(x["request_id"])
+        prepared_wake: dict[str, str] = {}
         def prepare_successor(page: Any, _text: str) -> str:
             selected = self._select_thinking(page, x)
-            return self._role_text(marker, x, selected)
+            text = self._role_text(marker, x, selected)
+            prepared_wake["text"] = text
+            return text
 
         page, conversation_id, url = self.ui.bootstrap_conversation(
             x["project_key"],
@@ -442,6 +803,14 @@ class BrowserRuntime:
             "handoff_id": handoff_id,
             "semantic_authority": False,
         }
+        successor = self._arm_planner_watchdog(
+            successor,
+            request_id=x["request_id"],
+            output_ref=str(control.get("required_output_ref") or ""),
+            generation=to_generation,
+            fence_token=pending_fence,
+            wake_text=prepared_wake.get("text") or (marker + "\n" + x["prompt"]),
+        )
         self.state.set_successor(x["task_id"], x["epoch"], successor)
         return self.bridge.call(
             "planner_successor_bootstrap_complete",
@@ -526,16 +895,153 @@ class BrowserRuntime:
             error=None if deleted else (error or "exact_conversation_delete_failed"),
         )
 
-    def _handle_lane_pool_reset(self, control: dict[str, Any]) -> dict[str, Any]:
+    def _handle_worker_same_generation_retry(self, control: dict[str, Any]) -> dict[str, Any]:
+        request_id = str(control.get("request_id") or "")
+        helper_request_id = str(control.get("helper_request_id") or "")
+        task_id = str(control.get("task_id") or "")
+        epoch = int(control.get("control_epoch") or 0)
+        child_task_id = str(control.get("child_task_id") or "")
+        backend_cl = str(control.get("backend_cl") or "")
+        dispatch_id = str(control.get("dispatch_id") or "")
+        generation = int(control.get("dispatch_generation") or 0)
+        fence_token = str(control.get("fence_token") or "")
+        wake_id = str(control.get("wake_id") or "")
+        worker_ref = str(control.get("worker_ref") or "")
+        lane_id = str(control.get("control_lane_id") or "")
+        project_key = str(control.get("worker_project_key") or "")
+        old_conversation_id = str(control.get("old_conversation_id") or "")
+        if (
+            not request_id
+            or not helper_request_id
+            or not task_id
+            or epoch < 1
+            or not child_task_id
+            or not backend_cl
+            or not dispatch_id
+            or generation < 1
+            or len(fence_token) < 8
+            or not wake_id
+            or not worker_ref
+            or not old_conversation_id
+            or control.get("exact_id_only") is not True
+            or str(control.get("retry_mode") or "") != "same_generation"
+        ):
+            raise RuntimeError("invalid same-generation Worker retry control")
+
+        lane = self.state.lane(lane_id)
+        if not lane or str(lane.get("project_key") or "") != project_key:
+            raise RuntimeError("same-generation Worker retry lane mismatch")
+        lineage = self.state.get_lineage(lane_id, task_id, epoch, create=False)
+        current = lineage.get("current") if isinstance(lineage, dict) else None
+        if not isinstance(current, dict):
+            raise RuntimeError("same-generation Worker retry current pointer missing")
+        # Re-enter a physical attempt already saved locally before doing any UI
+        # work. Canonical completion may lag behind semantic completion.
+        for candidate in [current, *list(lineage.get("managed") or [])]:
+            if not isinstance(candidate, dict):
+                continue
+            retry = candidate.get("same_generation_retry") or {}
+            if (retry.get("request_id") == request_id
+                    and candidate.get("handoff_id") == worker_ref
+                    and candidate.get("wake_id") == wake_id
+                    and candidate.get("conversation_id") != old_conversation_id
+                    and candidate.get("handoff_verified") is True):
+                if control.get("status") == "PENDING":
+                    self.bridge.call("worker_same_generation_retry_begin",
+                        **{**control, "lane_id": lane_id})
+                return self.workers._complete_same_generation_retry({
+                    "owner_task_id": task_id, "task_id": child_task_id,
+                    "backend_cl": backend_cl, "dispatch_id": dispatch_id,
+                    "dispatch_generation": generation, "fence_token": fence_token,
+                    "wake_id": wake_id, "_same_generation_retry": retry,
+                }, new_conversation_id=candidate["conversation_id"])
+        watchdog = current.get("worker_watchdog") if isinstance(current.get("worker_watchdog"), dict) else {}
+        if not (
+            str(current.get("conversation_id") or "") == old_conversation_id
+            and str(current.get("handoff_id") or "") == worker_ref
+            and str(current.get("wake_id") or "") == wake_id
+            and str(watchdog.get("child_task_id") or "") == child_task_id
+            and str(watchdog.get("backend_cl") or "") == backend_cl
+            and str(watchdog.get("dispatch_id") or "") == dispatch_id
+            and int(watchdog.get("dispatch_generation") or 0) == generation
+            and str(watchdog.get("fence_token") or "") == fence_token
+            and (str(watchdog.get("state") or "") == "WORKER_HELPER_REQUESTED"
+                 or (watchdog.get("state") == "SAME_GENERATION_RETRY_QUEUED"
+                     and watchdog.get("retry_request_id") == request_id))
+        ):
+            raise RuntimeError("same-generation Worker retry local pointer mismatch")
+
+        # Helper is responsible for exact deletion via browser.cli. Harness does
+        # not silently delete here; it verifies absence before requeueing.
+        witnesses = [
+            str(item.get("conversation_id") or "")
+            for item in list(lineage.get("managed") or [])
+            if isinstance(item, dict)
+            and str(item.get("conversation_id") or "")
+            and str(item.get("conversation_id") or "") != old_conversation_id
+        ]
+        root = self.ui.project_root(project_key, str(lane.get("project_root_url") or ""), reuse=False)
+        try:
+            if not self.ui.confirm_project_conversation_absent(
+                root,
+                project_key,
+                old_conversation_id,
+                witness_conversation_ids=witnesses,
+            ):
+                raise RuntimeError("WORKER_HELPER_OLD_CONVERSATION_NOT_CONFIRMED_DELETED")
+        finally:
+            try:
+                root.close()
+            except Exception:
+                pass
+
+        result = self.bridge.call(
+            "worker_same_generation_retry_begin",
+            request_id=request_id,
+            helper_request_id=helper_request_id,
+            task_id=task_id,
+            control_epoch=epoch,
+            child_task_id=child_task_id,
+            backend_cl=backend_cl,
+            dispatch_id=dispatch_id,
+            dispatch_generation=generation,
+            fence_token=fence_token,
+            wake_id=wake_id,
+            worker_ref=worker_ref,
+            lane_id=lane_id,
+            worker_project_key=project_key,
+            old_conversation_id=old_conversation_id,
+        )
+        if not result.get("ok"):
+            return result
+
+        next_watchdog = {
+            **watchdog,
+            "state": "SAME_GENERATION_RETRY_QUEUED",
+            "retry_request_id": request_id,
+            "retry_queued_at": now(),
+        }
+        current = {**current, "worker_watchdog": next_watchdog}
+        managed = [
+            ({**item, "worker_watchdog": next_watchdog}
+             if isinstance(item, dict) and str(item.get("conversation_id") or "") == old_conversation_id
+             else item)
+            for item in list(lineage.get("managed") or [])
+        ]
+        self.state.set_lineage(lane_id, {**lineage, "current": current, "managed": managed})
+        return result
+
+
+    def _handle_lane_lineage_reset(self, control: dict[str, Any]) -> dict[str, Any]:
         lane_id = str(control.get("control_lane_id") or "")
         project_key = str(control.get("worker_project_key") or "")
         lane = self.state.lane(lane_id)
         if not lane or str(lane.get("project_key") or "") != project_key:
             raise RuntimeError("lane_pool_reset target is not registered")
-        lane["task_pools"] = {}
+        lane[WORKER_LINEAGES_KEY] = {}
         self.state.save()
         return self.bridge.call(
-            "lane_pool_reset_complete",
+            LANE_LINEAGE_RESET_COMPLETE_OP,
             request_id=str(control.get("request_id") or ""),
             lane_id=lane_id,
             worker_project_key=project_key,
@@ -635,7 +1141,7 @@ class BrowserRuntime:
         handler_name = self.CONTROL_HANDLERS.get(kind)
         if not handler_name:
             return None
-        if kind == "lane_clear":
+        if kind in {"lane_clear", "worker_same_generation_retry"}:
             if status not in {"PENDING", "APPLYING"}:
                 return None
         elif status != "PENDING":
@@ -652,21 +1158,127 @@ class BrowserRuntime:
             )
             return {"ok": False, "error": str(exc), "kind": kind}
 
-    def process_control(self) -> dict[str, Any]:
-        # Watchdog must run even when a control delivery keeps failing.
-        self._process_final_delivery()
-        planner_result: dict[str, Any] | None = None
-        try:
-            planner_result = self.bridge.call("planner_runtime_tick")
-        except BridgeError:
-            planner_result = None
+    def _bound_semantic_turns(self) -> list[dict[str, Any]]:
+        turns = []
+        for record in list((self.state.data.get("task_cell") or {}).get("roles", {}).values()):
+            if not isinstance(record, dict) or not record.get("active_output_ref"):
+                continue
+            turns.append({"role": record["role"], "task_id": record["task_id"],
+                          "control_epoch": record["control_epoch"], "conversation_id": record["conversation_id"],
+                          "request_id": record.get("active_request_id"), "output_ref": record["active_output_ref"],
+                          "helper_source": record.get("helper_source")})
+        for lane_id, lane in self.state.data.get("lanes", {}).items():
+            for lineage in (lane.get(WORKER_LINEAGES_KEY) or {}).values():
+                current = lineage.get("current") or {}
+                wd = current.get("worker_watchdog") or {}
+                if not current.get("handoff_verified") or current.get("final_signal") or not wd.get("child_task_id"):
+                    continue
+                turns.append({"role": "worker", "task_id": wd["child_task_id"], "backend_cl": wd["backend_cl"],
+                              "dispatch_id": wd["dispatch_id"], "dispatch_generation": wd["dispatch_generation"],
+                              "fence_token": wd["fence_token"], "worker_ref": current["handoff_id"],
+                              "lane_id": lane_id, "owner_task_id": lineage["owner_task_id"],
+                              "owner_control_epoch": lineage["owner_control_epoch"],
+                              "conversation_id": current["conversation_id"]})
+        return turns
 
+    def _stop_completed_response(self, project_key: str, conversation_id: str) -> None:
+        # Semantic state is already committed. Missing/failed UI cannot undo it.
+        try:
+            page = self.ui.find_page(project_key=project_key, conversation_id=conversation_id)
+            if page is not None:
+                self.ui.stop_response(page)
+        except Exception as exc:
+            self.bridge.event("playwright.completed_response_stop_error", "error",
+                              conversation_id=conversation_id, message=str(exc)[:1000])
+
+    def _finish_helper_output(self, record: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+        request_id = str(record.get("active_request_id") or record.get("request_id") or "")
+        output_ref = str(record.get("active_output_ref") or "")
+        conversation_id = record["conversation_id"]
+        if isinstance(result.get("worker_watchdog_restore"), dict):
+            self.workers.restore_after_helper(request_id, result["worker_watchdog_restore"])
+        pending = record.get("canonical_cleanup_pending") is True
+        deleted = pending or self._delete_exact(TASK_CELL["project_key"], TASK_CELL["project_root_url"], conversation_id)
+        cleaned = None
+        if deleted:
+            try:
+                if record.get("helper_source") == "harness_error":
+                    cleaned = {"ok": True, "cleaned": True}
+                else:
+                    cleaned = self.bridge.call("helper_cleanup_complete", task_id=record["task_id"],
+                        control_epoch=record["control_epoch"], conversation_id=conversation_id,
+                        request_id=request_id, output_ref=output_ref)
+            except BridgeError as exc:
+                cleaned = {"ok": False, "error": str(exc)}
+            if cleaned.get("ok") and cleaned.get("cleaned"):
+                self.state.clear_role(record["task_id"], record["control_epoch"], "helper", conversation_id)
+                if record.get("helper_source") == "harness_error":
+                    self.state.data.pop("harness_error", None)
+                    self.state.save()
+            else:
+                self.state.set_role({**record, "canonical_cleanup_pending": True,
+                                     "physical_deleted_at": now(), "cleanup_error": cleaned.get("error")})
+        return {**result, "helper_deleted": deleted,
+                "canonical_helper_cleaned": bool(cleaned and cleaned.get("ok") and cleaned.get("cleaned"))}
+
+    def _finish_git_turns(self, turns: list[dict[str, Any]]) -> None:
+        for row in turns:
+            binding, result = row["binding"], row["result"]
+            if not result.get("accepted"):
+                error = result if result.get("ok") is False else result.get("result") or {}
+                if error.get("ok") is False:
+                    self.bridge.event("playwright.semantic_reconcile_error", "error", role=binding.get("role"),
+                                      task_id=binding.get("task_id"), message=str(error)[:1000])
+                continue
+            try:
+                if binding["role"] == "worker":
+                    lane_id = binding.get("lane_id")
+                    lineage = self.state.get_lineage(str(lane_id or ""), str(binding.get("owner_task_id") or ""),
+                                                     int(binding.get("owner_control_epoch") or 0), create=False)
+                    current = lineage.get("current") if lineage else None
+                    if not current or current.get("conversation_id") != binding.get("conversation_id"):
+                        continue
+                    self.workers.finish_git_turn(lane_id, lineage, current, row["turn_signal"])
+                    self._stop_completed_response(self.state.lane(lane_id)["project_key"], current["conversation_id"])
+                    continue
+                record = self.state.get_role(binding["task_id"], binding["control_epoch"], binding["role"])
+                if not record or record.get("conversation_id") != binding.get("conversation_id"):
+                    continue
+                if (record.get("active_request_id") != binding.get("request_id")
+                        or record.get("active_output_ref") != binding.get("output_ref")):
+                    continue
+                if binding["role"] == "helper":
+                    self._finish_helper_output(record, result)
+                else:
+                    wd = record.get("planner_watchdog") or {}
+                    self.state.set_role({**record, "active_request_id": None, "active_output_ref": None,
+                                         "active_decision_ref": None,
+                                         "planner_watchdog": {**wd, "state": "DISARMED"}})
+                    self._stop_completed_response(TASK_CELL["project_key"], record["conversation_id"])
+            except Exception as exc:
+                self.bridge.event("playwright.semantic_cleanup_error", "error", role=binding.get("role"),
+                                  task_id=binding.get("task_id"), message=str(exc)[:1000])
+        # A deleted Helper needs no browser page to finish its existing receipt.
+        for record in list((self.state.data.get("task_cell") or {}).get("roles", {}).values()):
+            if record.get("role") == "helper" and record.get("canonical_cleanup_pending") is True:
+                try:
+                    self._finish_helper_output(record, {"ok": True, "accepted": True})
+                except Exception as exc:
+                    self.bridge.event("playwright.helper_cleanup_error", "error", message=str(exc)[:1000])
+
+    def process_control(self) -> dict[str, Any]:
+        planner_result = None
+        try:
+            planner_result = self.bridge.call("planner_runtime_tick", bound_turns=self._bound_semantic_turns())
+            self._finish_git_turns(planner_result.get("semantic_turns") or [])
+        except BridgeError:
+            pass
+        # Consume Git facts before physical watchdog/replay or a new role wake.
+        self._process_final_delivery()
+        self._planner_watchdog_sweep()
         status = self.bridge.call("control_status")
         handled = self._dispatch_control_request(status.get("control_request"))
-        if handled is not None:
-            return handled
-
-        return planner_result or {"ok": True, "idle": "no_control_action"}
+        return handled if handled is not None else planner_result or {"ok": True, "idle": "no_control_action"}
 
     def _process_bound_tool_call(
         self,
@@ -779,7 +1391,7 @@ class BrowserRuntime:
         for record in records:
             role = str(record.get("role") or "").strip().lower()
             # Helper is intentionally excluded from conversational Tool transport.
-            # Its recovery control plane is canonical Git/runtime state + semantic_sync.
+            # Its recovery control plane is canonical Git/runtime state and bound result writes.
             if role != "planner":
                 continue
             conversation_id = str(record.get("conversation_id") or "")
@@ -814,145 +1426,6 @@ class BrowserRuntime:
                 if handled is not None:
                     results.append(handled)
 
-        return results
-
-    def _process_role_syscalls(self) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        task_cell = self.state.data.get("task_cell") or {}
-        records = [
-            value for value in (task_cell.get("roles") or {}).values()
-            if isinstance(value, dict)
-        ]
-        records.extend(
-            value for value in (task_cell.get("planner_successors") or {}).values()
-            if isinstance(value, dict)
-        )
-
-        for record in records:
-            conversation_id = str(record.get("conversation_id") or "")
-            if not conversation_id:
-                continue
-            page = self.ui.find_page(
-                project_key=TASK_CELL["project_key"],
-                conversation_id=conversation_id,
-            )
-            if page is None:
-                continue
-            role = str(record.get("role") or "")
-            helper_removed = False
-            request_id = str(record.get("active_request_id") or "")
-            output_ref = str(record.get("active_output_ref") or "")
-            task_id = str(record.get("task_id") or "")
-            if role in {"planner", "helper"} and request_id and output_ref and task_id:
-                bound_turn = self.ui.marker_state(page, self._marker(request_id))
-                for text in bound_turn.get("assistant_texts") or []:
-                    for syscall in syscall_blocks(text):
-                        if syscall.get("v") != 1 or syscall.get("kind") != "semantic_sync":
-                            continue
-                        call_id = str(syscall.get("call_id") or "")
-                        if not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", call_id):
-                            continue
-                        key = "|".join(["semantic_sync", role, task_id, request_id, call_id])
-                        if key in self._seen_role_syscalls:
-                            continue
-                        result = self.bridge.call(
-                            "semantic_turn_sync",
-                            role=role,
-                            task_id=task_id,
-                            control_epoch=int(record.get("control_epoch") or 0),
-                            conversation_id=conversation_id,
-                            request_id=request_id,
-                            output_ref=output_ref,
-                        )
-                        if result.get("accepted"):
-                            if role == "planner":
-                                self._seen_role_syscalls.add(key)
-                                self.state.set_role({
-                                    **record,
-                                    "active_request_id": None,
-                                    "active_output_ref": None,
-                                    "active_decision_ref": None,
-                                })
-                            else:
-                                # Helper done is durable Git state, not a chat-ending
-                                # word. Once canonical semantic_sync accepts it, the
-                                # single-use Helper has finished and is deleted now;
-                                # do not wait for ChatGPT response-end.
-                                deleted = self._delete_exact(
-                                    TASK_CELL["project_key"],
-                                    TASK_CELL["project_root_url"],
-                                    conversation_id,
-                                )
-                                if deleted:
-                                    self.state.clear_role(
-                                        record["task_id"],
-                                        record["control_epoch"],
-                                        "helper",
-                                        conversation_id,
-                                    )
-                                    self._seen_role_syscalls.add(key)
-                                    helper_removed = True
-                                result = {**result, "helper_deleted": deleted}
-                        elif role != "helper":
-                            # Preserve historical Planner syscall dedupe. Helper
-                            # retries an unaccepted sync on later ticks because its
-                            # completion has no response-end fallback anymore.
-                            self._seen_role_syscalls.add(key)
-                        results.append({
-                            "kind": "semantic_sync",
-                            "call_id": call_id,
-                            "task_id": task_id,
-                            "role": role,
-                            "accepted": bool(result.get("accepted")),
-                            "result": result,
-                        })
-                        if helper_removed:
-                            break
-                    if helper_removed:
-                        break
-
-            if helper_removed:
-                continue
-
-            assistant = page.locator('[data-message-author-role="assistant"]')
-            start = max(0, assistant.count() - 6)
-            for index in range(start, assistant.count()):
-                text = assistant.nth(index).inner_text() or ""
-                for syscall in syscall_blocks(text):
-                    if syscall.get("v") != 1 or syscall.get("kind") != "planner_git_cli":
-                        continue
-                    call_id = str(syscall.get("call_id") or "")
-                    task_id = str(syscall.get("task_id") or "")
-                    generation = int(syscall.get("planner_generation") or 0)
-                    output_ref = str(syscall.get("output_ref") or "")
-                    key = "|".join(["planner_git_cli", call_id, task_id, str(generation), output_ref])
-                    if not call_id or not task_id or generation < 1 or not output_ref:
-                        continue
-                    if key in self._seen_role_syscalls:
-                        continue
-
-                    # Existing extension semantics: Planner Git CLI is one bounded
-                    # fallback attempt, not a browser retry loop.
-                    self._seen_role_syscalls.add(key)
-                    observed = chatgpt_location(page.url)
-                    result = self.bridge.call(
-                        "planner_git_cli",
-                        task_id=task_id,
-                        control_epoch=int(syscall.get("control_epoch") or 0),
-                        planner_generation=generation,
-                        planner_fence_token=str(syscall.get("planner_fence_token") or ""),
-                        conversation_id=str(syscall.get("conversation_id") or ""),
-                        observed_conversation_id=(observed.conversation_id if observed else ""),
-                        output_ref=output_ref,
-                        artifact=syscall.get("artifact"),
-                    )
-                    results.append({
-                        "kind": "planner_git_cli",
-                        "call_id": call_id,
-                        "task_id": task_id,
-                        "output_ref": output_ref,
-                        "duplicate": bool(result.get("duplicate")),
-                    })
         return results
 
     def _foreground_page(self) -> Any | None:
@@ -1022,10 +1495,10 @@ class BrowserRuntime:
         if receipt is None:
             targets = {}
             for lane_id, lane in self.state.data.get("lanes", {}).items():
-                pool = self.state.get_pool(lane_id, task_id, epoch, create=False)
-                if not pool:
+                lineage = self.state.get_lineage(lane_id, task_id, epoch, create=False)
+                if not lineage:
                     continue
-                for row in [pool.get("current"), *(pool.get("managed") or [])]:
+                for row in [lineage.get("current"), *(lineage.get("managed") or [])]:
                     if isinstance(row, dict) and row.get("conversation_id"):
                         key = lane["project_key"] + ":" + row["conversation_id"]
                         targets[key] = {"project_key": lane["project_key"], "project_root_url": lane["project_root_url"], "conversation_id": row["conversation_id"]}
@@ -1051,7 +1524,7 @@ class BrowserRuntime:
         if result.get("ok"):
             self.state.clear_task_roles(task_id, epoch)
             for lane_id in list(self.state.data.get("lanes", {})):
-                self.state.remove_pool(lane_id, task_id, epoch)
+                self.state.remove_lineage(lane_id, task_id, epoch)
         return result
 
     def _deliver_terminal_event(self, event: dict[str, Any], *, planner: bool) -> dict[str, Any]:
@@ -1123,22 +1596,22 @@ class BrowserRuntime:
                     if task_id and epoch > 0:
                         self.state.clear_task_roles(task_id, epoch)
                         for lane_id in list((self.state.data.get("lanes") or {}).keys()):
-                            pool = self.state.get_pool(lane_id, task_id, epoch, create=False)
-                            if not isinstance(pool, dict):
+                            lineage = self.state.get_lineage(lane_id, task_id, epoch, create=False)
+                            if not isinstance(lineage, dict):
                                 continue
                             managed = []
-                            current_id = str((pool.get("current") or {}).get("conversation_id") or "")
-                            for item in list(pool.get("managed") or []):
+                            current_id = str((lineage.get("current") or {}).get("conversation_id") or "")
+                            for item in list(lineage.get("managed") or []):
                                 if not isinstance(item, dict):
                                     continue
                                 if current_id and str(item.get("conversation_id") or "") == current_id:
                                     managed.append({**item, "status": "standby"})
                                 else:
                                     managed.append(item)
-                            pool["current"] = None
-                            pool["handoff"] = None
-                            pool["managed"] = managed
-                            self.state.set_pool(lane_id, pool)
+                            lineage["current"] = None
+                            lineage["handoff"] = None
+                            lineage["managed"] = managed
+                            self.state.set_lineage(lane_id, lineage)
             else:
                 result = self.bridge.call(
                     "foreground_terminal_consumed",
@@ -1186,41 +1659,6 @@ class BrowserRuntime:
         self.state.data.setdefault("foreground", {}).pop("pending_terminal", None)
         self.state.save()
 
-    def _observe_planner_output(self, control_result: dict[str, Any] | None) -> dict[str, Any] | None:
-        roles = (self.state.data.get("task_cell") or {}).get("roles") or {}
-        for record in list(roles.values()):
-            if not isinstance(record, dict) or record.get("role") != "planner":
-                continue
-            request_id = str(record.get("active_request_id") or "")
-            if not request_id or not record.get("active_output_ref"):
-                continue
-            page = self.ui.find_page(project_key=TASK_CELL["project_key"],
-                                     conversation_id=str(record.get("conversation_id") or ""))
-            if page is None:
-                continue
-            turn = self.ui.marker_state(page, self._marker(request_id))
-            if not turn.get("response_ended"):
-                continue
-            result = self.bridge.call(
-                "semantic_turn_sync", role="planner",
-                task_id=record["task_id"], control_epoch=record["control_epoch"],
-                conversation_id=record["conversation_id"], request_id=request_id,
-                output_ref=record["active_output_ref"],
-            )
-            if not result.get("accepted") and turn.get("signal"):
-                result = self.bridge.call(
-                    "semantic_turn_observe", role="planner", signal=turn["signal"],
-                    task_id=record["task_id"], control_epoch=record["control_epoch"],
-                    conversation_id=record["conversation_id"], request_id=request_id,
-                    output_ref=record["active_output_ref"],
-                )
-            if result.get("accepted"):
-                # Planner done consumes work; it never takes the Helper delete path.
-                self.state.set_role({**record, "active_request_id": None,
-                                     "active_output_ref": None, "active_decision_ref": None})
-            return result
-        return None
-
     def _process_final_delivery(self) -> None:
         try:
             result = self.bridge.call("planner_final_delivery_status")
@@ -1228,7 +1666,7 @@ class BrowserRuntime:
             if isinstance(event, dict):
                 self._deliver_terminal_event(event, planner=True)
         except Exception as exc:
-            self.bridge.event("planner.final_delivery_error", "warn", message=str(exc)[:800])
+            self.bridge.event("planner.final_delivery_error", "error", message=str(exc)[:800])
 
         try:
             result = self.bridge.call("foreground_terminal_status")
@@ -1236,24 +1674,16 @@ class BrowserRuntime:
             if isinstance(event, dict):
                 self._deliver_terminal_event(event, planner=False)
         except Exception as exc:
-            self.bridge.event("foreground.monitor_error", "warn", message=str(exc)[:800])
+            self.bridge.event("foreground.monitor_error", "error", message=str(exc)[:800])
 
     def tick(self) -> dict[str, Any]:
         current = time.monotonic()
-        observed_workers = self.workers.observe()
-        semantic_tools = self._process_semantic_tool_calls()
-        role_syscalls = self._process_role_syscalls()
-        self._observe_foreground_terminal()
-
-        # Response-end detection is already available from the live ChatGPT DOM.
-        # Consume completed Planner/Helper turns on the normal host tick instead
-        # of waiting for the unrelated 60s maintenance sweep.
-        planner_observation = self._observe_planner_output(None)
-        if planner_observation is not None:
-            role_syscalls.append(planner_observation)
-        # Reduce any newly completed semantic turn immediately. This can create
-        # the next bound role prompt/wake in the same host tick.
-        control_result = self.process_control()
+        self._run_stage("error_poll", self._poll_harness_errors)
+        self._service_error_helper()
+        control_result = self._run_stage("control", self.process_control)
+        observed_workers = self._run_stage("worker_observe", self.workers.observe, [])
+        semantic_tools = self._run_stage("semantic_tools", self._process_semantic_tool_calls, [])
+        self._run_stage("foreground_observe", self._observe_foreground_terminal)
         wakes: list[dict[str, Any]] = []
         maintenance: list[dict[str, Any]] = []
         liveness: list[dict[str, Any]] = []
@@ -1262,50 +1692,41 @@ class BrowserRuntime:
             self._last_wake_poll = current
             for lane_id, lane in (self.state.data.get("lanes") or {}).items():
                 if isinstance(lane, dict) and lane.get("enabled", True) and not lane.get("pending_remove"):
-                    try:
-                        wakes.append(self.workers.poll_lane(lane_id))
-                    except Exception as exc:
-                        self.bridge.event(
-                            "playwright.wake_error",
-                            "warn",
-                            lane_id=lane_id,
-                            message=str(exc)[:800],
-                        )
+                    wakes.append(self._run_stage("wake_poll", lambda: self.workers.poll_lane(lane_id)))
 
         if current - self._last_maintenance_tick >= self.cfg.maintenance_seconds:
             self._last_maintenance_tick = current
-            topology = self.bridge.call("topology_status")
-            self.state.reconcile_lanes(topology.get("lanes"))
-            maintenance = self.workers.maintain()
-            liveness = self.workers.liveness_sweep()
+            topology = self._run_stage("topology", lambda: self.bridge.call("topology_status"), {})
+            self._run_stage("topology_reconcile", lambda: self.state.reconcile_lanes(topology.get("lanes")))
+            maintenance = self._run_stage("maintenance", self.workers.maintain, [])
+            liveness = self._run_stage("liveness", self.workers.liveness_sweep, [])
 
+        self._service_error_helper()
         return {
-            "ok": True,
-            "control": control_result,
-            "wakes": wakes,
-            "role_syscalls": role_syscalls,
+            "ok": True, "control": control_result, "wakes": wakes,
             "semantic_tools": semantic_tools,
-            "observed_workers": observed_workers,
-            "maintenance": maintenance,
+            "observed_workers": observed_workers, "maintenance": maintenance,
             "liveness": liveness,
         }
 
     def run_forever(self) -> None:
-        self.connect()
         try:
+            try:
+                self.connect()
+            except Exception as exc:
+                self.bridge.event("playwright.connect_error", "error", message=str(exc)[:1000])
             while True:
                 try:
                     self.tick()
                 except Exception as exc:
                     self.bridge.event("playwright.tick_error", "error", message=str(exc)[:1000])
-                    # A page can close between lookup and observation. Keep the
-                    # mechanical watchdog alive; reconnect only if CDP died.
-                    if not self.ui.browser or not self.ui.browser.is_connected():
+                # Stage isolation must not suppress the existing CDP reconnect.
+                if not self.ui.browser or not self.ui.browser.is_connected():
+                    try:
                         self.close()
-                        try:
-                            self.connect()
-                        except Exception as reconnect_error:
-                            self.bridge.event("playwright.reconnect_error", "error", message=str(reconnect_error)[:1000])
+                        self.connect()
+                    except Exception as reconnect_error:
+                        self.bridge.event("playwright.reconnect_error", "error", message=str(reconnect_error)[:1000])
                 time.sleep(1.0)
         finally:
             self.close()

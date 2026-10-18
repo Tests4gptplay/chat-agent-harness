@@ -40,6 +40,17 @@ except ImportError:
     )
 
 
+from harness.worker_lineage_compat import (
+    HANDOFF_TASK_LINEAGE_MISSING,
+    LAST_WORKER_REF_KEY,
+    OUTGOING_WORKER_REF_KEY,
+    TASK_LINEAGE_IDENTITY_MISMATCH,
+    TASK_LINEAGE_MISSING,
+    TASK_LINEAGE_OWNER,
+    WORKER_LINEAGES_KEY,
+)
+
+
 def _safe_rel(value: Any, name: str) -> str:
     s = str(value or "").replace("\\", "/").strip()
     p = Path(s)
@@ -66,7 +77,7 @@ def _condition(cl: dict[str, Any], cid: str) -> dict[str, Any] | None:
     return None
 
 
-def _task_pool_key(owner_task_id: str, owner_control_epoch: int) -> str:
+def _task_lineage_key(owner_task_id: str, owner_control_epoch: int) -> str:
     owner = _safe_id(owner_task_id, "owner_task_id")
     epoch = int(owner_control_epoch)
     if epoch < 1:
@@ -74,7 +85,7 @@ def _task_pool_key(owner_task_id: str, owner_control_epoch: int) -> str:
     return f"{owner}::{epoch}"
 
 
-def _worker_pool_identity(bg: dict[str, Any], fallback_task_id: str) -> tuple[str, int]:
+def _worker_lineage_identity(bg: dict[str, Any], fallback_task_id: str) -> tuple[str, int]:
     scheduling = bg.get("scheduling") if isinstance(bg.get("scheduling"), dict) else {}
     owner_task_id = _safe_id(
         scheduling.get("owner_task_id") or fallback_task_id,
@@ -94,7 +105,7 @@ def canonical_worker_owner(
     owner_task_id: str,
     owner_control_epoch: int,
 ) -> tuple[str, bool, str]:
-    """Resolve the exact task-owned Worker pool authority for one physical lane."""
+    """Resolve the exact task-owned Worker lineage authority for one physical lane."""
     lane_record: dict[str, Any] | None = None
     if isinstance(lanes, dict):
         for item in lanes.get("lanes") or []:
@@ -109,19 +120,19 @@ def canonical_worker_owner(
     if lane_record is None:
         return "", False, "lane_missing"
 
-    pools = lane_record.get("task_pools")
-    if not isinstance(pools, dict):
-        return "", False, "task_pool_missing"
-    key = _task_pool_key(owner_task_id, owner_control_epoch)
-    pool = pools.get(key)
-    if not isinstance(pool, dict):
-        return "", False, "task_pool_missing"
+    lineages = lane_record.get(WORKER_LINEAGES_KEY)
+    if not isinstance(lineages, dict):
+        return "", False, TASK_LINEAGE_MISSING
+    key = _task_lineage_key(owner_task_id, owner_control_epoch)
+    lineage = lineages.get(key)
+    if not isinstance(lineage, dict):
+        return "", False, TASK_LINEAGE_MISSING
     if (
-        str(pool.get("owner_task_id") or "") != str(owner_task_id)
-        or int(pool.get("owner_control_epoch") or 0) != int(owner_control_epoch)
+        str(lineage.get("owner_task_id") or "") != str(owner_task_id)
+        or int(lineage.get("owner_control_epoch") or 0) != int(owner_control_epoch)
     ):
-        return "", False, "task_pool_identity_mismatch"
-    return str(pool.get("last_pool_takeover_id") or "").strip(), False, "task_pool_owner"
+        return "", False, TASK_LINEAGE_IDENTITY_MISMATCH
+    return str(lineage.get(LAST_WORKER_REF_KEY) or "").strip(), False, TASK_LINEAGE_OWNER
 
 
 def stage_action_submit(store: Any, req: dict[str, Any]) -> dict[str, Any]:
@@ -196,7 +207,7 @@ def stage_action_submit(store: Any, req: dict[str, Any]) -> dict[str, Any]:
 
             if not isinstance(bg, dict) or bg.get("task_id") != task_id or bg.get("scope") != "backend_execution":
                 return {"ok": False, "error": "ACTION_SUBMIT_BACKEND_CL_INVALID"}
-            owner_task_id, owner_control_epoch = _worker_pool_identity(bg, task_id)
+            owner_task_id, owner_control_epoch = _worker_lineage_identity(bg, task_id)
             canonical_owner, owner_conflict, owner_source = canonical_worker_owner(
                 canonical_lanes,
                 lane_id=lane_id,
@@ -204,7 +215,7 @@ def stage_action_submit(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 owner_task_id=owner_task_id,
                 owner_control_epoch=owner_control_epoch,
             )
-            if owner_source != "task_pool_owner" or canonical_owner != worker_ref:
+            if owner_source != TASK_LINEAGE_OWNER or canonical_owner != worker_ref:
                 return {
                     "ok": False,
                     "error": "ACTION_SUBMIT_WORKER_MISMATCH",
@@ -373,7 +384,7 @@ def _fresh_handoff_dispatch(
         "acked_at": current.get("acked_at"),
         "acked_by_worker_ref": current.get("acked_by_worker_ref"),
         "reason": "worker_handoff",
-        "recovered_at": now,
+        "handoff_at": now,
     }
     dispatch = {
         "dispatch_id": dispatch_id,
@@ -390,7 +401,7 @@ def _fresh_handoff_dispatch(
         "wait_ref": None,
         "ack_source": None,
         "predecessor_worker_ref": current.get("acked_by_worker_ref"),
-        "recovered_from": predecessor,
+        "predecessor_dispatch": predecessor,
     }
     return dispatch, predecessor
 
@@ -448,21 +459,21 @@ def _matching_rollover_request(
             continue
         if str(lane.get("project_key") or "") != worker_project_key:
             return None
-        pools = lane.get("task_pools")
-        if not isinstance(pools, dict):
+        lineages = lane.get(WORKER_LINEAGES_KEY)
+        if not isinstance(lineages, dict):
             return None
-        pool = pools.get(_task_pool_key(owner_task_id, owner_control_epoch))
-        if not isinstance(pool, dict):
+        lineage = lineages.get(_task_lineage_key(owner_task_id, owner_control_epoch))
+        if not isinstance(lineage, dict):
             return None
-        request = pool.get("worker_rollover_request")
+        request = lineage.get("worker_rollover_request")
         if not isinstance(request, dict):
             return None
-        request_handoff = str(request.get("handoff_id") or request.get("outgoing_pool_id") or "")
+        request_handoff = str(request.get("handoff_id") or request.get(OUTGOING_WORKER_REF_KEY) or "")
         if request_handoff != outgoing_worker_ref:
             return None
         if str(request.get("handoff_packet_ref") or "") != packet_ref:
             return None
-        if str(request.get("reason") or "") not in {"context_compacted", "semantic_stall"}:
+        if str(request.get("reason") or "") != "context_compacted":
             return None
         return request
     return None
@@ -509,19 +520,19 @@ def complete_worker_handoff(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 return {"ok": False, "error": "HANDOFF_BACKEND_CL_READ_FAILED"}
             if not isinstance(bg, dict) or bg.get("scope") != "backend_execution" or bg.get("task_id") != task_id:
                 return {"ok": False, "error": "HANDOFF_BACKEND_CL_INVALID"}
-            owner_task_id, owner_control_epoch = _worker_pool_identity(bg, task_id)
+            owner_task_id, owner_control_epoch = _worker_lineage_identity(bg, task_id)
             current = bg.get("dispatch")
             if not isinstance(current, dict):
                 return {"ok": False, "error": "HANDOFF_DISPATCH_MISSING"}
 
             current_generation = int(current.get("generation") or 0)
-            recovered_from = current.get("recovered_from")
+            predecessor_dispatch = current.get("predecessor_dispatch")
             if current_generation > old_generation:
                 already = (
-                    isinstance(recovered_from, dict)
-                    and int(recovered_from.get("generation") or 0) == old_generation
-                    and str(recovered_from.get("dispatch_id") or "") == old_dispatch_id
-                    and str(recovered_from.get("reason") or "") == "worker_handoff"
+                    isinstance(predecessor_dispatch, dict)
+                    and int(predecessor_dispatch.get("generation") or 0) == old_generation
+                    and str(predecessor_dispatch.get("dispatch_id") or "") == old_dispatch_id
+                    and str(predecessor_dispatch.get("reason") or "") == "worker_handoff"
                 )
                 wake = _handoff_wake_payload(
                     project_id=project_id,
@@ -537,7 +548,7 @@ def complete_worker_handoff(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 wake["handoff_packet_ref"] = packet_ref
                 return {
                     "ok": True,
-                    "already_recovered": already,
+                    "already_handed_off": already,
                     "dispatch": current,
                     "backend_cl": backend_cl_rel,
                     "wake": wake,
@@ -562,10 +573,10 @@ def complete_worker_handoff(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     break
             if lane_record is None:
                 return {"ok": False, "error": "HANDOFF_LANE_NOT_REGISTERED"}
-            pools = lane_record.get("task_pools")
-            owner_pool = pools.get(_task_pool_key(owner_task_id, owner_control_epoch)) if isinstance(pools, dict) else None
-            if not isinstance(owner_pool, dict):
-                return {"ok": False, "error": "HANDOFF_TASK_POOL_MISSING"}
+            lineages = lane_record.get(WORKER_LINEAGES_KEY)
+            owner_lineage = lineages.get(_task_lineage_key(owner_task_id, owner_control_epoch)) if isinstance(lineages, dict) else None
+            if not isinstance(owner_lineage, dict):
+                return {"ok": False, "error": HANDOFF_TASK_LINEAGE_MISSING}
 
             rollover = _matching_rollover_request(
                 lanes,
@@ -641,11 +652,11 @@ def complete_worker_handoff(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                     return {"ok": False, "error": "GIT_HANDOFF_COMPLETE_PUSH_FAILED"}
                 return {
                     "ok": True,
-                    "already_recovered": False,
+                    "already_handed_off": False,
                     "task_id": task_id,
                     "backend_cl": backend_cl_rel,
                     "dispatch": new_dispatch,
-                    "recovered_from": old_record,
+                    "predecessor_dispatch": old_record,
                     "wake_ref": wake_rel,
                     "wake": wake,
                     "commit_sha": commit_sha,
@@ -988,7 +999,7 @@ def _try_finalize_nonparallel_semantic(
     canonical_sha: str,
     attempt: int,
 ) -> dict[str, Any] | None:
-    """Accept an exact task-declared semantic artifact before any liveness redrive.
+    """Accept an exact task-declared semantic artifact before unresolved liveness is reported.
 
     The semantic finalizer performs task/dispatch/generation/fence and prerequisite
     validation. A stale/malformed artifact is non-mutating and does not suppress
@@ -1398,19 +1409,21 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                 store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
                 canonical_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
                 bg = json.loads(store._git("show", f"{canonical_sha}:{backend_cl_rel}").stdout)
+                try:
+                    task_value = json.loads(
+                        store._git("show", f"{canonical_sha}:tasks/{task_id}.json").stdout
+                    )
+                except Exception:
+                    task_value = None
             except Exception:
                 return {"ok": False, "error": "GIT_LIVENESS_STATE_FAILED"}
-            try:
-                canonical_state = json.loads(store._git("show", f"{canonical_sha}:state/chatgpt.json").stdout)
-            except Exception:
-                canonical_state = {}
             try:
                 canonical_lanes = json.loads(store._git("show", f"{canonical_sha}:state/lanes.json").stdout)
             except Exception:
                 canonical_lanes = {}
             if not isinstance(bg, dict) or bg.get("scope") != "backend_execution" or bg.get("task_id") != task_id:
                 return {"ok": False, "error": "LIVENESS_BACKEND_CL_INVALID"}
-            owner_task_id, owner_control_epoch = _worker_pool_identity(bg, task_id)
+            owner_task_id, owner_control_epoch = _worker_lineage_identity(bg, task_id)
             canonical_owner, owner_conflict, owner_source = canonical_worker_owner(
                 canonical_lanes,
                 lane_id=lane_id,
@@ -1418,7 +1431,7 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                 owner_task_id=owner_task_id,
                 owner_control_epoch=owner_control_epoch,
             )
-            if owner_source != "task_pool_owner" or canonical_owner != worker_ref:
+            if owner_source != TASK_LINEAGE_OWNER or canonical_owner != worker_ref:
                 return {
                     "ok": True,
                     "matched": True,
@@ -1466,6 +1479,57 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                     "state": state,
                     "acked_by_worker_ref": owner,
                 }
+
+            managed_planner_worker = (
+                isinstance(task_value, dict)
+                and str(task_value.get("kind") or "") == "planner_worker_child"
+            )
+            if managed_planner_worker:
+                if response_running:
+                    return {
+                        "ok": True,
+                        "matched": True,
+                        "recovered": False,
+                        "escalated": False,
+                        "reason": "managed_worker_response_running_watchdog_owned",
+                        "state": state,
+                    }
+
+                terminal = _try_finalize_planner_worker_child(
+                    store,
+                    task_id=task_id,
+                    backend_cl_rel=backend_cl_rel,
+                    canonical_sha=canonical_sha,
+                    attempt=attempt,
+                )
+                if terminal and terminal.get("retry"):
+                    continue
+                if terminal and terminal.get("finalized"):
+                    return {
+                        "ok": True,
+                        "matched": True,
+                        "recovered": False,
+                        "reason": "planner_worker_child_terminal_finalized",
+                        "terminal": terminal,
+                    }
+                return {
+                    "ok": True,
+                    "matched": True,
+                    "recovered": False,
+                    "escalated": False,
+                    "reason": "managed_worker_liveness_wait_worker_watchdog",
+                    "liveness_reason": (
+                        "semantic_response_ended"
+                        if explicit_response_end
+                        else "worker_dom_not_running"
+                    ),
+                    "task_id": task_id,
+                    "backend_cl": backend_cl_rel,
+                    "dispatch_id": dispatch_id,
+                    "dispatch_generation": generation,
+                    "fence_token": fence_token,
+                }
+
             if response_running:
                 now_dt = datetime.now(timezone.utc)
                 lease = _parse_time(current.get("lease_expires_at"))
@@ -1557,7 +1621,7 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                     "state": state,
                     "lease_expires_at": current.get("lease_expires_at"),
                 }
-            recovery_reason = "semantic_response_ended" if explicit_response_end else "semantic_lease_expired"
+            liveness_reason = "semantic_response_ended" if explicit_response_end else "semantic_lease_expired"
 
             terminal = _try_finalize_planner_worker_child(
                 store,
@@ -1596,39 +1660,18 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                     "terminal": terminal,
                 }
 
-            task_rel = f"tasks/{task_id}.json"
-            try:
-                task_value = json.loads(store._git("show", f"{canonical_sha}:{task_rel}").stdout)
-            except Exception:
-                task_value = None
-            if (
-                isinstance(task_value, dict)
-                and str(task_value.get("kind") or "") == "planner_worker_child"
-            ):
-                return {
-                    "ok": True,
-                    "matched": True,
-                    "recovered": False,
-                    "escalated": False,
-                    "reason": "managed_worker_liveness_wait_worker_watchdog",
-                    "liveness_reason": recovery_reason,
-                    "task_id": task_id,
-                    "backend_cl": backend_cl_rel,
-                    "dispatch_id": dispatch_id,
-                    "dispatch_generation": generation,
-                    "fence_token": fence_token,
-                }
-
             return {
                 "ok": True,
                 "matched": True,
                 "recovered": False,
                 "escalated": False,
-                "reason": "liveness_fault_no_automatic_redrive",
-                "liveness_reason": recovery_reason,
+                "reason": "liveness_fault_no_automatic_successor",
+                "liveness_reason": liveness_reason,
                 "task_id": task_id,
                 "backend_cl": backend_cl_rel,
                 "dispatch_id": dispatch_id,
                 "dispatch_generation": generation,
                 "fence_token": fence_token,
             }
+
+

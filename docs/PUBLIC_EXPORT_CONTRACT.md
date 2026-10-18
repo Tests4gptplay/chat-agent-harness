@@ -1,6 +1,6 @@
 # Public export feature contract
 
-A public/clean-room edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
+A future public/clean-room edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
 
 The public export is therefore not a trimmed demo fork. It is a sanitized distribution of the same architecture.
 
@@ -9,7 +9,7 @@ The public export is therefore not a trimmed demo fork. It is a sanitized distri
 A public edition must preserve at least:
 
 - Git-canonical continuity/state and replaceable Worker semantics;
-- `LICENSE` and `NOTICE` carrying the current MIT licensing terms;
+- `LICENSE` and `NOTICE` carrying the current AGPL-3.0-only terms for original CAH-owned code while preserving third-party licenses and notices;
 - foreground/backend CL supervision and evidence-gated completion;
 - scheduler dispatch identity, generation/fencing, WAIT/continuation behavior;
 - backend lane topology and bounded Worker-generation lifecycle;
@@ -44,13 +44,13 @@ Sanitization must **not** remove:
 - `harness/skill.schema.json`;
 - `harness/skills.py`;
 - `docs/SKILL_SYSTEM.md`;
-- the Skill Registry structure and synthetic unit-test coverage;
+- the `skills/` directory structure and at least one safe example Skill;
 - Skill routing in `ai/repo-map.json`;
 - Worker Skill guidance in `AGENTS.md`;
 - Skill Registry tests;
 - the external Skill import interface/docs where the adapter itself is publishable.
 
-If private Skills are stripped, retain the functional subsystem and synthetic tests. This clean source edition explicitly ships an empty personal-content registry; example population is deferred.
+If private Skills are stripped, replace them with sanitized examples so public users receive a functional Skill subsystem rather than an empty architectural reference.
 
 ## Why Skill is core
 

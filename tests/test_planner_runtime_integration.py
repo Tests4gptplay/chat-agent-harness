@@ -10,7 +10,6 @@ from unittest.mock import patch
 from pathlib import Path
 
 from local_bridge.planner_runtime import (
-    DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS,
     PlannerRuntimeError,
     _build_worker_child,
     _continue_worker_child,
@@ -40,10 +39,13 @@ from local_bridge.server import WakeStore
 TASK = "planner-hybrid-control-082"
 
 
-class PlannerShortTurnProtocolTests(unittest.TestCase):
-    def test_default_semantic_output_timeout_is_eight_minutes(self):
-        self.assertEqual(DEFAULT_SEMANTIC_OUTPUT_TIMEOUT_SECONDS, 8 * 60)
+from harness.worker_lineage_compat import (
+    LAST_WORKER_REF_KEY,
+    WORKER_LINEAGES_KEY,
+)
 
+
+class PlannerShortTurnProtocolTests(unittest.TestCase):
     def test_worker_child_requires_wait_admission_before_wait_result(self):
         base = {
             "kind": "DISPATCH_WORKER_CHILD",
@@ -267,7 +269,7 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
         self.assertIn("TWO MANDATORY MISSIONS", helper_prompt)
         self.assertIn("TWO-PHASE HELPER RESULT", helper_prompt)
         self.assertIn("OMIT turn_signal", helper_prompt)
-        self.assertIn("Harness may route this payload while this Helper remains alive", helper_prompt)
+        self.assertIn("Harness may use this payload to perform the mechanically authorized return/retry while this Helper remains alive", helper_prompt)
         self.assertIn("ONLY AFTER the correct next semantic role has actually started", helper_prompt)
         self.assertIn("turn_signal=done", helper_prompt)
         self.assertIn("FINAL Git write", helper_prompt)
@@ -312,9 +314,10 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
         self.assertIn("Leave unused slot files unchanged", prompt)
         self.assertIn("outcome.json LAST", prompt)
         self.assertIn("set turn_signal to exactly one of done, rework, complete, handoff", prompt)
-        self.assertIn('"kind":"semantic_sync"', prompt)
+        self.assertIn("without a chat ending, syscall block or response-end", prompt)
+        self.assertNotIn("GAH_SYSCALL_BEGIN", prompt)
         self.assertIn("Do not fill the Harness-owned internal outcome field", prompt)
-        self.assertIn("Do not append the legacy one-word ending", prompt)
+        self.assertIn("After that durable write succeeds, stop.", prompt)
         self.assertNotIn("evidence_read", prompt)
         self.assertNotIn("worker_count", prompt)
 
@@ -474,13 +477,13 @@ class PlannerWorkerAdmissionIntegrationTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "project_key": "g-p-plannertest",
-                    "last_pool_takeover_id": worker_ref,
+                    LAST_WORKER_REF_KEY: worker_ref,
                 }],
             }
             state = {
                 "v": 1,
                 "agent": "chatgpt",
-                "last_pool_takeover_id": worker_ref,
+                LAST_WORKER_REF_KEY: worker_ref,
             }
 
             (work / backend_rel).write_text(json.dumps(backend), encoding="utf-8")
@@ -604,7 +607,7 @@ class PlannerTurnReductionIntegrationTests(unittest.TestCase):
                     "lane_id": "lane-00",
                     "project_key": "g-p-plannertest",
                     "enabled": True,
-                    "task_pools": {},
+                    WORKER_LINEAGES_KEY: {},
                 }],
             }
             state = {"v": 1, "agent": "chatgpt", "control_request": None}
@@ -998,11 +1001,11 @@ class PlannerTerminalRestoreIntegrationTests(unittest.TestCase):
                     "lane_id": "lane-00",
                     "project_key": lane_project_key,
                     "enabled": True,
-                    "task_pools": {
+                    WORKER_LINEAGES_KEY: {
                         f"{task_id}::{epoch}": {
                             "owner_task_id": task_id,
                             "owner_control_epoch": epoch,
-                            "last_pool_takeover_id": "pool-current",
+                            LAST_WORKER_REF_KEY: "pool-current",
                             "worker_rollover_request": {
                                 "handoff_id": "pool-current",
                                 "reason": "context_compacted",
@@ -1088,7 +1091,7 @@ class PlannerTerminalRestoreIntegrationTests(unittest.TestCase):
             self.assertEqual(frontier["paused_work"], {"task_id": "unrelated-paused-task"})
 
             lanes_after = self._read_remote_json(work, "state/lanes.json")
-            self.assertNotIn(f"{task_id}::{epoch}", lanes_after["lanes"][0]["task_pools"])
+            self.assertNotIn(f"{task_id}::{epoch}", lanes_after["lanes"][0][WORKER_LINEAGES_KEY])
 
             janitor = execute_planner_cleanup(
                 store,

@@ -34,7 +34,7 @@ READY dispatch
 -> Worker performs semantic work
 -> Worker reply entry
 -> semantic content in exact Result Artifact
--> bound short chat signal
+-> final bound Git turn_signal
 -> deterministic finalizer
 -> terminal / wait / next READY dispatch
 ```
@@ -82,29 +82,31 @@ current Worker
 
 The replacement performs useful semantic work in its first response.
 
-A Worker can request g1 -> g2 as soon as context replacement is needed. It does not wait for a full retention pool or author global lane state, a pool id, a generation/fence, or a second copy of its Reply.
+A Worker can request g1 -> g2 as soon as context replacement is needed. It does not wait for a full retention lineage or author global lane state, a lineage id, a generation/fence, or a second copy of its Reply.
 
 ## Liveness
 
-Playwright directly observes whether the current assistant response is running or ended.
+Playwright owns managed Worker and Planner physical watchdog timing.
 
-Harness reconciles that browser state with backend CL state and the exact expected output.
+When a managed Worker wake reaches real response-start/admission, the physical Worker record arms one fixed 30-minute `WORKER_HELPER` deadline bound to the exact conversation + wake + dispatch/generation/fence.
 
-A running response is positive liveness evidence, not a lease failure. The semantic lease is a lost-observation watchdog, not a maximum Worker execution duration. The default Worker semantic lease is 10 minutes. A currently observed running response remains positive liveness and must not be recovered merely because the original lease boundary is near or crossed; the bounded renewal path preserves the same generation/fence when needed. While the exact current response is still running, Harness must not recover or replace that Worker merely because wall-clock time crossed the original lease. When the remaining lease enters the bounded renewal margin, the maintenance sweep renews the same generation/fence and leaves the Worker owner unchanged. Renewal is deliberately coarse-grained so normal 60-second observation does not create a Git write on every sweep.
+When a managed Planner turn reaches real response-start, the physical Planner role binding arms one fixed 30-minute `PLANNER_PHYSICAL_WATCHDOG` deadline bound to the exact conversation + Planner request/output/generation/fence. Managed Planner turns do not use semantic-output timeout for liveness. Expiry is handled mechanically by Harness through canonical validation, same-conversation Stop + exact wake replay, and only if that fails exact physical-conversation replacement within the same Planner generation. A failed recovery transaction re-arms another 30-minute cycle while that exact Planner turn remains unresolved; recovery failure is not a terminal watchdog state.
 
-A running response is not a completed turn. Tool-result continuation remains inside the bound semantic turn. Do not accept historical/quoted signals or submit another wake into a busy composer as though it started a new response.
+Managed `planner_worker_child` dispatches do **not** use the old 10-minute semantic-lease renewal loop. `reconcile_dispatch_liveness()` may observe the exact managed Worker and finalize an already-durable terminal Result, but it does not renew a managed Worker lease, create a successor generation, or decide Helper escalation. The independent 30-minute Playwright watchdog is the only managed-Worker liveness owner.
 
-The semantic lease and the Worker watchdog are separate mechanisms. The 10-minute semantic lease protects dispatch observation and may be renewed while the exact response is visibly running. It does **not** decide when to invoke Helper.
+The 10-minute semantic lease remains only for non-managed/legacy semantic dispatch classes that still require lost-observation protection. That compatibility lease is outside the managed Task Cell Worker watchdog.
 
-When Playwright successfully creates/wakes a managed Worker and response-start/admission succeeds, the physical Worker record arms a fixed 30-minute `WORKER_HELPER` watchdog for that exact conversation + wake + dispatch/generation/fence. Lease renewal never moves this deadline. At the deadline, if that exact backend dispatch is still RUNNING, Playwright calls the dedicated `worker_watchdog_expired` bridge path and Harness stages a single-use Worker Helper. This check runs from the retained Worker binding before DOM turn parsing, so a missing/unknown `dispatch_turn_state()` cannot silently suppress the watchdog.
+At the 30-minute deadline, if the exact managed backend dispatch is still RUNNING, Playwright calls `worker_watchdog_expired` directly from the retained Worker binding before DOM turn parsing. A missing or unknown `dispatch_turn_state()` therefore cannot suppress Worker Helper escalation.
 
-Worker-watchdog Helper state is deliberately distinct from Planner Helper state: `WAIT_WORKER_HELPER`, `worker_helper_result`, `task_cell_worker_helper_prompt`, `WORKER_HELPER_RESULT`, and `worker-helper-*` request ids identify this path. Planner-requested Helper work continues to use its existing `WAIT_HELPER` / `helper_result` path.
+Worker-watchdog Helper state is deliberately distinct from Planner Helper state: `WAIT_WORKER_HELPER`, `worker_helper_result`, `task_cell_worker_helper_prompt`, `WORKER_HELPER_RESULT`, and `worker-helper-*` request ids identify this path. Planner-requested Helper work continues to use `WAIT_HELPER` / `helper_result`.
 
-`reconcile_dispatch_liveness()` never creates a successor generation, dispatch, fence or wake and does not itself start the 30-minute Worker Helper. It may renew the exact current lease, finalize an already-durable terminal Result, or report an unresolved liveness observation while the independent Playwright watchdog continues toward its deadline.
+After a Worker watchdog incident, Helper first inspects and repairs a concrete operational fault when possible. If the exact Worker remains abnormally unresolved and no concrete repairable fault is found, Helper exact-deletes that physical Worker conversation, appends a **WORKER_HELPER INCIDENT** breadcrumb to the Worker Child Reply, and restores/re-delivers the original same-generation wake/binding through Harness.
 
-After a Worker watchdog incident, Helper first inspects and repairs a concrete operational fault when possible. If the exact Worker remains abnormally unresolved and no concrete repairable fault is found, Helper exact-deletes that physical Worker conversation, appends a **HELPER INCIDENT** breadcrumb to the Worker Child Reply, and restores/re-delivers the original same-generation wake/binding through Harness. Watchdog recovery must not synthesize G+1, a new dispatch, a new fence, or a new wake identity. A new Worker generation is created only by the normal semantic continuation/handoff lifecycle.
+The physical retry is not a semantic handoff. Harness records it as a same-generation physical retry, keeps the original generation/dispatch/fence/wake/worker owner, and switches only the local current conversation pointer after the replacement response-start. A new Worker generation is created only by the normal semantic continuation/handoff lifecycle.
 
-Harness/runtime is the mechanical watchdog. The 30-minute threshold is an escalation boundary for operational inspection, not by itself proof of semantic failure or a Planner replacement signal.
+For Planner-watchdog recovery, physical replacement preserves the exact control epoch, Planner generation/fence, original request/challenge/output/turn identity and semantic direction; only the Planner conversation binding changes. Planner `handoff` remains the only semantic Planner generation transition.
+
+The 30-minute thresholds are escalation boundaries for operational inspection, not by themselves proof of semantic failure or permission to change semantic generation.
 
 ## Generation/fencing
 
@@ -123,9 +125,9 @@ Planner done/rework -> resume pending continuation with approved/corrected direc
 Worker complete at any generation -> immediate Planner acceptance review
 ```
 
-An approved pending continuation resumes even if the Task/direction is unchanged. A Worker completing at g7 does not wait for g10. There is no five-Child settlement barrier; the independent 565 rule limits retained conversations per task/epoch/lane pool, not the work graph.
+An approved pending continuation resumes even if the Task/direction is unchanged. A Worker completing at g7 does not wait for g10. There is no five-Child settlement barrier; the independent 565 rule limits retained conversations per task/epoch/lane lineage, not the work graph.
 
-The role-bound short-signal contract is in `docs/task-cell/README.md`. Planner `done` keeps Planner; Helper `done` retires only the finished Helper after result receipt. Planner `handoff` replaces the sole current Planner and inherits Task/Memory; normal turn count and elapsed time do not cause rotation.
+The role-bound Git-signal contract is in `docs/task-cell/README.md`. Planner `done` keeps Planner; Helper `done` retires only the finished Helper after result receipt. Planner `handoff` replaces the sole current Planner and inherits Task/Memory. Separately, Harness enforces the deterministic Planner prompt ceiling (default 10 response-starts per generation) after the current turn is fully reduced; watchdog replays continue that same count. Elapsed wall time by itself does not cause semantic Planner rotation.
 
 ## Terminal lifecycle
 
