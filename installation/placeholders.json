@@ -45,9 +45,6 @@
       "LANE00_KEY",
       "LANE01_KEY"
     ],
-    "docs/RECORD_ARCHIVE.md": [
-      "RECORD_REPOSITORY"
-    ],
     "docs/TOOL_SYSTEM.md": [
       "REPO_ROOT"
     ],
@@ -131,13 +128,8 @@
     "state/record-store.json": [
       "RECORD_REPOSITORY"
     ],
-    "tests/test_action_submit_syscall.py": [
-      "LANE00_KEY"
-    ],
     "tests/test_lane_topology.py": [
-      "REPOSITORY",
-      "LANE00_KEY",
-      "LANE01_KEY"
+      "REPOSITORY"
     ],
     "tests/test_parallel_branch_finalize.py": [
       "REPOSITORY"
@@ -145,12 +137,8 @@
     "tests/test_planner_runtime_integration.py": [
       "REPOSITORY"
     ],
-    "tests/test_startup_wiring.py": [
-      "BROWSER_ROOT"
-    ],
     "tests/test_wake_protocol.py": [
-      "REPOSITORY",
-      "LANE00_KEY"
+      "REPOSITORY"
     ],
     "AGENTS.md": [
       "COLD_RUNNER_NAME"
@@ -179,7 +167,7 @@
       {
         "file": "Reset_CAH_Hot_State.bat",
         "lines": [
-          11
+          12
         ]
       },
       {
@@ -203,7 +191,7 @@
       {
         "file": "local_bridge/server.py",
         "lines": [
-          46
+          49
         ]
       }
     ],
@@ -211,14 +199,14 @@
       {
         "file": "Reset_CAH_Hot_State.bat",
         "lines": [
-          9,
-          10
+          10,
+          11
         ]
       },
       {
         "file": "Start_CAH.ps1",
         "lines": [
-          17
+          19
         ]
       },
       {
@@ -250,13 +238,6 @@
         "lines": [
           19
         ]
-      },
-      {
-        "file": "tests/test_startup_wiring.py",
-        "lines": [
-          24,
-          74
-        ]
       }
     ],
     "MANAGED_RUNNER_ROOT": [
@@ -272,6 +253,96 @@
         "file": "Start_CAH.ps1",
         "lines": [
           14
+        ]
+      }
+    ],
+    "COLD_RUNNER_ROOT": [
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          16
+        ]
+      },
+      {
+        "file": "local_bridge/planner_runtime.py",
+        "lines": [
+          835
+        ]
+      },
+      {
+        "file": "docs/task-cell/HELPER.md",
+        "lines": [
+          32,
+          45
+        ]
+      },
+      {
+        "file": "tests/test_cold_burst_runner.py",
+        "lines": [
+          10
+        ]
+      },
+      {
+        "file": "tests/test_helper_recovery.py",
+        "lines": [
+          527
+        ]
+      }
+    ],
+    "COLD_RUNNER_NAME": [
+      {
+        "file": "Start_CAH.ps1",
+        "lines": [
+          17
+        ]
+      },
+      {
+        "file": "local_bridge/planner_runtime.py",
+        "lines": [
+          835,
+          955
+        ]
+      },
+      {
+        "file": "AGENTS.md",
+        "lines": [
+          29,
+          31,
+          35
+        ]
+      },
+      {
+        "file": "docs/task-cell/PLANNER.md",
+        "lines": [
+          44,
+          55
+        ]
+      },
+      {
+        "file": "docs/task-cell/WORKER.md",
+        "lines": [
+          45,
+          47,
+          51
+        ]
+      },
+      {
+        "file": "docs/task-cell/HELPER.md",
+        "lines": [
+          31,
+          45
+        ]
+      },
+      {
+        "file": "tests/test_cold_burst_runner.py",
+        "lines": [
+          11
+        ]
+      },
+      {
+        "file": "tests/test_helper_recovery.py",
+        "lines": [
+          526
         ]
       }
     ],
@@ -334,47 +405,6 @@
           11,
           12
         ]
-      },
-      {
-        "file": "tests/test_action_submit_syscall.py",
-        "lines": [
-          67,
-          100,
-          114,
-          161
-        ]
-      },
-      {
-        "file": "tests/test_lane_topology.py",
-        "lines": [
-          19,
-          59,
-          60,
-          77,
-          82,
-          83,
-          133,
-          134
-        ]
-      },
-      {
-        "file": "tests/test_wake_protocol.py",
-        "lines": [
-          77,
-          257,
-          427,
-          428,
-          456,
-          474,
-          528,
-          529,
-          563,
-          577,
-          608,
-          609,
-          639,
-          651
-        ]
       }
     ],
     "LANE01_KEY": [
@@ -390,46 +420,23 @@
           20,
           21
         ]
-      },
-      {
-        "file": "tests/test_lane_topology.py",
-        "lines": [
-          89,
-          90,
-          149,
-          150
-        ]
-      }
-    ],
-    "RECORD_REPOSITORY": [
-      {
-        "file": "docs/RECORD_ARCHIVE.md",
-        "lines": [
-          21
-        ]
-      },
-      {
-        "file": "state/record-store.json",
-        "lines": [
-          4
-        ]
       }
     ],
     "REPO_ROOT": [
       {
         "file": "docs/TOOL_SYSTEM.md",
         "lines": [
+          168,
+          169,
           170,
           171,
-          172,
-          173,
-          174
+          172
         ]
       },
       {
         "file": "docs/task-cell/FOREGROUND.md",
         "lines": [
-          171
+          174
         ]
       },
       {
@@ -449,7 +456,7 @@
       {
         "file": "docs/task-cell/FOREGROUND.md",
         "lines": [
-          131
+          134
         ]
       }
     ],
@@ -478,17 +485,17 @@
       {
         "file": "local_bridge/planner_runtime.py",
         "lines": [
-          708,
-          818,
-          1531,
-          3848,
-          3951
+          833,
+          952,
+          1712,
+          3877,
+          3976
         ]
       },
       {
         "file": "local_bridge/scheduler.py",
         "lines": [
-          416
+          427
         ]
       },
       {
@@ -500,13 +507,13 @@
       {
         "file": "playwright_host/worker.py",
         "lines": [
-          39
+          45
         ]
       },
       {
         "file": "tests/test_lane_topology.py",
         "lines": [
-          16
+          22
         ]
       },
       {
@@ -520,18 +527,18 @@
       {
         "file": "tests/test_planner_runtime_integration.py",
         "lines": [
-          78,
-          91,
-          149,
-          178
+          80,
+          93,
+          151,
+          180
         ]
       },
       {
         "file": "tests/test_wake_protocol.py",
         "lines": [
-          27,
-          45,
-          75
+          34,
+          52,
+          78
         ]
       }
     ],
@@ -586,7 +593,15 @@
           6
         ]
       }
+    ],
+    "RECORD_REPOSITORY": [
+      {
+        "file": "state/record-store.json",
+        "lines": [
+          5
+        ]
+      }
     ]
   },
-  "policy": "Render into a NEW private operational copy only; original private values are not included."
+  "policy": "Render into a NEW, independently verified private operational copy only. Never restore maintainer identities."
 }

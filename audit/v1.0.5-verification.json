@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "version": "v1.0.5",
+  "test_environment": "ubuntu-latest / python 3.11",
+  "source": "public repository reviewed candidate",
+  "tests_run": 391,
+  "skipped": 17,
+  "failures": 0,
+  "errors": 0,
+  "offline_status": "PASS",
+  "run_id": "39140608093",
+  "candidate_public_commit": "a7606f0995189dce45295d6b310568fcee97c058",
+  "verified_at": "2026-10-18T15:29:36.896418+00:00",
+  "security_scope": "Static current-public-tree scan, not past Git history or third-party security audit",
+  "not_claimed": [
+    "fresh Windows installation",
+    "real ChatGPT login/Runner registration",
+    "live Task Cell/Helper recovery on a new machine",
+    "third-party security review"
+  ]
+}
