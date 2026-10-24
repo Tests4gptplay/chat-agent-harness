@@ -6,8 +6,6 @@ param(
   [string]$LocalWorkerLanes = 'lane-00,lane-01'
 )
 
-& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Continue'
 $runtimeDir = Join-Path $BridgeRoot 'runtime'
 $logsDir = Join-Path $BridgeRoot 'logs'

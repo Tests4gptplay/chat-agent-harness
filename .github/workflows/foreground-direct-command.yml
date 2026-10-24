@@ -1,0 +1,19 @@
+name: CAH Foreground direct command
+run-name: Idle Foreground command slot
+'on':
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/foreground-direct-command.yml'
+permissions:
+  contents: read
+jobs:
+  idle:
+    if: false
+    runs-on: cah-shot
+    timeout-minutes: 2
+    steps:
+      - name: Idle mutable command slot
+        shell: pwsh
+        run: |
+          Write-Host 'Idle Foreground slot. No command is configured.'

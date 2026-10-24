@@ -20,19 +20,21 @@ CAH builds the lifecycle, scheduling, recovery, and execution machinery around t
 
 ---
 
-## v1.0.5 upgrade candidate — what's new since v1.0.4
+## Current source update
 
-**A substantial lifecycle/recovery upgrade, not just a new version number.** Public `main` is the unconfigured source; the [v1.0.5 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.5) is its versioned, tested download only after CI passes. The [v1.0.4 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.4) remains a historical release, not the operational configuration for this code.
+The October 2026 source update brings current lifecycle, recovery, scheduling and reusable execution capabilities into the public edition.
 
-| Area | v1.0.5 source candidate |
+| Area | Current behavior |
 |---|---|
-| **Helper** | Immediate bounded recovery on reported Harness/Host/Bridge errors; exact ownership, incident evidence and safe cleanup. Other task-level recovery remains bounded by role authority. |
-| **Worker continuity** | About 10-minute healthy checkpoint/handoff guidance; distinct 30-minute hard watchdog for same-generation physical rebirth, preserving dispatch/fence and durable progress. |
-| **Completion** | Final semantic Result/Outcome is a canonical Git write with `turn_signal`; Harness reconciles that artifact without requiring `semantic_sync` or a chat-text ACK. |
-| **Capacity** | Primary Managed Runner, isolated `cah-shot` short-task/rescue capacity, and optional normally-off `backup` Cold/Burst Managed Runner. |
-| **Distribution** | Privacy-sanitized unconfigured source, AGPL-3.0-only for current project-owned material, explicit new-private-instance setup and per-capability workflow provisioning. |
+| Helper | Immediate bounded recovery for reported Harness/Host/Bridge errors, with task-owned diagnosis and exact cleanup. |
+| Continuity | Task-scoped Worker generations and retention, Planner Memory, durable Child Reply and checkpointed handoff. |
+| Completion | The final Result/Outcome write carries `turn_signal`; Harness reconciles canonical Git and advances the task. |
+| Capacity | Two normally online Managed Runners; the second retains `backup`. A separate `cah-shot` Runner handles short tasks and recovery control. |
+| Execution | Reusable Managed, Stage 0, capability-probe, action-recovery, Skill-import and Short Task workflows. |
+| Skills | Reusable procedures and guides covering asset work, diagnosis, transfer and execution, with personal case material separated. |
+| Installation | AI-led deployment, browser-read Project URLs and a configuration tool for each user's installation. |
 
-**Installers must re-plan their own private repository, paths, browser profile, ChatGPT Projects, Runner identities and missing workflow capabilities.** Source presence and offline checks alone do not prove a new operational installation. See [release notes](RELEASE_NOTES.md), [installation guide](installation/README.md) and [v1.0.5 privacy/redeployment checklist](installation/UPGRADE_AND_REDEPLOY_V1_0_5.md).
+[Install CAH](installation/README.md) · [Update notes](RELEASE_NOTES.md)
 
 ---
 
@@ -221,37 +223,21 @@ Tools are executable capabilities: browser interaction, local command execution,
 
 Skills are reusable semantic procedures learned or imported from successful work. A Skill can describe how to approach a recurring class of task while leaving actual execution to the relevant Tool or authorized environment.
 
-The public source distribution intentionally starts without the maintainer's personal Skill collection.
+The public library includes reusable procedures, guides and source material. Task-specific inputs, personal preferences and private case records stay in each user's installation.
 
 ---
 
-## Public source vs. operational CAH
+## Your CAH installation
 
-**This repository is a public source distribution. It is not intended to be the live state repository for real CAH work.**
-
-A live CAH instance may accumulate task descriptions, planning state, project information, execution evidence, machine bindings, ChatGPT Project bindings, local configuration, and reusable Skills derived from private work.
-
-For that reason, normal deployment uses a separate **private operational repository**.
+Use this public source to configure your own private operational repository. That repository stores your task descriptions, Planner Memory, Worker replies, results and local installation bindings.
 
 ```text
-Public CAH source
-        |
-        v
-Create / select a private operational repository
-        |
-        v
-Generate installation-specific configuration
-        |
-        v
-Bind browser, Projects and Runners
-        |
-        v
-Run real CAH tasks
+Public source -> Configure your repository and paths
+              -> Bind ChatGPT Projects and Runner roles
+              -> Start CAH and work from the Foreground chat
 ```
 
-The installer should verify repository visibility from an authoritative GitHub source before enabling real task execution.
-
-Do not use this public repository as the canonical store for private runtime state.
+The [Installation guide](installation/README.md) walks the deployment AI through that process.
 
 ---
 
@@ -265,74 +251,19 @@ Do not use this public repository as the canonical store for private runtime sta
 
 ## Installation
 
-The current public edition is designed for **AI-assisted installation** rather than blind path replacement.
+**[AI-led Installation guide](installation/README.md)**
 
-Start here:
-
-**[installation/README.md](installation/README.md)**
-
-**v1.0.5 privacy and re-deployment notice:** The public source deliberately omits the maintainer's runtime state, paths, project/account bindings, runner credentials, personal Skills and private workflow payloads. Do not run it in place or assume it is preconfigured; follow [v1.0.5 private re-deployment plan](installation/UPGRADE_AND_REDEPLOY_V1_0_5.md) and create a separately configured private operational copy.
-
-The installation package contains:
+Give the guide to an AI with Windows command/file access and browser control. It prepares the tools, reads your Project URLs, configures your instance, registers the Runner roles and starts CAH. You handle the login and account authorization prompts.
 
 ```text
 installation/
-├── README.md
-├── CONFIGURATION_MAP.md
-├── OMITTED_COMPONENTS.md
-├── config.example.json
-├── placeholders.json
-├── configure.py
-├── preflight.py
-└── first_start.ps1
+    README.md
+    CONFIGURATION_MAP.md
+    config.example.json
+    configure.py
 ```
 
-### Configuration is explicit
-
-Machine-specific values are represented by placeholders rather than maintainer paths.
-
-The installation map explains:
-
-- what each removed private path or identifier originally did;
-- which runtime component consumes it;
-- what the installer should discover on the new machine;
-- where the replacement value belongs;
-- how to verify it.
-
-Configuration classes include the CAH checkout, Bridge runtime, Managed and Short Task Runners, browser runtime, Chrome executable and profile, Playwright tools, work/temp directories, operational Git repository, Task Cell Project, Worker lane Projects, and Foreground conversation.
-
-The installer generates a **new operational copy** rather than modifying the clean source tree in place.
-
-```text
-python installation/audit.py
-python installation/configure.py --config <LOCAL_CONFIG_JSON> --output <NEW_OPERATIONAL_DIRECTORY>
-```
-
----
-
-## What is intentionally not included
-
-The clean public source does **not** ship the maintainer's private runtime environment.
-
-In particular, this edition excludes:
-
-- personal Skills and imported Skill snapshots;
-- private workflow and toolbox payloads;
-- active tasks;
-- Planner / Worker memory from real tasks;
-- result and evidence history;
-- conversation identifiers;
-- real ChatGPT Project bindings;
-- machine capability caches;
-- local browser profiles;
-- credentials or authentication material;
-- private Git history;
-- previous deployment-specific state;
-- raw private showcase histories and unreviewed case payloads.
-
-The underlying Skill, Tool, scheduler, browser, Planner, Worker, Helper, and execution architecture remains.
-
-A missing workflow therefore means **WORKFLOW_NOT_PROVISIONED** — not that a private maintainer workflow should be copied from somewhere else.
+The configuration tool creates a new operational copy with your repository, directories, Projects and Foreground conversation. Daily startup uses `Start_CAH.bat`.
 
 ---
 
@@ -368,42 +299,9 @@ More sanitized showcases can be added here as complete end-to-end records become
 
 ---
 
-## Current status
+## Source and downloads
 
-See the [v1.0.5 Release](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.0.5) for the authoritative published artifact and current verification evidence. Public `main` is not a configured operational instance. Historical test totals below must not be used as v1.0.5 CI results.
-
-Historical clean source tag (2026-09-29; **not** a v1.0.5 Release):
-
-```text
-clean-2026-09-29
-```
-
-The previous public source tree is preserved at:
-
-```text
-archive/pre-clean-20260929
-```
-
-The six obsolete test expectations found during migration were reviewed and retired as outdated test contracts rather than carried forward as current runtime defects.
-
-### Historical clean-template validation (not v1.0.5 evidence)
-
-The archived September clean-template checks reported:
-
-- **306** offline tests;
-- **0 failures**;
-- **0 errors**;
-- Linux publication run: **296 passed / 10 environment or packaging skips**;
-- Windows installation/startup checks: **18 / 18 passed**;
-- PowerShell parser: **10 / 10 scripts, 0 errors**;
-- privacy/integrity scan: **PASS**;
-- relative Markdown link check: **PASS**.
-
-See [audit/PUBLICATION.json](audit/PUBLICATION.json), [audit/verification.json](audit/verification.json), and [audit/TEST_CONTRACT_CLEANUP.md](audit/TEST_CONTRACT_CLEANUP.md).
-
-This does **not** claim independent third-party security certification, universal compatibility with every machine, or fresh-machine acceptance on arbitrary hardware.
-
-The existing development deployment has also completed real Viewer and Cook workloads, but those operational cases are not presented as a substitute for independent installation testing.
+Use public `main` for the current source and [Releases](https://github.com/Tests4gptplay/chat-agent-harness/releases) for versioned downloads. [Update notes](RELEASE_NOTES.md) describe the current changes.
 
 ---
 
@@ -434,7 +332,7 @@ Important entry points:
 - [docs/task-cell/WORKER.md](docs/task-cell/WORKER.md) — Worker contract
 - [docs/task-cell/HELPER.md](docs/task-cell/HELPER.md) — Helper contract
 - [docs/SCHEDULER_MODEL.md](docs/SCHEDULER_MODEL.md) — scheduling model
-- [docs/CONVERSATION_POOL.md](docs/CONVERSATION_POOL.md) — conversation ownership and retention
+- [docs/WORKER_GENERATIONS.md](docs/WORKER_GENERATIONS.md) — conversation ownership and retention
 - [docs/TOOL_SYSTEM.md](docs/TOOL_SYSTEM.md) — reusable executable capabilities
 - [docs/SKILL_SYSTEM.md](docs/SKILL_SYSTEM.md) — reusable semantic procedures
 - [docs/STORAGE_POLICY.md](docs/STORAGE_POLICY.md) — runtime/task storage policy
@@ -464,15 +362,15 @@ The current maintained reference environment is Windows-based.
 A typical installation uses:
 
 - Git;
-- Python 3.10+;
-- PowerShell;
-- Node.js for Playwright tooling;
+- Python with the Windows `py` launcher;
+- Windows PowerShell and PowerShell 7;
+- Node.js 20+ for Playwright tooling;
 - Chrome or a compatible configured browser;
 - GitHub access;
 - GitHub Actions self-hosted Runner(s);
 - an authenticated ChatGPT browser session.
 
-Professional applications such as Blender or Unreal Engine are **not** bundled or automatically selected by CAH. They are installed and authorized according to the user's actual task requirements.
+Choose and install professional applications such as Blender or Unreal Engine according to the task.
 
 ---
 
@@ -488,12 +386,4 @@ Third-party applications, services, models, and platforms remain subject to thei
 
 ## Project stage
 
-CAH is an experimental but working system.
-
-It has moved beyond the original GPT ↔ Git ↔ local execution experiment into a persistent multi-role harness with real task execution, lifecycle management, recovery, and reusable capability infrastructure.
-
-There is still substantial work ahead, particularly around portability, installation ergonomics, broader environment validation, and public examples.
-
-For now, the repository should be read as:
-
-**a working engineering project, not a finished universal agent platform.**
+CAH is a working engineering project with persistent multi-role coordination, local task execution, lifecycle management, recovery and reusable capability infrastructure. Development continues on installation ergonomics, portability and public examples.

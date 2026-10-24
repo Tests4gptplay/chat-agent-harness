@@ -39,13 +39,13 @@
       ],
       "note": "Canonical resume/task continuity state; not an append-only history."
     },
-    "worker_pool": {
+    "worker_lineage": {
       "owns": [
         "playwright_host/worker.py",
         "playwright_host/ui.py"
       ],
       "contracts": [
-        "docs/CONVERSATION_POOL.md"
+        "docs/WORKER_GENERATIONS.md"
       ],
       "shared": [
         "local_bridge/server.py"
@@ -100,7 +100,9 @@
       "contracts": [
         "browser/playwright/README.md"
       ],
-      "tests": []
+      "tests": [
+        "tests/test_public_export_contract.py"
+      ]
     },
     "design_reference": {
       "owns": [
@@ -139,7 +141,9 @@
     },
     "codex_skill_import": {
       "owns": [
-        "executors/codex_skill_import.py"
+        "executors/codex_skill_import.py",
+        ".github/workflows/codex-skill-sync.yml",
+        "imports/codex-skills/"
       ],
       "contracts": [
         "docs/CODEX_SKILL_IMPORT.md",
@@ -209,7 +213,8 @@
       "owns": [
         "host/capabilities.py",
         "executors/host_capability.py",
-        "harness/resource_wait.py"
+        "harness/resource_wait.py",
+        ".github/workflows/host-capability-probe.yml"
       ],
       "contracts": [
         "harness/host_capability.schema.json",
@@ -223,7 +228,6 @@
     },
     "record_archive": {
       "owns": [
-        "state/record-store.json",
         "docs/RECORD_ARCHIVE.md"
       ],
       "contracts": [
@@ -252,9 +256,9 @@
     }
   },
   "read_sets": {
-    "worker_pool_debug": {
+    "worker_lineage_debug": {
       "primary": [
-        "docs/CONVERSATION_POOL.md"
+        "docs/WORKER_GENERATIONS.md"
       ],
       "expand_on_failure": [
         "playwright_host/worker.py",
@@ -311,7 +315,6 @@
     },
     "skill_registry": {
       "primary": [
-        "skills/index.json",
         "docs/SKILL_SYSTEM.md"
       ],
       "expand_on_failure": [
@@ -322,8 +325,7 @@
     },
     "codex_skill_import": {
       "primary": [
-        "docs/CODEX_SKILL_IMPORT.md",
-        "skills/index.json"
+        "docs/CODEX_SKILL_IMPORT.md"
       ],
       "expand_on_failure": [
         "executors/codex_skill_import.py",
@@ -364,7 +366,7 @@
         "playwright_host/runtime.py",
         "local_bridge/control.py",
         "local_bridge/server.py",
-        "docs/CONVERSATION_POOL.md"
+        "docs/WORKER_GENERATIONS.md"
       ]
     },
     "context_economy": {
@@ -388,6 +390,7 @@
         "executors/host_capability.py",
         "harness/resource_wait.py",
         "harness/cl.schema.json",
+        ".github/workflows/host-capability-probe.yml",
         "tests/test_host_capabilities.py"
       ]
     },
@@ -406,7 +409,6 @@
     },
     "record_archive": {
       "primary": [
-        "state/record-store.json",
         "docs/RECORD_ARCHIVE.md"
       ],
       "expand_on_failure": [

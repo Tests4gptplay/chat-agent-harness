@@ -77,7 +77,7 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
                     "wait": {"kind": "WAIT_RESULT", "selector": {"child_task_id": "planner-child-001"}},
                 },
                 project_id="git-agent-harness",
-                repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+                repo="__CAH_REPOSITORY__",
             )
         self.assertEqual(ctx.exception.code, "PLANNER_CHILD_WAIT_ADMISSION_REQUIRED")
 
@@ -90,7 +90,7 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
                 "wait": {"kind": "WAIT_ADMISSION", "selector": {"child_task_id": "planner-child-001"}},
             },
             project_id="git-agent-harness",
-            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            repo="__CAH_REPOSITORY__",
         )
         expected_result_ref = child["wake"]["result_ref"]
         self.assertIn(
@@ -148,7 +148,7 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
                 "wait": {"kind": "WAIT_ADMISSION", "selector": {"child_task_id": "planner-child-001"}},
             },
             project_id="git-agent-harness",
-            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            repo="__CAH_REPOSITORY__",
         )
         terminal_cl = json.loads(json.dumps(first["cl"]))
         terminal_cl["overall"] = "DONE"
@@ -177,7 +177,7 @@ class PlannerShortTurnProtocolTests(unittest.TestCase):
                 },
                 direction_id="direction-2",
                 project_id="git-agent-harness",
-                repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+                repo="__CAH_REPOSITORY__",
             )
 
         self.assertEqual(nxt["child_task_id"], first["child_task_id"])

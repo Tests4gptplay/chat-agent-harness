@@ -1,7 +1,5 @@
 # Foreground
 
-> Clean source distribution: no supplied workflows/toolbox or personal Skills. Names below describe operational integration contracts, not an installed inventory. See installation/OMITTED_COMPONENTS.md; never dispatch to an absent workflow.
-
 Foreground is CAH's persistent human-facing semantic boundary.
 
 ## Role mission
@@ -251,4 +249,4 @@ If the BAT itself fails, inspect that run's log and report the concrete BAT fail
 
 Bind the user project’s existing absolute host directory as `project_directory` in the Task Contract. Final clean/reset restores CAH working state, never engineering source or outputs. Harness exports process records to `records.md` and verifies them before pruning corresponding CAH caches; do not ask Planner/Worker to rewrite records or manage hashes. Without a known directory preserve records, do not guess. See `docs/CLEANER_RULES.md`.
 
-The separate record repository is configured in `state/record-store.json` (currently `CAH_OWNER/chat-agent-harness-records`; see `docs/RECORD_ARCHIVE.md`). Independent Showcase observations live under its `showcase-observer/`, distinct from project-local `records.md`; do not write observer reports into active CAH Git or routinely load cold archives.
+The separate record repository is configured in `state/record-store.json` (currently `__CAH_RECORD_REPOSITORY__`; see `docs/RECORD_ARCHIVE.md`). Independent Showcase observations live under its `showcase-observer/`, distinct from project-local `records.md`; do not write observer reports into active CAH Git or routinely load cold archives.

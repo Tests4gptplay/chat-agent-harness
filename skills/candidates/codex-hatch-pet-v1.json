@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "skill_id": "codex-hatch-pet-v1",
+  "title": "hatch-pet",
+  "status": "CANDIDATE",
+  "summary": "Create, repair, validate, visually QA, and package Codex-compatible v2 animated pets from character art, generated images, company or prospect brand cues, or visual references. Use for any new Codex pet, custom mascot, non-pixel pet style, brand-inspired pet, existing-pet repair, or 8x11 spritesheet workflow requiring all 9 standard animation rows, 16 look directions, deterministic assembly, QA artifacts, and spriteVersionNumber 2 packaging.",
+  "tags": [
+    "codex-import",
+    "hatch-pet",
+    "unreal",
+    "python",
+    "web"
+  ],
+  "applicability": {
+    "intents": [
+      "Create, repair, validate, visually QA, and package Codex-compatible v2 animated pets from character art, generated images, company or prospect brand cues, or visual references. Use for any new Codex pet, custom mascot, non-pixel pet style, brand-inspired pet, existing-pet repair, or 8x11 spritesheet workflow requiring all 9 standard animation rows, 16 look directions, deterministic assembly, QA artifacts, and spriteVersionNumber 2 packaging."
+    ],
+    "required_capabilities": [
+      "unreal",
+      "python",
+      "web"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native GAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/hatch-pet/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

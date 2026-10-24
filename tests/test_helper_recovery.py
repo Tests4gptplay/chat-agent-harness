@@ -521,14 +521,16 @@ class HelperWakeTests(unittest.TestCase):
         for phrase in (
             'Act as HELPER',
             'ACTIVE RECOVERY REQUIRED',
-            'FIRST CHECK RUNNERS BEFORE ANY RECOVERY MUTATION',
-            'cah-shot is the normal bounded rescue/control channel',
-            '__CAH_COLD_RUNNER_NAME__',
-            '__CAH_COLD_RUNNER_ROOT__',
-            'Planner may require 02 open/keep/release',
+            'CHECK REQUIRED RUNNER CAPACITY ONCE WHEN RECOVERY NEEDS IT',
+            'Local control-state repair must not wait for unrelated Runner capacity',
+            'cah-shot is the bounded rescue/control channel',
+            '__CAH_SECOND_RUNNER_NAME__',
+            '__CAH_SECOND_RUNNER_ROOT__',
+            'normally keeps CAH-Managed-01 and __CAH_SECOND_RUNNER_NAME__ online',
+            'Planner may coordinate 02 capacity',
+            'without a new activation approval for every use',
             'alternate emergency/control channel',
-            'There is no required backup-runner wrapper protocol',
-            'Never commandeer ACTIVE_BUSY 02',
+            'Never commandeer busy 02',
             'never move Managed workload onto cah-shot',
             'PLANNER AUTHORITY',
             'highest autonomous task-level semantic authority below Foreground/user intent',
@@ -539,6 +541,8 @@ class HelperWakeTests(unittest.TestCase):
             'Verify that the next Harness reconciliation can proceed without another manual correction',
         ):
             self.assertIn(phrase, prompt)
+        self.assertNotIn('FIRST CHECK RUNNERS BEFORE ANY RECOVERY MUTATION', prompt)
+        self.assertNotIn('normally READY_OFF', prompt)
         self.assertIn('fixture-branch', prompt)
         self.assertIn('evidence/result.json', prompt)
 

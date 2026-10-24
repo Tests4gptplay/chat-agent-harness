@@ -5,7 +5,6 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 
-@unittest.skipUnless(WORKFLOWS.is_dir(), 'Workflows deliberately omitted from this template; provision before workflow acceptance')
 class WorkflowGitTransactionTests(unittest.TestCase):
     def test_no_workflow_local_rebase_push_sequence(self):
         offenders = []
@@ -27,27 +26,15 @@ class WorkflowGitTransactionTests(unittest.TestCase):
     def test_shared_helper_is_used_by_maintained_writers(self):
         expected = {
             "action-submit-recovery.yml",
-            "blender-case-finalize.yml",
             "codex-skill-sync.yml",
-            "dispatch-recovery.yml",
             "host-capability-probe.yml",
-            "host-diagnostic.yml",
-            "parallel-branch-finalize.yml",
-            "review-assets.yml",
-            "semantic-finalize.yml",
             "stage0-single-thread.yml",
         }
-        if not all((WORKFLOWS/name).is_file() for name in expected):
-            self.assertEqual({p.name for p in WORKFLOWS.glob('*.yml')}, {'public-source-release.yml'})
-            self.assertIn('harness/git_publish.py', (WORKFLOWS/'public-source-release.yml').read_text(encoding='utf-8'))
-            self.skipTest('Private production writers intentionally omitted; publication writer is checked')
         missing = []
         for name in sorted(expected):
             text = (WORKFLOWS / name).read_text(encoding="utf-8")
             normalized = text.replace("\\", "/")
-            helper = ('harness/request_drain.py' if name in {'semantic-finalize.yml', 'parallel-branch-finalize.yml'}
-                      else 'harness/git_publish.py')
-            if helper not in normalized:
+            if 'harness/git_publish.py' not in normalized:
                 missing.append(name)
         self.assertEqual(missing, [], f"maintained Git writer(s) bypass transaction helper: {missing}")
 

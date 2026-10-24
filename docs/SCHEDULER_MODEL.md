@@ -98,7 +98,7 @@ The 10-minute semantic lease remains only for non-managed/legacy semantic dispat
 
 At the 30-minute deadline, if the exact managed backend dispatch is still RUNNING, Playwright calls `worker_watchdog_expired` directly from the retained Worker binding before DOM turn parsing. A missing or unknown `dispatch_turn_state()` therefore cannot suppress Worker Helper escalation.
 
-Worker-watchdog Helper state is deliberately distinct from Planner Helper state: `WAIT_WORKER_HELPER`, `worker_helper_result`, `task_cell_worker_helper_prompt`, `WORKER_HELPER_RESULT`, and `worker-helper-*` request ids identify this path. Planner-requested Helper work continues to use `WAIT_HELPER` / `helper_result`.
+Worker-watchdog Helper state is deliberately distinct from Planner Helper state: `WAIT_WORKER_HELPER`, `worker_helper_result`, `task_cell_worker_helper_prompt`, `WORKER_HELPER_RESULT`, and `worker-helper-*` request ids identify this path. Planner-requested Helper uses `turn_signal=need_helper` → internal `NEED_HELPER` → existing `WAIT_HELPER` / `helper_result`. The existing `wait` / `need_user` mapping is retained unchanged.
 
 After a Worker watchdog incident, Helper first inspects and repairs a concrete operational fault when possible. If the exact Worker remains abnormally unresolved and no concrete repairable fault is found, Helper exact-deletes that physical Worker conversation, appends a **WORKER_HELPER INCIDENT** breadcrumb to the Worker Child Reply, and restores/re-delivers the original same-generation wake/binding through Harness.
 

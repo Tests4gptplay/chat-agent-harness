@@ -1,15 +1,13 @@
 param(
   [string]$RepoRoot = '',
-  [string]$ChromePath = '__CAH_CHROME_PATH__',
-  [string]$ProfileDir = "__CAH_PROFILE_ROOT__",
+  [string]$ChromePath = 'C:\Program Files\Google\Chrome\Application\chrome.exe',
+  [string]$ProfileDir = "$env:LOCALAPPDATA\CAH\PlaywrightChrome",
   [int]$CdpPort = 9222,
   [string]$BridgeUrl = 'http://127.0.0.1:8765/api',
   [string]$RuntimeRoot = '__CAH_BROWSER_ROOT__',
   [string]$ForegroundUrl = ''
 )
 
-& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
   $RepoRoot = Split-Path -Parent $PSScriptRoot

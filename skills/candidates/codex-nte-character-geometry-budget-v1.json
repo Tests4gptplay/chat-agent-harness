@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "skill_id": "codex-nte-character-geometry-budget-v1",
+  "title": "nte-character-geometry-budget",
+  "status": "CANDIDATE",
+  "summary": "Compare an NTE character mod with the matching official cooked mesh to set realistic triangle, vertex, section and LOD budgets. Use before substantially densifying custom garments or embroidery, or when a character mod causes poor performance or excessive package size. Does not authorize reducing accepted detail, changing original character assets, or substituting archive compression for runtime optimization.",
+  "tags": [
+    "codex-import",
+    "nte-character-geometry-budget",
+    "blender"
+  ],
+  "applicability": {
+    "intents": [
+      "Compare an NTE character mod with the matching official cooked mesh to set realistic triangle, vertex, section and LOD budgets. Use before substantially densifying custom garments or embroidery, or when a character mod causes poor performance or excessive package size. Does not authorize reducing accepted detail, changing original character assets, or substituting archive compression for runtime optimization."
+    ],
+    "required_capabilities": [
+      "blender"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native CAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/nte-character-geometry-budget/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

@@ -497,7 +497,6 @@ class SingleLaneFinalizerTests(unittest.TestCase):
 
 
 class PackagingContractTests(unittest.TestCase):
-    @unittest.skipUnless((Path(__file__).resolve().parents[1] / '.github/workflows/stage0-single-thread.yml').is_file(), 'Workflow payload deliberately omitted')
     def test_stage0_false_continuation_never_wakes_worker(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github" / "workflows" / "stage0-single-thread.yml").read_text(encoding="utf-8")

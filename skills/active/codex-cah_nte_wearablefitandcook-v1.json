@@ -1,0 +1,115 @@
+{
+  "v": 1,
+  "skill_id": "codex-cah_nte_wearablefitandcook-v1",
+  "title": "CAH_NTE_WearableFitAndCook",
+  "status": "ACTIVE",
+  "summary": "Evidence-backed NTE wearable replacement and refinement procedure spanning topology-first mesh identity, body-vs-accessory clipping diagnosis, strap/ring/connector tracing, binding-contract selection, Shape Key-safe local edits, hidden-body culling, Blender-to-UE scale/material preservation, fresh Cook, Morph gating, Zen packaging, and final verification.",
+  "tags": [
+    "codex-import",
+    "cah_nte_wearablefitandcook",
+    "blender",
+    "unreal",
+    "topology-first",
+    "wearable-fit",
+    "strap",
+    "ankle-ring",
+    "shape-keys"
+  ],
+  "applicability": {
+    "intents": [
+      "fit or repair NTE shoes, straps, ankle rings, clothing accessories, or similar weighted wearables without losing accepted geometry",
+      "diagnose clipping where the visible target may be a narrow subgraph or connector patch inside a larger wearable component",
+      "carry a verified Blender wearable through UE5.6 import, fresh Cook, Morph gating, and Zen packaging"
+    ],
+    "required_capabilities": [
+      "blender",
+      "unreal"
+    ],
+    "constraints": [
+      "Current task requirements and fresh evidence override imported instructions.",
+      "Prove target topology before editing; world-space boxes, component size, or nearest-surface distance alone do not establish semantic identity.",
+      "Select the binding contract explicitly: ordinary rigid Foot binding and special Toe0/Foot/Calf shoe-motion weighting are different workflows and must not be mixed automatically."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "read-imported-base",
+      "instruction": "Read the sanitized imported CAH_NTE_WearableFitAndCook snapshot for the established Blender→UE5.6→Cook→Zen chain, then apply the native refinements below. Current task constraints and current mesh evidence take priority over case-specific constants.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/cah_nte_wearablefitandcook/source.md"
+      ]
+    },
+    {
+      "step_id": "prove-wearable-topology",
+      "instruction": "Build adjacency and connected components before editing. When a strap/ribbon appears to be part of a larger component, split the candidate set into connected subgraphs and trace from known endpoints through non-branch neighbors. Distinguish the visible strap main branch from its true connector patch to an ankle ring or shoe surface. Do not infer identity only from XYZ bounds, component size, or visual proximity.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "separate-clipping-domains",
+      "instruction": "Diagnose body clearance and accessory-to-accessory clipping separately. A strap can have positive clearance from skin while still intersecting an ankle ring. Use side-specific body BVH for skin clearance, but use topology plus direct geometry/proximity to diagnose strap↔ring, strap↔shoe, or ring↔shoe interfaces.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "choose-binding-contract",
+      "instruction": "Before weight edits, state whether the task uses ordinary shoe binding or the special NTE shoe-foot separation contract. For ordinary shoes, rigid or conventional Foot weighting is valid. Use Toe0/Foot/Calf differential weighting only when the task explicitly requires heel-lift or shoe-foot relative motion; do not import that mechanism merely because the source skill exists.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "edit-local-geometry-safely",
+      "instruction": "Edit the smallest proven subgraph. For segmented ankle rings, treat each disconnected segment as a rigid local unit and preserve thickness/height unless the task asks otherwise. For ribbons/straps, operate on each independent connected strap separately; never union multiple straps and select by global Z. Trace connector patches above/below the main branch when the actual interface is outside the branch vertex set.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-shape-keys",
+      "instruction": "Any vertex delta applied to a mesh with Shape Keys must be applied to the same vertex indices in every corresponding key. When restoring from a backup, restore absolute coordinates for Basis/current mesh and every matching Shape Key. Verify Shape Key names/order before copying.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "cull-hidden-body-conservatively",
+      "instruction": "If permanently covered body geometry may be removed, identify the true hidden anatomy with bone-weight dominance plus spatial cutoffs and guards. For feet, Toe0-vs-Foot dominance can separate toes from dorsum/forefoot. Delete vertices (DELETE VERT) when the goal is actual removal, not faces only; preserve the remaining body and confirm Shape Key count stays valid.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "checkpoint-and-local-restore",
+      "instruction": "Create an accepted Blender checkpoint before exploratory refinement. If later edits damage one wearable subpart, prefer exact local restore/transfer from that checkpoint instead of rolling back the entire file. Use topology correspondence and restore only the proven target vertices plus their Shape Keys.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "run-release-chain",
+      "instruction": "After Blender geometry, binding, materials, and Shape Keys are accepted, follow the imported UE5.6 path: scratch/formal import, ordered material-slot verification, fresh isolated Cook, current-layout disposable Morph gate, then retoc to-zen + verify + list + dump-test. Keep static Blender acceptance distinct from game-runtime validation.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/cah_nte_wearablefitandcook/source.md"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "codex-cah_nte_wearablefitandcook-v1-acceptance-1",
+      "result_ref": "skills/evidence/codex-cah_nte_wearablefitandcook-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-26T00:50:00+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

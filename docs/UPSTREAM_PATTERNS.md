@@ -74,9 +74,9 @@ Do not globally slow the one-minute maintenance loop. If added, backoff must be 
 
 Implement only after repeated live failures show that one-minute retry churn is materially wasteful.
 
-### Local deterministic micro-loop
+## Engineering command batches
 
-For Blender/UE tasks, a single coarse CAH action may eventually run several deterministic local steps before returning one compact result:
+For a single authorized Child outcome, use one existing execution request for consecutive deterministic steps that do not require an intervening AI decision. A Blender/UE action or managed script can perform the necessary local steps before returning compact evidence:
 
 ```text
 Worker -> one coarse action
@@ -89,7 +89,7 @@ Worker -> one coarse action
        -> Worker
 ```
 
-This avoids paying a full Git -> Actions -> Runner -> Wake round trip for every tiny mechanical edit.
+This avoids a separate Git -> Actions -> Runner -> Wake round trip for each tiny mechanical edit. Managed/Stage0 trigger commits still carry one request JSON; the script inside that request carries the command group. Include only steps needed by the task, preserve truthful failures and recovery boundaries, and return when new semantic judgment is required. Long external jobs retain their exact run/job/PID and output identity across Worker handoff.
 
 Do not build a second hidden LLM agent loop into the runner by default. Start with deterministic micro-steps and add an inner runtime only if a real task demonstrates the need.
 

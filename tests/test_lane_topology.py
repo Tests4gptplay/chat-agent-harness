@@ -1,8 +1,10 @@
 import json
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from harness.wake import make_wake, validate_wake
 from local_bridge.server import WakeStore
@@ -19,10 +21,10 @@ class LaneTopologyTests(unittest.TestCase):
     def test_lane_addressed_wake(self):
         wake = make_wake(
             "git-agent-harness",
-            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            repo="__CAH_REPOSITORY__",
             result_ref="state/topology_request.json",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHTESTB86CD70AB2",
+            worker_project_key="g-p-CAHLANE00",
             kind="topology_reconcile",
         )
         validate_wake(wake)
@@ -62,8 +64,8 @@ class LaneTopologyTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                     "enabled": True,
                     "status": "IDLE",
                     WORKER_LINEAGES_KEY: {},
@@ -80,20 +82,20 @@ class LaneTopologyTests(unittest.TestCase):
                 "request_id": "topo-12345678",
                 "desired_version": 2,
                 "control_lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "lanes": [
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-CAHTESTB86CD70AB2",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                        "project_key": "g-p-CAHLANE00",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                         "enabled": True,
                     },
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-CAHTEST5B0313A208",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTEST5B0313A208-cah-sandbox1/project",
+                        "project_key": "g-p-CAHLANE01",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01-cah-sandbox1/project",
                         "enabled": True,
                     },
                 ],
@@ -136,8 +138,8 @@ class LaneTopologyTests(unittest.TestCase):
                     {
                         "lane_id": "lane-00",
                         "display_name": "CAH Sandbox0",
-                        "project_key": "g-p-CAHTESTB86CD70AB2",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                        "project_key": "g-p-CAHLANE00",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                         "enabled": True,
                         "status": "IDLE",
                         WORKER_LINEAGES_KEY: {
@@ -152,8 +154,8 @@ class LaneTopologyTests(unittest.TestCase):
                     {
                         "lane_id": "lane-01",
                         "display_name": "CAH Sandbox1",
-                        "project_key": "g-p-CAHTEST5B0313A208",
-                        "project_root_url": "https://chatgpt.com/g/g-p-CAHTEST5B0313A208-cah-sandbox1/project",
+                        "project_key": "g-p-CAHLANE01",
+                        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01-cah-sandbox1/project",
                         "enabled": True,
                         "status": "IDLE",
                         WORKER_LINEAGES_KEY: {},
@@ -164,6 +166,21 @@ class LaneTopologyTests(unittest.TestCase):
             subprocess.check_call(["git", "-C", str(work), "add", "state/lanes.json"])
             subprocess.check_call(["git", "-C", str(work), "commit", "-m", "worker reconcile"], stdout=subprocess.DEVNULL)
             subprocess.check_call(["git", "-C", str(work), "push", "origin", "HEAD:main"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            reconciled_sha = subprocess.check_output(
+                ["git", "-C", str(work), "rev-parse", "HEAD"], text=True
+            ).strip()
+            store.record_git_commit(reconciled_sha)
+            with patch("local_bridge.topology.finalize_topology_request") as finalize:
+                observed = topology_status(store, {
+                    "client_id": "client-test-001",
+                    "project_id": "git-agent-harness",
+                    "observation": True,
+                })
+            finalize.assert_not_called()
+            self.assertEqual(observed["control_request"]["status"], "PENDING")
+            self.assertEqual(observed["lanes"]["source_request_id"], "topo-12345678")
+            self.assertIsNone(observed["finalize"])
 
             finalized = topology_status(store, {
                 "client_id": "client-test-001",
@@ -180,6 +197,112 @@ class LaneTopologyTests(unittest.TestCase):
             self.assertEqual(final_state["phase"], "DONE")
             self.assertEqual(final_state["next_action"], "resume-me")
             self.assertEqual(final_state["next_reads"], [])
+
+
+class TopologyObservationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.work = self.root / "work"
+        subprocess.check_call(["git", "init", str(self.work)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.check_call(["git", "-C", str(self.work), "config", "user.name", "gah-test"])
+        subprocess.check_call(["git", "-C", str(self.work), "config", "user.email", "gah-test@example.invalid"])
+        (self.work / "state").mkdir()
+        self._write_state(1, "PENDING")
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.work), "rev-parse", "HEAD"], text=True
+        ).strip()
+        self.clock = [0.0]
+        self.store = WakeStore(
+            self.root / "spool", repo_root=self.work,
+            git_snapshot_clock=lambda: self.clock[0],
+        )
+        self.request = {
+            "client_id": "client-observation",
+            "project_id": "git-agent-harness",
+            "observation": True,
+        }
+
+    def _write_state(self, version, status):
+        for name, value in {
+            "lanes": {"topology_version": version, "lanes": []},
+            "chatgpt": {"control_request": {"request_id": "topo-observation", "status": status}},
+        }.items():
+            (self.work / "state" / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
+        subprocess.check_call(["git", "-C", str(self.work), "add", "state"])
+        subprocess.check_call(
+            ["git", "-C", str(self.work), "commit", "-m", f"topology {version}"],
+            stdout=subprocess.DEVNULL,
+        )
+
+    def test_missing_or_expired_snapshot_defers_without_git_or_finalization(self):
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                if expired:
+                    self.store.record_git_commit(self.sha)
+                    self.clock[0] = 1.0
+                with patch.object(self.store, "_git", side_effect=AssertionError("observation performed Git IO")) as git:
+                    with patch("local_bridge.topology.finalize_topology_request") as finalize:
+                        result = topology_status(self.store, self.request)
+                git.assert_not_called()
+                finalize.assert_not_called()
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["idle"], "git_snapshot_unavailable")
+                for field in ("lanes", "control_request", "finalize"):
+                    self.assertIsNone(result[field])
+
+    def test_observation_reads_one_immutable_commit_while_git_transaction_lock_is_held(self):
+        self.store.record_git_commit(self.sha)
+        # A later checkout commit must not replace the confirmed observation SHA.
+        self._write_state(2, "DONE")
+        original_git = self.store._git
+        calls = []
+
+        def immutable_read(*args):
+            self.assertEqual(args[0], "show")
+            self.assertTrue(args[1].startswith(self.sha + ":"))
+            calls.append(args)
+            return original_git(*args)
+
+        done = threading.Event()
+        results = []
+        errors = []
+
+        def observe():
+            try:
+                results.append(topology_status(self.store, self.request))
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+        with patch.object(self.store, "_git", side_effect=immutable_read):
+            with patch("local_bridge.topology.finalize_topology_request") as finalize:
+                with self.store.git_lock:
+                    thread = threading.Thread(target=observe, daemon=True)
+                    thread.start()
+                    completed_without_lock = done.wait(2.0)
+                thread.join(timeout=2.0)
+        self.assertTrue(completed_without_lock, "routine topology observation waited for the transaction lock")
+        self.assertEqual(errors, [])
+        finalize.assert_not_called()
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(results[0]["source_commit"], self.sha)
+        self.assertEqual(results[0]["lanes"]["topology_version"], 1)
+        self.assertEqual(results[0]["control_request"]["status"], "PENDING")
+        self.assertIsNone(results[0]["finalize"])
+
+    def test_failed_snapshot_read_is_not_an_empty_successful_topology(self):
+        self.store.record_git_commit(self.sha)
+        with patch.object(self.store, "_git", side_effect=RuntimeError("unreadable object")):
+            with patch("local_bridge.topology.finalize_topology_request") as finalize:
+                result = topology_status(self.store, self.request)
+        finalize.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "GIT_TOPOLOGY_OBSERVATION_READ_FAILED")
+        self.assertIsNone(result["lanes"])
+        self.assertIsNone(result["finalize"])
 
 
 if __name__ == "__main__":

@@ -12,11 +12,25 @@ DEFAULT_RUNTIME_ROOT = Path(os.environ.get("CAH_PLAYWRIGHT_ROOT", r"__CAH_BROWSE
 
 TASK_CELL = {
     "display_name": "CAH Task Cell",
-    "project_key": "g-p-CAHTASKCELLPLACEHOLDER",
-    "project_root_url": "https://chatgpt.com/g/g-p-CAHTASKCELLPLACEHOLDER-cah-task-cell/project",
+    "project_key": "g-p-CAHTASKCELL",
+    "project_root_url": "https://chatgpt.com/g/g-p-CAHTASKCELL-cah-task-cell/project",
 }
-import json
-BOOTSTRAP_LANES = json.loads((Path(__file__).resolve().parents[1] / 'state/lanes.json').read_text(encoding='utf-8'))['lanes']
+BOOTSTRAP_LANES = [
+    {
+        "lane_id": "lane-00",
+        "display_name": "CAH Sandbox0",
+        "project_key": "g-p-CAHLANE00",
+        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
+        "enabled": True,
+    },
+    {
+        "lane_id": "lane-01",
+        "display_name": "CAH Sandbox1",
+        "project_key": "g-p-CAHLANE01",
+        "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE01-cah-sandbox1/project",
+        "enabled": True,
+    },
+]
 
 
 @dataclass(frozen=True)

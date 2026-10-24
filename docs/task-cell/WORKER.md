@@ -28,6 +28,24 @@ Reuse accepted work recorded in Child Reply. Continue from locked/accepted artif
 
 Task-local scripts, dependencies, experiments and intermediate artifacts are available when they directly advance the Child goal.
 
+## GPT GitHub plugin: discovery and durable writes
+
+The GitHub plugin means GPT's connected **GitHub app/connector**, whose repository tools provide canonical Git reads and writes. It is not a separate product named “git connector”, a local Git installation, or a Codex execution service. Discover the tools actually exposed in the current session and read their current schemas before calling them. Where `functions.exec` is available, inspect `ALL_TOOLS` by GitHub name/description and call the matching `tools` method. A current example is `mcp__codex_apps__github_fetch_file`; prefixes are not a contract. The absence of an old name such as `mcp__GitHub__*` does **not** establish that GitHub tools or write permission are missing.
+
+Use the available capability appropriate to the authorized target:
+
+- **Read:** `fetch_file` with `repository_full_name`, `path` and the intended `ref`; retain the returned content and current blob SHA.
+- **Create text:** `create_file` with the new path, complete UTF-8 text, commit message and target branch. It creates a file on an existing branch, not a branch.
+- **Replace text:** read the existing file first, then call `update_file` with its current blob `sha`, complete replacement UTF-8 content and target branch. Do not pass a commit SHA as the file SHA or run competing writes to the same path.
+- **Binary/Git-data writes:** when the exposed schemas support them, use `create_blob` with `encoding=base64`, then `create_tree` with the current `base_tree_sha` and intended entries, `create_commit` with that tree and the current parent commit, and `update_ref` with the target branch and `expected_sha` lease. Preserve unrelated tree entries. Inspect a changed branch head before retrying a rejected lease; do not force over concurrent work.
+- **Verify:** after a successful write, read the exact target back at the returned commit and check its content (or decoded binary bytes). Record the commit and relevant verification in the normal Child Reply. A tool name or schema alone is not evidence that a write succeeded.
+
+Validate capability by performing the actual required read/write inside the Child's authorized repository, branch and paths. Do not create unrelated smoke-test files merely to prove access. A previously successful operation is useful evidence, not a guarantee that every repository, branch, operation or future session is authorized.
+
+Report observed failure boundaries precisely: **tool unavailable** after current tool discovery; **authentication/authorization failure** from the actual response; **content/SHA or branch-lease conflict** requiring fresh state; or **platform/policy rejection** requiring the stated decision. A missing file, stale tool prefix, or content conflict is not proof of missing write permission. Include the attempted operation, target and literal error rather than inventing an access limitation.
+
+If the required Git operation really is unavailable or blocked, follow the existing `AGENTS.md` GitHub-plugin fallback and role/authorization boundaries. Keep any permitted fallback bounded to that same Git operation, report managed failures to Planner, and never migrate the Managed Child workload to `cah-shot`.
+
 ## Healthy work budget
 
 Treat about **10 minutes** as the healthy work budget for one Worker generation. This is a handoff budget, not a permission to idle until ten minutes and not a hard process-kill timer.
@@ -38,31 +56,19 @@ An independently running external operation is already detached from the Worker 
 
 If the Child is actually complete before the budget is reached, follow the normal write sequence, setting `turn_signal=complete` in the bound Result last, then stop. If a small currently active step must be finished to leave a safe, durable checkpoint, finish only that minimum necessary step before handing off; do not use checkpoint cleanup as a reason to expand into another substantial stage.
 
-## Runner selection
+## Runner selection and bounded command groups
 
-Managed Task Cell Children normally execute on the primary Managed path (`runs-on: [self-hosted, Windows, X64]`). `cah-shot` is not Worker workload capacity; never route managed Child work through it.
+Managed Task Cell Children use the two normally online Managed Runners, `CAH-Managed-01` and `__CAH_SECOND_RUNNER_NAME__`. Generic `[self-hosted, Windows, X64]` eligibility can select either; record the actual Runner. `cah-shot` is not Worker workload capacity.
 
-Worker owns the **concrete execution-level judgment** of whether a particular detached external experiment is long/heavy enough that running it on `__CAH_COLD_RUNNER_NAME__` would preserve useful primary capacity. Examples include a long build, Cook, render, compile, runtime probe, or other operation that can continue independently of the current Worker conversation.
+Worker owns concrete placement within current Planner direction. The existing `requests/managed-host-script-cold/` -> `.github/workflows/managed-host-script-cold.yml` surface requires the `backup` label and directs an independent operation to 02. Do not assume that two Listeners add GPU/RAM capacity: conflicting GPU-heavy or same-workspace operations must not run together. Keep distinct external operations and their output locations identifiable.
 
-Unless current Planner direction explicitly forbids or reserves 02, Worker may choose the dedicated `requests/managed-host-script-cold/` -> `.github/workflows/managed-host-script-cold.yml` surface for such an experiment. That workflow requires the `backup` label and therefore isolates the operation onto `__CAH_COLD_RUNNER_NAME__`.
+**Every use or requested use of 02 stays durable in Child Reply.** Keep the heading exactly `## COLD_BURST RUNNER` and record the placement reason, exact request/workflow and run/job refs, actual occupancy, expected output/evidence, usable frontier, and release/cleanup condition. This is the existing ownership handoff to successors, Planner and Helper; no extra activation approval is needed for healthy available 02.
 
-**Every Worker use or requested use of 02 must be durable in the current Child Reply entry.** Add a heading exactly `## COLD_BURST RUNNER`, then record at minimum:
+Worker does not start, stop, reconfigure or broadly clean Runner infrastructure. If 02 is unexpectedly `READY_OFF`, dirty, unavailable or occupied by conflicting work, persist that concrete dependency and use the existing Planner/Helper path; continue other useful work when possible. Do not steal a recorded business job or fall back to Shot. A completed experiment normally releases its job while leaving the Listener online.
 
-- decision: use/request `__CAH_COLD_RUNNER_NAME__`;
-- reason the concrete experiment is long/heavy enough to isolate;
-- exact request/workflow ref;
-- exact run/job refs once created;
-- whether 02 was already active or still requires activation;
-- expected output/evidence and current usable frontier;
-- release/cleanup condition, including whether the run may be cancelled if later superseded.
+For one Child outcome, combine consecutive deterministic commands into one bounded request/script when later steps require no new AI interpretation. The current Managed/Stage0 interface still requires exactly one request JSON in its triggering commit. Preserve correct stage errors, exit codes and evidence; an error stops the dependent steps. Return at the next real semantic choice or recoverable frontier rather than building an unbounded script or hiding a failed stage. There is no fixed minimum command count and no added mandatory preflight/postflight Job.
 
-This record is the operational ownership handoff used by successor Worker, Planner and Helper. Do not leave 02 occupancy discoverable only from Actions UI or chat.
-
-Worker does **not** start, stop, reconfigure, or broadly clean Runner infrastructure. If 02 is `READY_OFF` and the experiment requires it, persist the capacity need and route the real dependency to Planner through the existing Worker result path; use `blocked` when no further useful Child work can proceed without that capacity. Planner may then request Helper activation. If other useful work remains, continue that work rather than idling, while preserving the 02 request in Child Reply for the next review.
-
-When 02 is already active and available, Worker may place the long experiment there directly and record the exact run/job. If 02 is already occupied, do not steal it or silently fall back to `cah-shot`; use primary capacity if semantically acceptable, continue other work, or report the concrete capacity conflict for Planner coordination.
-
-Record the actual job Runner in execution evidence.
+Use existing execution surfaces instead of creating a new Workflow for each micro-step. An independently running long job retains exact run/job/PID, logs and output identity across normal Worker handoff; observe that same operation instead of relaunching it merely because a generation changes.
 
 ## Write sequence for every Worker turn
 

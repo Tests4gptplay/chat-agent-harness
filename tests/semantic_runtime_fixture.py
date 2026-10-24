@@ -117,7 +117,7 @@ class FixtureBridge(BridgeClient):
         except Exception as exc:
             item['error']=str(exc);raise
 class HarnessCase:
-    def __init__(self,lanes=1,idle=False):
+    def __init__(self,lanes=1,idle=False,*,synchronous_control=True):
         self.temp=tempfile.TemporaryDirectory(prefix='cah-semantic-');self.root=Path(self.temp.name)
         self.work=self.root/'repo';self.work.mkdir();self.origin=self.root/'remote.git'
         subprocess.run(['git','init','--bare','-q',str(self.origin)],check=True)
@@ -125,10 +125,6 @@ class HarnessCase:
         self.git('checkout','-qb','main');self.git('remote','add','origin',str(self.origin))
         topology=json.loads((SOURCE/'state/lanes.json').read_text())
         topology['lanes']=topology['lanes'][:lanes];topology.update(registered_count=lanes,enabled_count=lanes)
-        # Release state is deliberately unconfigured; tests enable synthetic lanes only.
-        for lane in topology['lanes']:
-            lane['enabled']=True
-            lane['status']='IDLE'
         state={'v':1,'agent':'chatgpt','phase':'NEED_AGENT','active_task':None,'control_request':None}
         self.n=0;self.ops=[];self.ticks=[];self.writes=[];self.consume_fail=0;self.fail_message=None;self.fail_ops={}
         self.clock=Clock();self.clock.elapsed=0;ClockDate.clock=self.clock;self.patches=[]
@@ -145,11 +141,11 @@ class HarnessCase:
             files.update({f'tasks/{PARENT}.json':{'v':1,'task_id':PARENT,'goal':'Preserve accepted output and continue a long-running experiment','status':'ACTIVE'},
                           f'tasks/{PARENT}.plan.json':{'v':1,'task_id':PARENT,'plan':'Run bounded experiments and carry verified results forward'}})
         self.write('initial user/Foreground input',files)
-        self.store=WakeStore(self.root/'bridge',repo_root=self.work)
+        self.store=WakeStore(self.root/'bridge',repo_root=self.work,git_snapshot_interval=0)
         self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler);self.server.store=self.store
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
         self.cfg=HostConfig(bridge_url=f'http://127.0.0.1:{self.server.server_port}/api',runtime_root=self.root/'host')
-        self.runtime=BrowserRuntime(self.cfg);self.ui=BrowserAdapter(self)
+        self.runtime=BrowserRuntime(self.cfg,synchronous_control=synchronous_control);self.ui=BrowserAdapter(self)
         bridge=FixtureBridge(self.cfg.bridge_url,self.runtime.state.client_id,self.cfg.project_id,self.runtime._on_harness_error);bridge.audit=self
         self.runtime.bridge=bridge;self.runtime.ui=self.ui;self.runtime.workers.bridge=bridge;self.runtime.workers.ui=self.ui
         self.runtime.connect()
@@ -214,6 +210,6 @@ class HarnessCase:
         self.write('Helper semantic write',{role['active_output_ref']:{'diagnosis':'identified reported runtime fault','repair_result':'restored existing operation; no business identity changed','turn_signal':'done'}})
         page=self.ui.page_for(role['conversation_id']);page.answer=[];page.running=True
     def close(self):
-        self.runtime.workers.mcp.close();self.server.shutdown();self.server.server_close();self.thread.join(5)
+        self.runtime.close();self.server.shutdown();self.server.server_close();self.thread.join(5)
         for p in reversed(self.patches):p.stop()
         self.temp.cleanup()

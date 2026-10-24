@@ -1,0 +1,130 @@
+{
+  "v": 1,
+  "skill_id": "cah-nte-ueformat-character-extract-v1",
+  "title": "CAH_NTE_UEFORMAT_CHARACTER_EXTRACT",
+  "status": "ACTIVE",
+  "summary": "Extract a Neverness to Everness character or outfit SkeletalMesh from the cooked NTE IoStore safely and bring it into Blender with the target mesh's own RefSkeleton intact. Resolve the real USkeletalMesh by archive enumeration and export behavior, export UEFormat .uemodel with CUE4Parse, import with h4lfheart/UEFormat instead of GLB, exclude collision proxies, and verify core/garment bones before treating the Blender file as a valid authoring baseline.",
+  "tags": [
+    "cah",
+    "nte",
+    "neverness-to-everness",
+    "skeletalmesh",
+    "cue4parse",
+    "ueformat",
+    "uemodel",
+    "blender",
+    "asset-extraction"
+  ],
+  "applicability": {
+    "intents": [
+      "extract an NTE character or outfit SkeletalMesh into Blender with the original rig intact",
+      "identify the real NTE USkeletalMesh when nearby PhysicsAsset or MeshAsset resources are misleading",
+      "repair an NTE extraction workflow that produced correct geometry but an obviously misaligned Blender skeleton"
+    ],
+    "required_capabilities": [
+      "blender",
+      "python",
+      "powershell",
+      "unreal"
+    ],
+    "constraints": [
+      "Use the current NTE game version, mappings and authorized AES source. Never embed AES values in the Skill, generated scripts, Git commits or logs; suppress the values when reading them.",
+      "Work in a dedicated task workspace and leave the installed game archives unchanged.",
+      "Treat asset type as evidence, not filename intuition: a PhysicsAsset/collision proxy or MeshAsset configuration object is not the render SkeletalMesh.",
+      "For NTE skeletal models, prefer UEFormat .uemodel -> h4lfheart/UEFormat Blender import. Do not treat CUE4Parse Gltf2 as canonical unless the skeleton independently passes anatomical and transform validation.",
+      "Import collision as false for a clean character authoring baseline unless collision geometry is explicitly required.",
+      "Character-specific bone counts and names from the Fadia nighty evidence are examples, not universal constants. Validate the target mesh's own RefSkeleton and weighted garment bones.",
+      "When comparing against a known-good Blender reference that has been split into many mesh objects, compute scene-wide mesh bounds; do not normalize against only the largest part.",
+      "Treat semantic character identity as a separate gate from asset-type correctness: a valid SkeletalMesh extraction can still be the wrong character. When names/codenames are ambiguous, enumerate outfit folders and corroborate with user-provided visual references or stronger package evidence before accepting the baseline."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "load-current-credentials-and-tools",
+      "instruction": "Resolve the current NTE AES keys and usmap from the user's canonical authorized sources and local tool index. Keep key values in process memory only and suppress them from logs. Prefer the maintained a CUE4Parse exporter plus the current GAME_NevernessToEverness enum and matching .usmap.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "enumerate-character-packages",
+      "instruction": "Mount the cooked archive directory read-only and list HT/Content/Characters/Player/* with CUE4Parse.CLI. Resolve the target by current numeric id/codename and outfit suffix instead of relying on stale ids; in the verified case Fadia nightwear resolved to 039_fadia_nighty.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "identify-real-skeletalmesh",
+      "instruction": "Test the small set of plausible .uasset candidates by export behavior/type. The render mesh must produce a mesh export; configuration assets may fall back to JSON and PhysicsAsset/collision data may look like low-poly stones. In the verified case player_039_fadia_nighty_skin.uasset produced .uemodel while MeshAsset_Player039_nighty.uasset produced JSON.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "export-ueformat",
+      "instruction": "Export only the resolved USkeletalMesh with CUE4Parse.CLI using --mesh-format UEFormat and target LOD as needed. Keep this .uemodel as the canonical Blender-transfer artifact because it preserves the SkeletalMesh RefSkeleton and weights without the GLB skeleton conversion observed to fail on NTE.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "import-with-ueformat",
+      "instruction": "Use h4lfheart/UEFormat in Blender 4.x/5.x, directly through UEFormatImport/UEModelOptions when automation is needed. Use scale_factor=0.01, bone_length=4.0, reorient_bones=False, import_collision=False, import_morph_targets=True, target_lod=0; sockets/virtual bones can remain off for the clean modeling baseline unless required.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-skeleton-source",
+      "instruction": "Before accepting the Blender file, verify that the armature came from the target .uemodel/RefSkeleton: core Bip001 body bones must exist, weighted outfit-specific cloth/skirt/chest bones should match the target mesh, and the mesh must be bound by an Armature modifier to this imported skeleton rather than a borrowed reference rig.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-anatomical-transforms",
+      "instruction": "Check bone heads/tails against the character body and reject obvious transform failures. With UEFormat defaults at 0.01 scale, display bones should remain short (the verified Fadia baseline had max display length about 0.04 m); legs must run hip->knee->foot and arms shoulder->elbow->hand. Giant meter-scale hand/root bones or bones running across body axes indicate a bad conversion.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "reject-gltf-skeleton-shortcut",
+      "instruction": "Do not use CUE4Parse Gltf2 -> Blender as the default NTE skeletal transfer. The verified failure produced visually correct geometry but corrupted local skeleton transforms, including about 1.1 m hand display bones. GLB may still be useful for geometry-only inspection, but not as the canonical rigged authoring baseline without passing the same skeleton gates.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-extraction-baseline",
+      "instruction": "Keep the original .uemodel and a clean UEFormat-imported .blend as separate baseline artifacts before mesh replacement, shoe fitting, material edits, bone edits or cooking. Later authoring should start from this verified baseline so extraction faults are not confused with modeling faults.",
+      "deterministic": true,
+      "implementation_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "cah-nte-ueformat-character-extract-v1-acceptance-1",
+      "result_ref": "skills/evidence/cah-nte-ueformat-character-extract-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-24T12:59:22+00:00"
+    },
+    {
+      "task_id": "cah-nte-ueformat-character-extract-v1-acceptance-2",
+      "result_ref": "skills/evidence/cah-nte-ueformat-character-extract-v1-acceptance-2.json",
+      "outcome": "FAIL",
+      "verified_at": "2026-09-26T02:13:30+00:00"
+    },
+    {
+      "task_id": "cah-nte-ueformat-character-extract-v1-acceptance-3",
+      "result_ref": "skills/evidence/cah-nte-ueformat-character-extract-v1-acceptance-3.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-26T02:13:30+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 2,
+    "failure_count": 1,
+    "use_count": 3
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

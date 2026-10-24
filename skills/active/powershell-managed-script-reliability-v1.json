@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "skill_id": "powershell-managed-script-reliability-v1",
+  "title": "PowerShell managed-script reliability and preflight",
+  "status": "ACTIVE",
+  "summary": "Author and execute PowerShell/managed-host scripts without repeatedly losing semantic work to wrapper defects. Materialize the exact final script before dispatch, verify UTF-8/base64 roundtrip and a zero-error PowerShell parser result, keep nested source generation bounded, normalize collections before JSON/interop boundaries, handle optional evidence explicitly under StrictMode, protect secrets, and rebuild from a known-good source instead of repeatedly patching a corrupted payload.",
+  "tags": [
+    "powershell",
+    "managed-host",
+    "script-generation",
+    "preflight",
+    "parser",
+    "strictmode",
+    "serialization",
+    "execution-hygiene"
+  ],
+  "applicability": {
+    "intents": [
+      "write or repair a PowerShell script that will be dispatched through a managed host or GitHub Actions runner",
+      "generate PowerShell that itself emits C#, JSON, another PowerShell script, or other nested source text",
+      "diagnose repeated parser, quoting, serialization, missing-property, or optional-evidence failures that occur before the intended semantic operation"
+    ],
+    "required_capabilities": [
+      "powershell"
+    ],
+    "constraints": [
+      "Current task requirements and fresh evidence override this Skill; it governs execution hygiene, not the semantic solution.",
+      "Do not treat parser, quoting, encoding, serialization, wrapper, checkout, or evidence-readback failures as proof that the target technical approach failed.",
+      "Never persist secrets in generated scripts, request JSON, command lines, Git, result artifacts, or durable logs. Pass secrets only through an authorized ephemeral channel and sanitize output.",
+      "After two equivalent no-progress wrapper/source-generation attempts, stop patching the same broken payload. Rebuild from the last known-good source or switch to a smaller execution surface.",
+      "One-off task scripts remain task-local under the owned workspace/scripts area; this Skill does not authorize durable CAH runtime changes."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "classify-driver-versus-semantic-failure",
+      "instruction": "Before changing the technical approach, identify where the failure occurred. PowerShell ParserError, quoting/here-string breakage, base64/UTF-8 corruption, checkout/request transport failure, serialization errors, missing optional evidence, StrictMode property errors, or generated-source compile errors are driver/preflight failures. Preserve the semantic hypothesis unless target code actually executed and produced contradictory evidence.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "build-the-final-script-once",
+      "instruction": "Construct the exact script bytes that the runner will execute before dispatch. Avoid chains where JavaScript/Python edits a generated PowerShell payload that then generates another script unless unavoidable. Prefer a small known-good task-local .ps1 or a single literal payload with explicit inputs. If nested source is required, isolate it in a literal here-string or separate file rather than interleaving quoting layers.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-encoding-and-roundtrip",
+      "instruction": "Use UTF-8 consistently. When script_b64 or another encoded transport is used, encode the final script once, decode it before dispatch, and require byte/text equality (or a recorded SHA-256 equality) with the intended script. Do not continue if the roundtrip changes line endings, delimiters, quotes, or non-ASCII content in a way that affects parsing.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "mechanical-syntax-symbol-checklist",
+      "instruction": "Before parser preflight, mechanically inspect the exact final PowerShell text for basic delimiter/token defects: unmatched () {} [], unterminated single or double quotes, broken $() or ${} expressions, malformed @' ... '@ / @\" ... \"@ here-string boundaries (closing delimiter on its own valid line), accidental or dangling backticks/escapes, stray or missing commas/parentheses in method calls and argument lists, and unintended variable interpolation inside generated source. If the script emits another PowerShell script, apply the same checklist and parser preflight to the emitted PowerShell text before executing it. Do not dispatch while any such defect is unresolved.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "require-zero-error-parser-preflight",
+      "instruction": "Run the PowerShell parser against the exact final decoded/materialized script before dispatch, using System.Management.Automation.Language.Parser ParseFile/ParseInput or an equivalent pwsh parse-only check. Require zero parser errors. Report line/column and fix the source before any managed run; never spend a Runner job to discover a syntax error that the local parser could have caught.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "make-here-strings-boring",
+      "instruction": "For here-strings, keep the opening delimiter syntactically isolated and the closing '@ or \"@ delimiter at the required line position with no accidental indentation/trailing tokens. Prefer single-quoted here-strings for generated source that should not interpolate PowerShell variables. When interpolation is required, minimize it and substitute a small explicit placeholder set rather than broad string replacement.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "precompute-static-method-arguments",
+      "instruction": "Do not bury complex ConvertTo-Json, casts, constructors, or nested expressions directly inside fragile static calls such as [IO.File]::WriteAllText(...). Compute content and encoding into named variables first, then call the overload plainly. Prefer [Text.UTF8Encoding]::new($false) for explicit UTF-8 without BOM when that is the task contract.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "normalize-collections-before-serialization",
+      "instruction": "Before ConvertTo-Json, PSCustomObject construction, helper calls, or .NET interop boundaries, normalize generic/list-like collections into ordinary PowerShell arrays or a concrete ToArray result. Do not rely on implicit coercion of generic lists across helper/serialization boundaries. Validate the serialized shape on a small representative object before running an expensive semantic operation.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "be-strictmode-null-safe",
+      "instruction": "Under Set-StrictMode, never optimistically dereference a property that may be absent. Check PSObject.Properties, IDictionary membership, or an explicit helper before access; distinguish absent, null and empty values. For optional evidence/files, Test-Path first and emit null/absent metadata instead of throwing. Throw only when a Task Contract-critical prerequisite is genuinely missing.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "separate-required-and-optional-evidence",
+      "instruction": "Declare input evidence as required or optional before readback. Required evidence may stop the run with a literal error. Legacy, advisory, historical or best-effort evidence must be guarded and may be omitted from the summary. Never let a removed legacy summary file invalidate already-durable semantic evidence.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "use-argument-arrays-and-splatting",
+      "instruction": "Build external-process invocations with argument arrays/splatting rather than one quoted command string. Keep paths and values as separate arguments, use -LiteralPath for filesystem operations where appropriate, capture exit code/stdout/stderr separately, and sanitize secret-bearing output before persistence.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "change-surface-after-repeated-wrapper-failures",
+      "instruction": "If two attempts fail for the same wrapper/source-generation reason before semantic execution, stop incremental payload surgery. Return to the last untouched known-good request/script, make the smallest deterministic edit set, verify invariant properties such as line count/hash/parser success, or move the probe into a standalone task-local script/project. Record the failed runs as driver failures so successors do not repeat them.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "record-stage-separated-outcome",
+      "instruction": "Persist enough evidence to separate preflight, driver execution and semantic target result: parser/roundtrip status, process exit code, expected output existence, sanitized target markers, and immutable-input checks when relevant. A wrapper PASS is not semantic PASS, and a wrapper FAIL before target execution is not semantic FAIL.",
+      "deterministic": true,
+      "implementation_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "powershell-managed-script-reliability-v1-acceptance-1",
+      "result_ref": "skills/evidence/powershell-managed-script-reliability-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-28T09:51:00+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

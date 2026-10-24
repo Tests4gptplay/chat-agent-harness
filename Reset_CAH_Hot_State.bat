@@ -2,8 +2,6 @@
 REM Worker lineage state retains task_pools on disk; see harness/worker_lineage_compat.py.
 setlocal EnableExtensions
 cd /d "%~dp0"
-py installation\preflight.py
-if errorlevel 1 exit /b %ERRORLEVEL%
 
 set "STATE=state\chatgpt.json"
 set "LANES=state\lanes.json"

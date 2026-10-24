@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "skill_id": "codex-ue5-iostore-appearance-porting-v1",
+  "title": "ue5-iostore-appearance-porting",
+  "status": "CANDIDATE",
+  "summary": "Analyze, build, verify, and troubleshoot UE5 IoStore cosmetic appearance-transfer mods, especially NTE character or vehicle meshes, paid-owned skin visuals, combat and vehicle VFX, ultimate sequences, UI previews, NPC appearances, dye compatibility, and condition-gated effects. Use when redirecting one owned appearance onto another local cosmetic path, making cosmetic effects global, diagnosing full-awaken skin glow (满命皮肤发光), missing materials/animations/VFX or IoStore crashes, or packaging .pak/.ucas/.utoc mods without changing entitlement logic.",
+  "tags": [
+    "codex-import",
+    "ue5-iostore-appearance-porting",
+    "unreal"
+  ],
+  "applicability": {
+    "intents": [
+      "Analyze, build, verify, and troubleshoot UE5 IoStore cosmetic appearance-transfer mods, especially NTE character or vehicle meshes, paid-owned skin visuals, combat and vehicle VFX, ultimate sequences, UI previews, NPC appearances, dye compatibility, and condition-gated effects. Use when redirecting one owned appearance onto another local cosmetic path, making cosmetic effects global, diagnosing full-awaken skin glow (满命皮肤发光), missing materials/animations/VFX or IoStore crashes, or packaging .pak/.ucas/.utoc mods without changing entitlement logic."
+    ],
+    "required_capabilities": [
+      "unreal"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native GAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/ue5-iostore-appearance-porting/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

@@ -12,6 +12,7 @@ READ_OPS = {
     "harness_errors",
     "dispatch_status",
     "worker_takeover_status",
+    "worker_observation_status",
     "foreground_task_status",
     "topology_status",
     "control_status",

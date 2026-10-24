@@ -2,7 +2,7 @@
   "v": 1,
   "kind": "record_store",
   "status": "DISABLED",
-  "repository": "CAH_OWNER/CAH_RECORD_REPOSITORY",
+  "repository": "__CAH_RECORD_REPOSITORY__",
   "index": "INDEX.json",
   "read_policy": "explicit_history_audit_recovery_or_user_archive_only"
 }

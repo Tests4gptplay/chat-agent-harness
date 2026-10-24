@@ -71,7 +71,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
                 "v": 1,
                 "lanes": [{
                     "lane_id": "lane-00",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_key": "g-p-CAHLANE00",
                     "enabled": True,
                     WORKER_LINEAGES_KEY: {
                         "task-syscall-001::1": {
@@ -104,7 +104,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
                 "backend_cl": "cl/bg.json",
                 "timeout_seconds": 30,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "worker_continuation": True,
             }
             req = {
@@ -118,7 +118,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
                 "fence_token": "fence-syscall-0001",
                 "worker_ref": "pool-worker-syscall-0001",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "action": action,
             }
 
@@ -165,7 +165,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
             successor = "pool-successor-worker-0002"
             packet_ref = "state/handoffs/task-handoff-001-packet.json"
             backend_ref = "cl/task-handoff-001.backend.json"
-            project_key = "g-p-CAHTESTB86CD70AB2"
+            project_key = "g-p-CAHLANE00"
             old_dispatch = {
                 "dispatch_id": "dispatch-handoff-old-0002",
                 "wake_id": "wake-handoff-old-0002",
@@ -355,7 +355,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
             (work / "cl").mkdir()
             backend_ref = "cl/task-liveness-001.backend.json"
             worker = "pool-liveness-worker-0001"
-            project_key = "g-p-CAHTEST5B0313A208"
+            project_key = "g-p-CAHLANE01"
             backend = {
                 "v": 1,
                 "cl_id": "bg-task-liveness-001",
@@ -476,7 +476,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
                 "v": 1,
                 "lanes": [{
                     "lane_id": "lane-00",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_key": "g-p-CAHLANE00",
                     "enabled": True,
                     WORKER_LINEAGES_KEY: {
                         "task-live-001::1": {
@@ -505,7 +505,7 @@ class ActionSubmitSyscallTests(unittest.TestCase):
                 "fence_token": "fence-live-0001",
                 "worker_ref": "pool-live-worker-0001",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "response_running": True,
                 "response_ended": False,
             })

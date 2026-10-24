@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "skill_id": "blender-local-submesh-restore-transfer-v1",
+  "title": "Blender local submesh restore and transfer",
+  "status": "ACTIVE",
+  "summary": "Restore or transfer a verified local Blender submesh from an accepted backup or topology-compatible source without rolling back unrelated current work. Use connected-component/subgraph identity, topology correspondence, exact Basis/Shape Key copying for rollback, or boundary-anchored local mapping for source-shape transfer, then verify target equality/locality and preserved geometry.",
+  "tags": [
+    "blender",
+    "python",
+    "submesh-restore",
+    "topology-correspondence",
+    "shape-keys",
+    "checkpoint",
+    "local-repair"
+  ],
+  "applicability": {
+    "intents": [
+      "restore one damaged Blender submesh from an accepted backup while preserving all unrelated current edits",
+      "transfer a local surface or accessory shape from a topology-compatible source model into the current fitted model",
+      "repair straps, rings, shoe patches, clothing patches, or other local geometry with Shape Keys without whole-file rollback"
+    ],
+    "required_capabilities": [
+      "blender",
+      "python"
+    ],
+    "constraints": [
+      "Use only when the target submesh can be identified and source-to-current topology correspondence can be proven.",
+      "Keep the reference/backup read-only; mutate only the active working file.",
+      "This skill is not a remeshing or arbitrary retopology procedure; if topology differs without a proven mapping, stop before coordinate transfer."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "checkpoint-and-scope",
+      "instruction": "Preserve or select an accepted checkpoint/reference and define the exact local target to restore or transfer. Do not use whole-file rollback when unrelated current edits must survive.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "identify-submesh",
+      "instruction": "Locate the target using connected components, adjacency, material/weight context, or a traced subgraph. Do not rely on object name, bounding box, nearest point, or a screenshot alone when the target is embedded in a larger mesh.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "prove-correspondence",
+      "instruction": "Verify source↔current correspondence before copying coordinates. Check component vertex count, adjacency/degree structure, and component-local ordering. Global indices may differ after unrelated component deletion; derive an offset or local mapping only when topology proves it.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "choose-restore-mode",
+      "instruction": "Choose exact restore when the target should match the accepted backup: copy absolute target coordinates. Choose transfer when the current fit/placement must be preserved but source local shape should return: map the source patch into the current frame using corresponding fixed boundary/anchor vertices.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-boundaries",
+      "instruction": "For local transfer, pin patch boundaries, seams, silhouette anchors, connectors, or neighboring accepted geometry unless explicitly in scope. Apply only the interior/reference-shape change needed to reconstruct the target.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "sync-shape-keys",
+      "instruction": "If Shape Keys exist, handle the same target indices in every matching key. For exact restore, copy absolute coordinates for Basis/current mesh and all keys from the reference. For intentional deformation, apply the same vertex delta to each corresponding key. Verify key names/order before mutation.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-locality",
+      "instruction": "After mutation, verify the target matches the intended reference or mapped result and that non-target geometry stayed unchanged. For exact restore, require near-zero target coordinate delta to the backup; for preserved areas, compare vertex counts, coordinates, or hashes when practical.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "retain-checkpoint",
+      "instruction": "Keep the accepted checkpoint available until the user accepts the new local result. If a later experiment fails, restore only the affected verified submesh rather than reconstructing earlier accepted work from memory.",
+      "deterministic": false,
+      "implementation_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "blender-local-submesh-restore-transfer-v1-acceptance-1",
+      "result_ref": "skills/evidence/blender-local-submesh-restore-transfer-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-26T00:50:00+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

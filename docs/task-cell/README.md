@@ -2,7 +2,7 @@
 
 Task Cell is CAH's managed mode for long-lived or multi-step work.
 
-Maintainer's host-local full design: `E:/CAH-Browser/DESIGN_USER_CLARIFIED_20260926.md` (the user-designated primary file). Update that file in place; deliverables are backups, not a replacement primary path. The portable role contracts remain the repository Markdown files below.
+The role contracts and operational interfaces are documented in the repository Markdown files below.
 
 ## Core model
 
@@ -116,7 +116,8 @@ These lowercase values are written as `turn_signal` in the exact bound Result/Ou
 | Planner | `rework` | Corrective directions and reasons saved; resume the relevant work and keep Planner. |
 | Planner | `complete` | Parent-task acceptance passed; automatically clean this task's chats, then reset. |
 | Planner | `handoff` | Context collapsed; inherit Task/Memory in a replacement Planner and retire the predecessor. |
-| Planner | `wait` / `need_user` / `error` | Read the corresponding durable wait, question or terminal error content. |
+| Planner | `wait` / `need_user` / `error` | Read the corresponding durable wait, question or terminal error content; existing `wait → need_user` behavior remains. |
+| Planner | `need_helper` | Require non-empty `semantic.helper_prompt`; route internal `NEED_HELPER` to the existing `WAIT_HELPER` / single-use Helper lifecycle, not to the user. |
 | Worker | `continue` | Work remains; saved Reply allows a new generation, after Planner review when due. |
 | Worker | `complete` | Child work ready for Planner acceptance, not final parent-task acceptance. |
 | Worker | `blocked` / `error` | Recorded blocker/failure; route the real condition, not false success. |
@@ -143,7 +144,7 @@ Harness owns:
 
 Planner `done` keeps the current Planner. Helper uses a two-phase result: `diagnosis + repair_result` is routed first while Helper remains alive; only after the correct next role has actually started does Helper add durable `turn_signal=done`. Accepted Helper `done` immediately exact-deletes that single-use Helper without a response-end gate; the next incident gets a fresh conversation.
 
-Planner-requested Helper and Worker-watchdog Helper are visibly different canonical paths. Planner-requested recovery uses `WAIT_HELPER` / `helper_result` / `task_cell_role_prompt`. A managed Worker response-start arms a fixed 30-minute Playwright watchdog; expiry of an exact still-RUNNING Worker uses `WORKER_HELPER` / `WAIT_WORKER_HELPER` / `worker_helper_result` / `task_cell_worker_helper_prompt`. A managed Planner response-start likewise arms a fixed 30-minute physical watchdog, but expiry is recovered directly by Harness: validate the exact unresolved Planner turn, Stop + replay the retained exact wake in the same physical conversation, and if that cannot response-start, exact-delete and replace only the physical conversation while preserving the same Planner generation/fence/request/output identity. Managed Worker lease renewal and Planner semantic-output timeout are not liveness owners. Worker watchdog recovery and Planner physical recovery both preserve their semantic generation; normal Worker continuation or Planner handoff/prompt-ceiling rotation are the paths that create successor generations.
+Planner-requested Helper and Worker-watchdog Helper are visibly different canonical paths. Planner requests Helper with `turn_signal=need_helper` and `semantic.helper_prompt`; Harness derives `NEED_HELPER` and uses the existing `WAIT_HELPER` / `helper_result` / `task_cell_role_prompt`. A managed Worker response-start arms a fixed 30-minute Playwright watchdog; expiry of an exact still-RUNNING Worker uses `WORKER_HELPER` / `WAIT_WORKER_HELPER` / `worker_helper_result` / `task_cell_worker_helper_prompt`. A managed Planner response-start likewise arms a fixed 30-minute physical watchdog, but expiry is recovered directly by Harness: validate the exact unresolved Planner turn, Stop + replay the retained exact wake in the same physical conversation, and if that cannot response-start, exact-delete and replace only the physical conversation while preserving the same Planner generation/fence/request/output identity. Managed Worker lease renewal and Planner semantic-output timeout are not liveness owners. Worker watchdog recovery and Planner physical recovery both preserve their semantic generation; normal Worker continuation or Planner handoff/prompt-ceiling rotation are the paths that create successor generations.
 
 If internal state does not expose a clear stall, Helper may inspect the exact affected browser/host state through an already-authorized direct execution surface, but recovery remains driven by direct operational action plus canonical Git/runtime repair. Helper must restore the Task Cell to a self-running lifecycle and advance the task to a next runnable/wakeable semantic role before successful completion. See `docs/task-cell/HELPER.md` for the operational boundary.
 

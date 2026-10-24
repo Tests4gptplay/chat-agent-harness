@@ -1,7 +1,613 @@
 {
   "v": 1,
-  "updated_at": null,
-  "skill_count": 0,
-  "active_count": 0,
-  "skills": []
+  "updated_at": "2026-10-24T19:05:18+00:00",
+  "skill_count": 23,
+  "active_count": 8,
+  "skills": [
+    {
+      "skill_id": "blender-local-submesh-restore-transfer-v1",
+      "title": "Blender local submesh restore and transfer",
+      "status": "ACTIVE",
+      "ref": "skills/active/blender-local-submesh-restore-transfer-v1.json",
+      "summary": "Restore or transfer a verified local Blender submesh from an accepted backup or topology-compatible source without rolling back unrelated current work. Use connected-component/subgraph identity, topology correspondence, exact Basis/Shape Key copying for rollback, or boundary-anchored local mapping for source-shape transfer, then verify target equality/locality and preserved geometry.",
+      "tags": [
+        "blender",
+        "python",
+        "submesh-restore",
+        "topology-correspondence",
+        "shape-keys",
+        "checkpoint",
+        "local-repair"
+      ],
+      "intents": [
+        "restore one damaged Blender submesh from an accepted backup while preserving all unrelated current edits",
+        "transfer a local surface or accessory shape from a topology-compatible source model into the current fitted model",
+        "repair straps, rings, shoe patches, clothing patches, or other local geometry with Shape Keys without whole-file rollback"
+      ],
+      "required_capabilities": [
+        "blender",
+        "python"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "cah-image-native-drive-local-v1",
+      "title": "CAH native image to local project",
+      "status": "ACTIVE",
+      "ref": "skills/active/cah-image-native-drive-local-v1.json",
+      "summary": "Generate an image in the owning Worker, upload the original through a user-selected Drive relay, download it with the current Managed request, and verify the local file.",
+      "tags": [
+        "cah",
+        "image",
+        "native-image",
+        "google-drive",
+        "local-original",
+        "sha256"
+      ],
+      "intents": [
+        "将 CAH Worker 原生生成的图片原件保存到本地工程",
+        "reuse verified native image to Drive to normal Managed Runner transfer"
+      ],
+      "required_capabilities": [
+        "native-image-generation",
+        "google-drive-upload",
+        "github",
+        "managed-windows-runner",
+        "python"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "cah-nte-ueformat-character-extract-v1",
+      "title": "CAH_NTE_UEFORMAT_CHARACTER_EXTRACT",
+      "status": "ACTIVE",
+      "ref": "skills/active/cah-nte-ueformat-character-extract-v1.json",
+      "summary": "Extract a Neverness to Everness character or outfit SkeletalMesh from the cooked NTE IoStore safely and bring it into Blender with the target mesh's own RefSkeleton intact. Resolve the real USkeletalMesh by archive enumeration and export behavior, export UEFormat .uemodel with CUE4Parse, import with h4lfheart/UEFormat instead of GLB, exclude collision proxies, and verify core/garment bones before treating the Blender file as a valid authoring baseline.",
+      "tags": [
+        "cah",
+        "nte",
+        "neverness-to-everness",
+        "skeletalmesh",
+        "cue4parse",
+        "ueformat",
+        "uemodel",
+        "blender",
+        "asset-extraction"
+      ],
+      "intents": [
+        "extract an NTE character or outfit SkeletalMesh into Blender with the original rig intact",
+        "identify the real NTE USkeletalMesh when nearby PhysicsAsset or MeshAsset resources are misleading",
+        "repair an NTE extraction workflow that produced correct geometry but an obviously misaligned Blender skeleton"
+      ],
+      "required_capabilities": [
+        "blender",
+        "python",
+        "powershell",
+        "unreal"
+      ],
+      "success_count": 2,
+      "failure_count": 1,
+      "use_count": 3,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-cah_nte_wearablefitandcook-v1",
+      "title": "CAH_NTE_WearableFitAndCook",
+      "status": "ACTIVE",
+      "ref": "skills/active/codex-cah_nte_wearablefitandcook-v1.json",
+      "summary": "Evidence-backed NTE wearable replacement and refinement procedure spanning topology-first mesh identity, body-vs-accessory clipping diagnosis, strap/ring/connector tracing, binding-contract selection, Shape Key-safe local edits, hidden-body culling, Blender-to-UE scale/material preservation, fresh Cook, Morph gating, Zen packaging, and final verification.",
+      "tags": [
+        "codex-import",
+        "cah_nte_wearablefitandcook",
+        "blender",
+        "unreal",
+        "topology-first",
+        "wearable-fit",
+        "strap",
+        "ankle-ring",
+        "shape-keys"
+      ],
+      "intents": [
+        "fit or repair NTE shoes, straps, ankle rings, clothing accessories, or similar weighted wearables without losing accepted geometry",
+        "diagnose clipping where the visible target may be a narrow subgraph or connector patch inside a larger wearable component",
+        "carry a verified Blender wearable through UE5.6 import, fresh Cook, Morph gating, and Zen packaging"
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-mesh-replacement-repair-v1",
+      "title": "nte-mesh-replacement-repair",
+      "status": "ACTIVE",
+      "ref": "skills/active/codex-nte-mesh-replacement-repair-v1.json",
+      "summary": "Replace and repair NTE cosmetic meshes while preserving accepted native parts, topology, rigging, materials, and runtime compatibility. Covers anatomical fitting, local foot/stance correction, source/backup topology correspondence, boundary-preserving local surface reconstruction, Shape Key-safe submesh restoration, and diagnosis of scale/material/cooked-asset failures.",
+      "tags": [
+        "codex-import",
+        "nte-mesh-replacement-repair",
+        "blender",
+        "unreal",
+        "python",
+        "topology-correspondence",
+        "submesh-repair",
+        "shape-keys",
+        "source-transfer"
+      ],
+      "intents": [
+        "replace or repair an NTE cosmetic mesh while preserving accepted native appendages and unrelated geometry",
+        "reconstruct a damaged local Blender surface from an original or accepted backup when smoothing would destroy intended shape",
+        "diagnose NTE mesh scale, material, texture, cooked-package, or local fitting problems without redesigning the whole asset"
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "github-capability-extension-v1",
+      "title": "Extend missing GitHub operations through ephemeral Actions and API calls",
+      "status": "ACTIVE",
+      "ref": "skills/active/github-capability-extension-v1.json",
+      "summary": "When the connected GitHub tool lacks a repository operation, extend the reachable GitHub capability without polluting the main branch: prefer the native connector first, then use an ephemeral branch-scoped GitHub Actions workflow with least-privilege GITHUB_TOKEN permissions and gh api REST/GraphQL calls, make the operation idempotent where possible, verify the real remote effect, and remove or neutralize the helper branch/workflow afterward.",
+      "tags": [
+        "github",
+        "capability-extension",
+        "github-actions",
+        "graphql",
+        "rest-api",
+        "ephemeral-tooling"
+      ],
+      "intents": [
+        "perform a GitHub repository operation missing from the connected GitHub tool",
+        "extend GitHub automation with REST or GraphQL without adding permanent helper code to main",
+        "use a temporary GitHub Actions bridge for a repository-scoped API mutation"
+      ],
+      "required_capabilities": [
+        "github",
+        "github-actions"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "iterative-blender-visual-refinement-v1",
+      "title": "Iterative Blender procedural asset generation with visual review",
+      "status": "ACTIVE",
+      "ref": "skills/active/iterative-blender-visual-refinement-v1.json",
+      "summary": "Build a Blender asset through bounded bpy iterations and standardized visual review, reject local improvements that fail whole-form or geometric checks, and promote only a verified render/script/blend set.",
+      "tags": [
+        "blender",
+        "bpy",
+        "procedural-asset",
+        "visual-review",
+        "iterative-refinement"
+      ],
+      "intents": [
+        "create a Blender asset procedurally",
+        "refine a Blender model through rendered visual review",
+        "run a bounded AI-authored bpy generation loop"
+      ],
+      "required_capabilities": [
+        "blender",
+        "python"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "powershell-managed-script-reliability-v1",
+      "title": "PowerShell managed-script reliability and preflight",
+      "status": "ACTIVE",
+      "ref": "skills/active/powershell-managed-script-reliability-v1.json",
+      "summary": "Author and execute PowerShell/managed-host scripts without repeatedly losing semantic work to wrapper defects. Materialize the exact final script before dispatch, verify UTF-8/base64 roundtrip and a zero-error PowerShell parser result, keep nested source generation bounded, normalize collections before JSON/interop boundaries, handle optional evidence explicitly under StrictMode, protect secrets, and rebuild from a known-good source instead of repeatedly patching a corrupted payload.",
+      "tags": [
+        "powershell",
+        "managed-host",
+        "script-generation",
+        "preflight",
+        "parser",
+        "strictmode",
+        "serialization",
+        "execution-hygiene"
+      ],
+      "intents": [
+        "write or repair a PowerShell script that will be dispatched through a managed host or GitHub Actions runner",
+        "generate PowerShell that itself emits C#, JSON, another PowerShell script, or other nested source text",
+        "diagnose repeated parser, quoting, serialization, missing-property, or optional-evidence failures that occur before the intended semantic operation"
+      ],
+      "required_capabilities": [
+        "powershell"
+      ],
+      "success_count": 1,
+      "failure_count": 0,
+      "use_count": 1,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-blender-clothing-pose-diagnostics-v1",
+      "title": "blender-clothing-pose-diagnostics",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-blender-clothing-pose-diagnostics-v1.json",
+      "summary": "Diagnose and locally repair animation-driven clothing clipping in Blender using component-color isolation, evaluated skeletal deformation, multi-pose clearance indicators, skin-derived weight transfer, and matching separate seam weights. Use for clothing or crotch patches that fit at rest but open during running, leg lifts, or posing. This is controlled-pose skinning analysis, not cloth physics or a guarantee of collision-free game animation.",
+      "tags": [
+        "codex-import",
+        "blender-clothing-pose-diagnostics",
+        "blender",
+        "python"
+      ],
+      "intents": [
+        "Diagnose and locally repair animation-driven clothing clipping in Blender using component-color isolation, evaluated skeletal deformation, multi-pose clearance indicators, skin-derived weight transfer, and matching separate seam weights. Use for clothing or crotch patches that fit at rest but open during running, leg lifts, or posing. This is controlled-pose skinning analysis, not cloth physics or a guarantee of collision-free game animation."
+      ],
+      "required_capabilities": [
+        "blender",
+        "python"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-blender-jewelry-clasp-modeling-v1",
+      "title": "blender-jewelry-clasp-modeling",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-blender-jewelry-clasp-modeling-v1.json",
+      "summary": "Model or refine ornamental jewelry clasps, connecting rings, flat-band ferrules, heart or diamond frames, and gemstone settings in Blender from visual references. Use for silhouette hierarchy, full metal cross sections, actual interlocking connections and visually tensioned strap assemblies. Not a substitute for cloth simulation, structural engineering, character rigging or game-runtime acceptance.",
+      "tags": [
+        "codex-import",
+        "blender-jewelry-clasp-modeling",
+        "blender"
+      ],
+      "intents": [
+        "Model or refine ornamental jewelry clasps, connecting rings, flat-band ferrules, heart or diamond frames, and gemstone settings in Blender from visual references. Use for silhouette hierarchy, full metal cross sections, actual interlocking connections and visually tensioned strap assemblies. Not a substitute for cloth simulation, structural engineering, character rigging or game-runtime acceptance."
+      ],
+      "required_capabilities": [
+        "blender"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-blender-leather-item-authoring-v1",
+      "title": "blender-leather-item-authoring",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-blender-leather-item-authoring-v1.json",
+      "summary": "Create or refine detailed Blender leather items—backpacks, bags, pouches and similar stylized accessories—from design images or an existing native model. Use for clean shell and pocket construction, strap/handle cross sections, curved-surface artwork, zipper alignment, raised dashed stitching, and precise user-redline revisions. Not a substitute for character fitting, rigging, game cooking, or generating concept images.",
+      "tags": [
+        "codex-import",
+        "blender-leather-item-authoring",
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "intents": [
+        "Create or refine detailed Blender leather items—backpacks, bags, pouches and similar stylized accessories—from design images or an existing native model. Use for clean shell and pocket construction, strap/handle cross sections, curved-surface artwork, zipper alignment, raised dashed stitching, and precise user-redline revisions. Not a substitute for character fitting, rigging, game cooking, or generating concept images."
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-cah_nte_wearablefitandcook-v1",
+      "title": "CAH_NTE_WearableFitAndCook",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-cah_nte_wearablefitandcook-v1.json",
+      "summary": "Evidence-backed NTE wearable replacement procedure spanning topology-first mesh identification, skin-surface fitting, Blender-to-UE scale/slot preservation, shoe-motion weight contracts, fresh Cook, Morph compatibility gating, Zen packaging, and final dump-test verification. Use when adapting shoes, straps, ankle rings, clothing accessories, or similar weighted wearables into an NTE UE5.6 character replacement. Depends on nte-shoe-foot-motion, nte-mesh-replacement-repair, and nte-mod-authoring; does not replace them.",
+      "tags": [
+        "codex-import",
+        "cah_nte_wearablefitandcook",
+        "blender",
+        "unreal"
+      ],
+      "intents": [
+        "Evidence-backed NTE wearable replacement procedure spanning topology-first mesh identification, skin-surface fitting, Blender-to-UE scale/slot preservation, shoe-motion weight contracts, fresh Cook, Morph compatibility gating, Zen packaging, and final dump-test verification. Use when adapting shoes, straps, ankle rings, clothing accessories, or similar weighted wearables into an NTE UE5.6 character replacement. Depends on nte-shoe-foot-motion, nte-mesh-replacement-repair, and nte-mod-authoring; does not replace them."
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-hatch-pet-v1",
+      "title": "hatch-pet",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-hatch-pet-v1.json",
+      "summary": "Create, repair, validate, visually QA, and package Codex-compatible v2 animated pets from character art, generated images, company or prospect brand cues, or visual references. Use for any new Codex pet, custom mascot, non-pixel pet style, brand-inspired pet, existing-pet repair, or 8x11 spritesheet workflow requiring all 9 standard animation rows, 16 look directions, deterministic assembly, QA artifacts, and spriteVersionNumber 2 packaging.",
+      "tags": [
+        "codex-import",
+        "hatch-pet",
+        "unreal",
+        "python",
+        "web"
+      ],
+      "intents": [
+        "Create, repair, validate, visually QA, and package Codex-compatible v2 animated pets from character art, generated images, company or prospect brand cues, or visual references. Use for any new Codex pet, custom mascot, non-pixel pet style, brand-inspired pet, existing-pet repair, or 8x11 spritesheet workflow requiring all 9 standard animation rows, 16 look directions, deterministic assembly, QA artifacts, and spriteVersionNumber 2 packaging."
+      ],
+      "required_capabilities": [
+        "unreal",
+        "python",
+        "web"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-arrow-key-modules-v1",
+      "title": "nte-arrow-key-modules",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-arrow-key-modules-v1.json",
+      "summary": "Add or repair arrow-key visibility toggles for separated parts of an NTE/异环 cosmetic skeletal mesh: Blender groups to material sections, PostProcess AnimBlueprint, WasInputKeyJustPressed, and ShowMaterialSection. Use for 上下左右切换模块有无, independently hiding cords/tails/rings/straps, or similar mesh-only hotkeys. Not a general UMG menu, outfit inventory system, or entitlement mechanism.",
+      "tags": [
+        "codex-import",
+        "nte-arrow-key-modules",
+        "blender",
+        "unreal"
+      ],
+      "intents": [
+        "Add or repair arrow-key visibility toggles for separated parts of an NTE/异环 cosmetic skeletal mesh: Blender groups to material sections, PostProcess AnimBlueprint, WasInputKeyJustPressed, and ShowMaterialSection. Use for 上下左右切换模块有无, independently hiding cords/tails/rings/straps, or similar mesh-only hotkeys. Not a general UMG menu, outfit inventory system, or entitlement mechanism."
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-character-geometry-budget-v1",
+      "title": "nte-character-geometry-budget",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-character-geometry-budget-v1.json",
+      "summary": "Compare an NTE character mod with the matching official cooked mesh to set realistic triangle, vertex, section and LOD budgets. Use before substantially densifying custom garments or embroidery, or when a character mod causes poor performance or excessive package size. Does not authorize reducing accepted detail, changing original character assets, or substituting archive compression for runtime optimization.",
+      "tags": [
+        "codex-import",
+        "nte-character-geometry-budget",
+        "blender"
+      ],
+      "intents": [
+        "Compare an NTE character mod with the matching official cooked mesh to set realistic triangle, vertex, section and LOD budgets. Use before substantially densifying custom garments or embroidery, or when a character mod causes poor performance or excessive package size. Does not authorize reducing accepted detail, changing original character assets, or substituting archive compression for runtime optimization."
+      ],
+      "required_capabilities": [
+        "blender"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-character-toggle-menu-v1",
+      "title": "nte-character-toggle-menu",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-character-toggle-menu-v1.json",
+      "summary": "Create or repair character-bound NTE outfit and accessory toggle menus. Mount on the owning character mesh/AnimBP rather than a world-global controller, save every selection immediately, reload saved choices after reconstruction, and reset only on the user's Reset click. Use for 人物挂载菜单、服装开关、避免干扰其他角色控件、点击自动保存. Not for intentionally global vehicle/tool dashboards.",
+      "tags": [
+        "codex-import",
+        "nte-character-toggle-menu"
+      ],
+      "intents": [
+        "Create or repair character-bound NTE outfit and accessory toggle menus. Mount on the owning character mesh/AnimBP rather than a world-global controller, save every selection immediately, reload saved choices after reconstruction, and reset only on the user's Reset click. Use for 人物挂载菜单、服装开关、避免干扰其他角色控件、点击自动保存. Not for intentionally global vehicle/tool dashboards."
+      ],
+      "required_capabilities": [],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-mesh-replacement-repair-v1",
+      "title": "nte-mesh-replacement-repair",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-mesh-replacement-repair-v1.json",
+      "summary": "Replace an existing NTE cosmetic mod mesh from a supplied Blender model, preserve joined native appendages, fit existing shoes/sleeves/clothing to a character with anatomical anchors and clearance checks, correct local foot stance/proportions (内八、FootStance) without disturbing accepted channels, and diagnose animation scale explosions or cooked texture/material loading crashes, wrong body atlases, private material dependency bindings, curve-constrained neck/leg/patch seam reflow, UV-driven shading blotches, and lossless IoStore compression with dependency pruning. Use nte-mod-authoring for new outfit-system items and ue5-iostore-appearance-porting for raw appearance-graph transfers.",
+      "tags": [
+        "codex-import",
+        "nte-mesh-replacement-repair",
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "intents": [
+        "Replace an existing NTE cosmetic mod mesh from a supplied Blender model, preserve joined native appendages, fit existing shoes/sleeves/clothing to a character with anatomical anchors and clearance checks, correct local foot stance/proportions (内八、FootStance) without disturbing accepted channels, and diagnose animation scale explosions or cooked texture/material loading crashes, wrong body atlases, private material dependency bindings, curve-constrained neck/leg/patch seam reflow, UV-driven shading blotches, and lossless IoStore compression with dependency pruning. Use nte-mod-authoring for new outfit-system items and ue5-iostore-appearance-porting for raw appearance-graph transfers."
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-mod-authoring-v1",
+      "title": "nte-mod-authoring",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-mod-authoring-v1.json",
+      "summary": "Create, adapt, cook, package, verify, and troubleshoot Neverness to Everness (NTE/异环) project-authored cosmetic mods using the standalone FModel → Blender → Unreal Engine 5.6 → NTE_Outfit_System/KawaiiPhysics workflow. Use for basic mesh or texture replacements, modular outfit items, custom hair/tails/ears with secondary motion, per-character detachable parts, UE cooking, and .pak/.ucas/.utoc packaging. Do not use this skill for raw IoStore package transplants or binary asset-graph migration.",
+      "tags": [
+        "codex-import",
+        "nte-mod-authoring",
+        "blender",
+        "unreal"
+      ],
+      "intents": [
+        "Create, adapt, cook, package, verify, and troubleshoot Neverness to Everness (NTE/异环) project-authored cosmetic mods using the standalone FModel → Blender → Unreal Engine 5.6 → NTE_Outfit_System/KawaiiPhysics workflow. Use for basic mesh or texture replacements, modular outfit items, custom hair/tails/ears with secondary motion, per-character detachable parts, UE cooking, and .pak/.ucas/.utoc packaging. Do not use this skill for raw IoStore package transplants or binary asset-graph migration."
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-shoe-foot-motion-v1",
+      "title": "nte-shoe-foot-motion",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-shoe-foot-motion-v1.json",
+      "summary": "Analyze and reproduce NTE high-heel or loose-shoe motion relative to the foot using separate Toe0, Foot and calf skin weights. Use for walking/running heel lift, shoe-foot separation, rigid soles and ankle-strap deformation. Distinguish skinning from visibility toggles, animation clips and physics; not a general shoe-fitting or outfit-toggle skill.",
+      "tags": [
+        "codex-import",
+        "nte-shoe-foot-motion",
+        "blender",
+        "python"
+      ],
+      "intents": [
+        "Analyze and reproduce NTE high-heel or loose-shoe motion relative to the foot using separate Toe0, Foot and calf skin weights. Use for walking/running heel lift, shoe-foot separation, rigid soles and ankle-strap deformation. Distinguish skinning from visibility toggles, animation clips and physics; not a general shoe-fitting or outfit-toggle skill."
+      ],
+      "required_capabilities": [
+        "blender",
+        "python"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-nte-ui-mod-authoring-v1",
+      "title": "nte-ui-mod-authoring",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-nte-ui-mod-authoring-v1.json",
+      "summary": "Analyze, design, implement, cook, package, verify, and troubleshoot project-authored Neverness to Everness (NTE/异环) UE5.6 in-game UI mods and tool menus. Use for runtime menu injection, controller/component module frameworks, UMG design systems, SaveGame-backed settings, localization, configurable hotkeys, HUD controls, cooldown displays, color pickers, vehicle recoloring controls, and matching .pak/.ucas/.utoc output. Do not use for character/outfit mesh authoring or raw IoStore appearance/package transplants.",
+      "tags": [
+        "codex-import",
+        "nte-ui-mod-authoring",
+        "unreal",
+        "python",
+        "powershell"
+      ],
+      "intents": [
+        "Analyze, design, implement, cook, package, verify, and troubleshoot project-authored Neverness to Everness (NTE/异环) UE5.6 in-game UI mods and tool menus. Use for runtime menu injection, controller/component module frameworks, UMG design systems, SaveGame-backed settings, localization, configurable hotkeys, HUD controls, cooldown displays, color pickers, vehicle recoloring controls, and matching .pak/.ucas/.utoc output. Do not use for character/outfit mesh authoring or raw IoStore appearance/package transplants."
+      ],
+      "required_capabilities": [
+        "unreal",
+        "python",
+        "powershell"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "codex-ue5-iostore-appearance-porting-v1",
+      "title": "ue5-iostore-appearance-porting",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/codex-ue5-iostore-appearance-porting-v1.json",
+      "summary": "Analyze, build, verify, and troubleshoot UE5 IoStore cosmetic appearance-transfer mods, especially NTE character or vehicle meshes, paid-owned skin visuals, combat and vehicle VFX, ultimate sequences, UI previews, NPC appearances, dye compatibility, and condition-gated effects. Use when redirecting one owned appearance onto another local cosmetic path, making cosmetic effects global, diagnosing full-awaken skin glow (满命皮肤发光), missing materials/animations/VFX or IoStore crashes, or packaging .pak/.ucas/.utoc mods without changing entitlement logic.",
+      "tags": [
+        "codex-import",
+        "ue5-iostore-appearance-porting",
+        "unreal"
+      ],
+      "intents": [
+        "Analyze, build, verify, and troubleshoot UE5 IoStore cosmetic appearance-transfer mods, especially NTE character or vehicle meshes, paid-owned skin visuals, combat and vehicle VFX, ultimate sequences, UI previews, NPC appearances, dye compatibility, and condition-gated effects. Use when redirecting one owned appearance onto another local cosmetic path, making cosmetic effects global, diagnosing full-awaken skin glow (满命皮肤发光), missing materials/animations/VFX or IoStore crashes, or packaging .pak/.ucas/.utoc mods without changing entitlement logic."
+      ],
+      "required_capabilities": [
+        "unreal"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "mv-timeline-evidence-self-review-v1",
+      "title": "MV Timeline Evidence Self-Review",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/mv-timeline-evidence-self-review-v1.json",
+      "summary": "Cross-reference verified frame times, lyric display intervals, actual audio measurements and observed visual action for bounded MV self-review when hearing is unsupported. Distinguish technical alignment from artistic judgment; keep unaffected work moving.",
+      "tags": [
+        "mv",
+        "video-editing",
+        "timeline",
+        "audio-analysis",
+        "self-review",
+        "lyrics"
+      ],
+      "intents": [
+        "Review MV image and music timing from existing assets",
+        "Diagnose editing decisions using lyric cues, waveform and actual frames",
+        "Continue bounded self-review when audio listening is unsupported"
+      ],
+      "required_capabilities": [],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    },
+    {
+      "skill_id": "nte-normal-tangent-winding-diagnostics-v1",
+      "title": "NTE normal/tangent/winding shading diagnostics",
+      "status": "CANDIDATE",
+      "ref": "skills/candidates/nte-normal-tangent-winding-diagnostics-v1.json",
+      "summary": "Diagnose localized NTE character shading failures—especially dark, grey, patchy, or seemingly inside-out skin on regions such as the abdomen or palm—by checking triangle winding and the full tangent-space basis before blaming vertex-normal XYZ. Match against an accepted/native reference independently of normals, preserve stylized custom normals, separate material/vertex-color/normal-map confounders, and require cooked runtime verification before treating a repair as proven.",
+      "tags": [
+        "nte",
+        "unreal",
+        "blender",
+        "python",
+        "skeletal-mesh",
+        "normals",
+        "tangents",
+        "winding",
+        "shading-diagnostics"
+      ],
+      "intents": [
+        "diagnose localized dark, grey, patchy, or inside-out shading on an NTE character mesh after Blender/UE import, cook, or mesh replacement",
+        "compare an NTE mod mesh against an official or accepted reference to distinguish vertex-normal differences from tangent-handedness or triangle-winding errors",
+        "repair a suspected normal/tangent orientation problem without destroying custom stylized normals or unrelated accepted mesh data"
+      ],
+      "required_capabilities": [
+        "blender",
+        "unreal",
+        "python"
+      ],
+      "success_count": 0,
+      "failure_count": 0,
+      "use_count": 0,
+      "updated_at": "2026-10-25T00:00:00+09:00"
+    }
+  ]
 }

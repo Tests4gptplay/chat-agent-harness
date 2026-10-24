@@ -6,8 +6,6 @@ param(
     [string]$Session = ('cah-reset-semantics-' + $PID)
 )
 
-& py (Join-Path (Split-Path -Parent $PSScriptRoot) 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -23,8 +21,8 @@ $targets = @(
     [pscustomobject]@{
         kind='task_cell'
         display_name='CAH Task Cell'
-        project_key='g-p-CAHTASKCELLPLACEHOLDER'
-        project_root_url='https://chatgpt.com/g/g-p-CAHTASKCELLPLACEHOLDER-cah-task-cell/project'
+        project_key='g-p-CAHTASKCELL'
+        project_root_url='https://chatgpt.com/g/g-p-CAHTASKCELL-cah-task-cell/project'
     }
 )
 

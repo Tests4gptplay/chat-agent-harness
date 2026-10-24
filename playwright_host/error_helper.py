@@ -39,7 +39,7 @@ def helper_control(state: Any, project_key: str) -> dict[str, Any] | None:
     branch = state.data.get("harness_git_branch") or os.environ.get("GAH_GIT_BRANCH", "main")
     prompt = (
         "HARNESS_ERROR_HELPER SOURCE=HARNESS_ERROR\n"
-        f"Act as Helper. Repository CAH_OWNER/CAH_OPERATIONAL_REPOSITORY, branch {branch}. "
+        f"Act as Helper. Repository __CAH_REPOSITORY__, branch {branch}. "
         "Harness reported the mechanical error below. Start troubleshooting now; "
         "this is not a 30-minute watchdog request and does not require Planner approval. "
         "Read AGENTS.md and docs/task-cell/HELPER.md (Harness errors section).\n"

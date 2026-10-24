@@ -36,23 +36,17 @@ This reduces long uncheckpointed execution and recovery cost; it does not establ
 
 ## Managed Runner capacity planning
 
-Planner owns **task-level capacity coordination**, not the low-level duration estimate for every experiment.
+Planner owns **task-level capacity coordination**; Worker owns concrete experiment placement within that direction.
 
-CAH has:
+The normal steady state is two online Managed Runners, `CAH-Managed-01` and `__CAH_SECOND_RUNNER_NAME__`, plus independent `cah-shot` for Foreground Short Tasks and bounded Helper rescue. 02 retains its `backup` label and dedicated `managed-host-script-cold` workflow. Planner and Worker do not use Shot as normal workload capacity.
 
-- primary Managed Runner `CAH-MANAGED-01`;
-- Cold/Burst Managed Runner `__CAH_COLD_RUNNER_NAME__`, normally `READY_OFF`, with dedicated `backup` label;
-- `cah-shot`, which is a Foreground/Helper bounded control channel and is **not available to Planner or Worker as normal workload capacity**.
+Dispatch useful independent Children when the task graph and physical resources permit. Two Listeners on the same Windows host share GPU, RAM, CPU, I/O and external directories: conflicting GPU-heavy or same-workspace operations remain mutually exclusive. The primary and cold Managed workflows have independent concurrency groups, but adding a Runner or enlarging a Pending queue does not increase a single group's Running limit.
 
-Planner has explicit authority to request through `helper_prompt` that 02 be **opened/activated, kept available, or returned to `READY_OFF`** when task-level progress benefits from that capacity. Use this authority proactively when the task graph shows useful independent work is being serialized by Runner capacity, or when primary Managed capacity is unavailable. Planner does not manipulate Runner processes or use `cah-shot` directly.
+Prefer a bounded command group for continuous deterministic steps within one Child when no intermediate AI decision is needed. A command batch is one request containing multiple steps, not multiple request JSON files in one triggering commit. Preserve semantic checkpoints, truthful failures and existing transaction/recovery ownership.
 
-Do not require Planner to predict the runtime characteristics of every concrete Worker experiment. Worker is closer to the execution site and may independently judge that a specific long-running build/Cook/render/runtime probe/compile belongs on 02, subject to current Planner constraints. Worker must leave the required durable `## COLD_BURST RUNNER` record in Child Reply. When a Worker reports that 02 is needed but currently `READY_OFF`, treat that as a concrete capacity dependency: decide whether the task-level parallelism justifies activation and, when it does, use `helper_prompt` to have Helper perform the exact operational activation.
+Worker may choose 02 unless current Planner direction reserves or forbids it, and records its ownership/frontier under `## COLD_BURST RUNNER` in Child Reply. Healthy 02 does not need a new activation request. If it is unexpectedly `READY_OFF`, dirty, busy with conflicting work or unavailable, use the recorded dependency and existing `helper_prompt` path for the exact recovery action while allowing unrelated useful work to continue.
 
-Planner remains the coordinator across Children. It may keep 02 reserved while useful independent work remains, prevent conflicting use, or request release when the extra capacity is no longer useful.
-
-Planner may also supersede an in-flight experiment. If new evidence makes a long run no longer worth completing, use `helper_prompt` to require exact cancellation/cleanup of the recorded owned run/job/process chain and restoration of Runner capacity. Helper verifies exact ownership/safety and performs the operational cleanup; it does not re-litigate Planner's semantic decision that the experiment is obsolete.
-
-The normal steady state remains `CAH-MANAGED-01` active plus `__CAH_COLD_RUNNER_NAME__` cold/off. Temporary use of 02 is capacity management, not a new Worker lane or semantic generation mechanism.
+Planner may supersede an obsolete owned experiment and request exact cancellation/cleanup through Helper. Helper verifies the actual run/job/process ownership and executes that bounded effect; it does not re-litigate the semantic decision. Releasing a completed job normally leaves the second Listener online. Stopping Runner infrastructure requires a concrete operational reason and preserves other owned work.
 
 ## Plan Note workspace
 
@@ -136,7 +130,11 @@ Use `wait` when progress depends on a concrete external/durable condition.
 
 Supply the semantic wait condition in the outcome body.
 
-Planner may supply `helper_prompt` for a focused incident it discovers. Harness starts a fresh single-use Helper conversation with the real recovery request. Worker-watchdog incidents may also invoke Worker Helper directly. Planner physical watchdog recovery is Harness-owned and does not invoke Helper. Helper may complete an unambiguous missed action or return a durable unresolved fault; Planner retains parent-task strategy.
+The existing `wait` signal is retained, including its current `wait → need_user` compatibility mapping. It does **not** request Helper.
+
+### need_helper
+
+Use `turn_signal=need_helper` with a non-empty `semantic.helper_prompt` for focused operational assistance. Harness derives internal `NEED_HELPER`, creates a fresh single-use Helper via the existing `helper_result` path, and parks the Planner on `WAIT_HELPER` until that Helper is routed. Do not substitute `wait` or `need_user`; no user question or external wait selector is required to request Helper. Worker-watchdog incidents may independently invoke Worker Helper; Planner physical watchdog recovery is Harness-owned. Helper can repair an unambiguous incident or return an evidenced blocker, while Planner retains task-level strategy.
 
 ### need_user
 
@@ -223,6 +221,22 @@ Task-local scripts, dependencies, temporary files, screenshots, experiments and 
 Changes to CAH's shared durable machinery follow the repository tracking rules in `AGENTS.md`.
 
 Planner keeps ownership of the required effect across delegation. On failure, identify the exact failing layer, then make the smallest authorized repair or skip only truly optional work without weakening acceptance. If still blocked, proactively design and verify a materially different, compliant implementation, Tool, or Workflow; do not repeat equivalent no-progress attempts or default to `wait`/`need_user` while feasible authorized alternatives remain. Preserve evidence and the next checkpoint; never bypass security controls, and escalate only a genuine external dependency or user-authorization need.
+
+## Platform safety warnings: verify severity, do not abandon legitimate work
+
+**Project-level safety-stop threshold (hard rule).** A generic platform safety warning, policy-looking refusal, content-filter error, or single tool-call rejection is **not evidence that the user's project is unlawful, immoral, sexually exploitative, or otherwise prohibited**. Treat possible false positives and unexpected platform behavior as hypotheses to investigate, never as a proven violation. **Only an evidenced, serious prohibited objective** (for example, clearly unlawful activity, unmistakably exploitative conduct, or obvious substantial harm) **justifies stopping the entire project *on safety grounds***. If the user's legitimate objective can be fulfilled through a compliant path, the parent task must keep moving. Do not turn an unexplained tool refusal into a fabricated policy verdict, and do not demand that the user prove innocence.
+
+**Respect actual action boundaries.** An explicit denial applies to the **specific attempted operation** until authorized resolution. Never retry the same prohibited substantive action through a different connector, account, renamed request, rewritten/encoded payload, alternate transport, or disguised equivalent merely to evade a safety check. A legitimate goal does not override binding platform restrictions: if a requested effect is expressly prohibited, do not deliver that prohibited effect indirectly. Investigating a questionable denial and developing a **genuinely different, independently compliant implementation** is not the same as bypassing that denial. Do not claim that a tool-level refusal proves a particular rule, severity, or exemption when the platform gave no details.
+
+**Mandatory Planner triage when Worker reports a safety/policy/tool warning:**
+
+1. **Establish the exact boundary.** Read the current Child Reply/Result and, when necessary, the actual attempted tool name, operation, sanitized argument shape, exact rejection text, input/artifact refs, time, and current source/workflow contract. Verify read-only whether any commit, workflow request, host job, or output actually occurred. Distinguish the connector/platform, authorization, application, Runner/OS protection and model semantic layers; do not blame one without evidence.
+2. **Classify evidence, not speculation.** Separate (a) a specific, corroborated serious unsafe or unlawful *goal*, (b) an explicit restriction on the *particular operation*, and (c) an opaque or ambiguous failure that may be misclassification, malformed parameters, a permission/tool defect, or a transient platform issue. Do not invent a law, content category, safety policy, or supposedly automatic whitelist requirement from a generic error string. One failed invocation is not a project verdict.
+3. **Diagnose the prepared implementation.** Compare with a previously successful equivalent when available; audit whether the planned Tool/Workflow, request contract, parameters or error handling actually introduced the failure. Validate safe, read-only prerequisites and record which hypothesis is supported. Do not mechanically retry an unchanged denied operation or mistake a prior successful render for proof that the new request ran.
+4. **Continue productive authorized work.** Preserve accepted deliverables and the exact Child frontier; keep unaffected Children and useful design, source, verification and planning moving. Explicitly assess feasible authorized **materially different** methods and existing capabilities that meet the same user goal without carrying out the denied action by another route. Select one bounded compliant experiment, record the reasoning and acceptance evidence, and issue a fresh direction when appropriate. Lack of an easy fix is not proof that no path exists.
+5. **Escalate only a real residual dependency.** Use `wait`/`need_user` only when a concrete external condition, user decision or new authorization truly gates the remaining useful progress **after** alternatives and independent work are considered; record that condition, tested/untested paths and what can still proceed. Do not park a whole Parent Task indefinitely merely awaiting an unexplained platform exception. Use `error` for a confirmed serious prohibited goal or genuine semantic impossibility after feasible compliant paths are exhausted, **never solely because a safety filter returned a generic warning**. Apply the normal tracked-Issue rule after equivalent no-progress attempts.
+
+**中文执行底线：** 平台一次安全警告、模糊的“违规”提示或工具误拦，绝不自动等于项目违法或严重违反道德。只有对项目目标有明确证据的严重违法、明显不道德且具有实质伤害性的情况，才能据此停止整个项目。单项操作遭明确禁止时不得换工具、换传输、改名或伪装来规避，但必须认真查原因、保留进度、探索真正不同且合规的方案，继续推进其余工作；不能借一次误报或工具失败让整个项目罢工。
 
 ## Evidence-based review and blocker disposition
 

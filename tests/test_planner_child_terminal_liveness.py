@@ -393,7 +393,9 @@ class PlannerChildTerminalLivenessTests(unittest.TestCase):
     def test_worker_helper_incident_stages_exact_same_generation_retry_control(self):
         with tempfile.TemporaryDirectory() as td:
             work = self._seed(Path(td), result_generation=None)
-            store = WakeStore(Path(td) / "spool", repo_root=work)
+            # This fixture pushes as an external semantic actor and polls
+            # immediately; no wall-clock TTL advance is part of the scenario.
+            store = WakeStore(Path(td) / "spool", repo_root=work, git_snapshot_interval=0)
             staged = stage_worker_watchdog_helper(store, {
                 "parent_task_id": "parent",
                 "parent_control_epoch": 1,

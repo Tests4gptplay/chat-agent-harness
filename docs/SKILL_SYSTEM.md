@@ -116,9 +116,9 @@ python harness/skills.py promote --candidate skills/candidates/<skill_id>.json
 
 Promotion is a trust boundary, not a formatting change.
 
-## First proven Skill
+## Reusable Skill example
 
-The first active Skill is distilled from `blender-retro-camera-001`: a bounded Blender procedural generation + render/review/refinement loop. It exists as a concrete demonstration that a successful CAH workload can become reusable procedural knowledge without confusing the original case history with the Skill itself.
+A bounded Blender generation and visual-refinement procedure is provided in `skills/guides/iterative-blender-visual-refinement-v1.md`. Public entries retain reusable methods and anonymized existing acceptance outcomes under `skills/evidence/`. Each installation records its own subsequent task results through the registry.
 
 
 ## External Skill imports

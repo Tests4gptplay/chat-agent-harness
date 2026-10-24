@@ -3,8 +3,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import queue
 import re
+import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -51,21 +54,46 @@ class BrowserRuntime:
         "task_cell_prompt": "_handle_task_cell_prompt",
     }
 
-    def __init__(self, cfg: HostConfig):
+    def __init__(self, cfg: HostConfig, *, synchronous_control: bool = False):
         self.cfg = cfg
+        self._ui_thread_id = threading.get_ident()
+        self._pending_harness_errors: queue.SimpleQueue[tuple[str, dict[str, Any]]] = queue.SimpleQueue()
+        self._synchronous_control = synchronous_control
+        self._control_executor: ThreadPoolExecutor | None = None
+        self._control_future: Future | None = None
+        self._control_phase: str | None = None
+        self._control_planner_result: dict[str, Any] | None = None
+        self._control_stopped = threading.Event()
         self.state = HostState(cfg.state_path)
         self._delivering_error_helper = False
         self.bridge = BridgeClient(cfg.bridge_url, self.state.client_id, cfg.project_id, self._on_harness_error)
         self.ui = ChatGPTUI(cfg.cdp_url, cfg.browser_endpoint_path)
-        self.workers = WorkerManager(self.bridge, self.state, self.ui, cfg.project_id)
+        self.workers = WorkerManager(self.bridge, self.state, self.ui, cfg.project_id,
+                                     asynchronous_observation=not synchronous_control)
         self.tool_registry = ToolRegistry()
         self._last_wake_poll = 0.0
         self._last_maintenance_tick = 0.0
         self._seen_role_tool_calls: set[str] = set()
 
     def _on_harness_error(self, event: str, data: dict[str, Any]) -> None:
+        # HTTP callbacks from the Git polling worker must never touch the
+        # Playwright objects or their owner-thread HostState projection.
+        if threading.get_ident() != getattr(self, "_ui_thread_id", threading.get_ident()):
+            self._pending_harness_errors.put((event, deepcopy(data)))
+            return
         record_error(self.state, event, data)
         self._service_error_helper()
+
+    def _drain_harness_errors(self) -> None:
+        pending = getattr(self, "_pending_harness_errors", None)
+        if pending is None:
+            return
+        while True:
+            try:
+                event, data = pending.get_nowait()
+            except queue.Empty:
+                break
+            self._on_harness_error(event, data)
 
     def _service_error_helper(self) -> None:
         # Reuse one live incident, including if its own delivery fails. This is
@@ -116,7 +144,13 @@ class BrowserRuntime:
         topology = self.bridge.call("topology_status")
         self.state.reconcile_lanes(topology.get("lanes"))
 
-    def close(self) -> None:
+    def close(self, *, stop_control: bool = True) -> None:
+        if stop_control:
+            self._control_stopped.set()
+            if self._control_future is not None:
+                self._control_future.cancel()
+            if self._control_executor is not None:
+                self._control_executor.shutdown(wait=False, cancel_futures=True)
         self.workers.mcp.close()
         self.ui.close()
 
@@ -1266,7 +1300,7 @@ class BrowserRuntime:
                 except Exception as exc:
                     self.bridge.event("playwright.helper_cleanup_error", "error", message=str(exc)[:1000])
 
-    def process_control(self) -> dict[str, Any]:
+    def _process_control_synchronous(self) -> dict[str, Any]:
         planner_result = None
         try:
             planner_result = self.bridge.call("planner_runtime_tick", bound_turns=self._bound_semantic_turns())
@@ -1279,6 +1313,99 @@ class BrowserRuntime:
         status = self.bridge.call("control_status")
         handled = self._dispatch_control_request(status.get("control_request"))
         return handled if handled is not None else planner_result or {"ok": True, "idle": "no_control_action"}
+
+    def _query_control_reconciliation(self, bound_turns: list[dict[str, Any]],
+                                      worker_requests: list[dict[str, Any]]) -> dict[str, Any]:
+        """Git/HTTP work only. The caller captured bindings on the UI thread."""
+        if self._control_stopped.is_set():
+            return {"planner_result": None, "deliveries": [], "observations": []}
+        result = self.bridge.call("control_poll", phase="reconcile",
+                                  bound_turns=bound_turns, workers=worker_requests)
+        requests = {row["identity_key"]: row for row in worker_requests}
+        for row in result.get("observations") or []:
+            for operation in ("dispatch", "takeover", "liveness"):
+                observation = row.get(operation) or {}
+                if observation.get("ok") is False:
+                    self.bridge.event("playwright.worker_observation_error", "error",
+                                      operation=operation, message=str(observation)[:800])
+            liveness = row.get("liveness") or {}
+            if liveness.get("requires_fresh_liveness") and not self._control_stopped.is_set():
+                # Only legacy lease renewal needs an additional fresh transaction.
+                # Keep that existing Fetch/CAS on this same bounded worker.
+                payload = requests[row["identity_key"]]["liveness"]
+                row["liveness"] = self.bridge.call("dispatch_liveness", **payload)
+        return result
+
+    def _query_control_status(self, source_commit: str | None) -> dict[str, Any]:
+        if self._control_stopped.is_set():
+            return {"ok": True, "control_request": None}
+        return self.bridge.call("control_status", observed_source_commit=source_commit)
+
+    def _submit_control_query(self, phase: str, operation: Any, *args: Any) -> None:
+        if self._control_executor is None:
+            self._control_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cah-git-control")
+        self._control_phase = phase
+        self._control_future = self._control_executor.submit(operation, *args)
+
+    def _start_control_reconciliation(self) -> None:
+        # Never let the worker enumerate live UI-owned dictionaries.
+        bindings = deepcopy(self._bound_semantic_turns())
+        workers = deepcopy(self.workers.observation_requests())
+        self._submit_control_query("reconcile", self._query_control_reconciliation, bindings, workers)
+
+    def _process_control_async(self) -> dict[str, Any]:
+        self.workers.replace_observations([])
+        self._drain_harness_errors()
+        if self._control_stopped.is_set():
+            return {"ok": True, "idle": "control_poll_closed"}
+        future = self._control_future
+        if future is None:
+            self._start_control_reconciliation()
+            return {"ok": True, "pending": True}
+        if not future.done():
+            # There is exactly one in-flight query and no catch-up backlog.
+            return {"ok": True, "pending": True}
+
+        phase = self._control_phase
+        self._control_future = None
+        self._control_phase = None
+        try:
+            result = future.result()
+        finally:
+            self._drain_harness_errors()
+
+        if phase == "reconcile":
+            planner = result.get("planner_result")
+            self._control_planner_result = planner
+            self._finish_git_turns((planner or {}).get("semantic_turns") or [])
+            for delivery in result.get("deliveries") or []:
+                if delivery.get("error_event"):
+                    self.bridge.event(delivery["error_event"], "error", message=delivery["error"])
+                else:
+                    try:
+                        self._apply_terminal_status(delivery["result"], planner=delivery["planner"])
+                    except Exception as exc:
+                        event = "planner.final_delivery_error" if delivery["planner"] else "foreground.monitor_error"
+                        self.bridge.event(event, "error", message=str(exc)[:800])
+            self._planner_watchdog_sweep()
+            self.workers.replace_observations(result.get("observations") or [])
+            # Cleanup/delivery/watchdog may mutate the canonical control slot.
+            # Read it after those effects, preserving the existing ordering.
+            self._submit_control_query("dispatch", self._query_control_status, result.get("source_commit"))
+            return {"ok": True, "pending": True}
+
+        handled = self._dispatch_control_request(result.get("control_request"))
+        response = handled if handled is not None else self._control_planner_result or {"ok": True, "idle": "no_control_action"}
+        self._control_planner_result = None
+        self._start_control_reconciliation()
+        return response
+
+    def process_control(self) -> dict[str, Any]:
+        # Explicit synchronous mode keeps isolated logical-clock fixtures
+        # deterministic; the actual Host defaults to owner-thread-safe polling.
+        if getattr(self, "_synchronous_control", True):
+            return self._process_control_synchronous()
+        return self._process_control_async()
 
     def _process_bound_tool_call(
         self,
@@ -1659,20 +1786,23 @@ class BrowserRuntime:
         self.state.data.setdefault("foreground", {}).pop("pending_terminal", None)
         self.state.save()
 
+    def _apply_terminal_status(self, result: dict[str, Any], *, planner: bool) -> None:
+        event = result.get("event")
+        if planner:
+            event = event or result.get("delivered_wait_response_end")
+        if isinstance(event, dict):
+            self._deliver_terminal_event(event, planner=planner)
+
     def _process_final_delivery(self) -> None:
         try:
             result = self.bridge.call("planner_final_delivery_status")
-            event = result.get("event") or result.get("delivered_wait_response_end")
-            if isinstance(event, dict):
-                self._deliver_terminal_event(event, planner=True)
+            self._apply_terminal_status(result, planner=True)
         except Exception as exc:
             self.bridge.event("planner.final_delivery_error", "error", message=str(exc)[:800])
 
         try:
             result = self.bridge.call("foreground_terminal_status")
-            event = result.get("event")
-            if isinstance(event, dict):
-                self._deliver_terminal_event(event, planner=False)
+            self._apply_terminal_status(result, planner=False)
         except Exception as exc:
             self.bridge.event("foreground.monitor_error", "error", message=str(exc)[:800])
 
@@ -1696,8 +1826,10 @@ class BrowserRuntime:
 
         if current - self._last_maintenance_tick >= self.cfg.maintenance_seconds:
             self._last_maintenance_tick = current
-            topology = self._run_stage("topology", lambda: self.bridge.call("topology_status"), {})
-            self._run_stage("topology_reconcile", lambda: self.state.reconcile_lanes(topology.get("lanes")))
+            options = {} if getattr(self, "_synchronous_control", True) else {"observation": True}
+            topology = self._run_stage("topology", lambda: self.bridge.call("topology_status", **options), {})
+            if topology.get("lanes") is not None:
+                self._run_stage("topology_reconcile", lambda: self.state.reconcile_lanes(topology["lanes"]))
             maintenance = self._run_stage("maintenance", self.workers.maintain, [])
             liveness = self._run_stage("liveness", self.workers.liveness_sweep, [])
 
@@ -1723,7 +1855,7 @@ class BrowserRuntime:
                 # Stage isolation must not suppress the existing CDP reconnect.
                 if not self.ui.browser or not self.ui.browser.is_connected():
                     try:
-                        self.close()
+                        self.close(stop_control=False)
                         self.connect()
                     except Exception as reconnect_error:
                         self.bridge.event("playwright.reconnect_error", "error", message=str(reconnect_error)[:1000])

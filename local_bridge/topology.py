@@ -292,7 +292,7 @@ def stage_topology_request(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     wake = make_wake(
         project_id,
         state="NEED_AGENT",
-        repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+        repo="__CAH_REPOSITORY__",
         result_ref="state/topology_request.json",
         lane_id=control_lane_id,
         worker_project_key=worker_project_key,
@@ -316,6 +316,32 @@ def topology_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     project_id = str(req.get("project_id") or "").strip()
     if not project_id:
         raise ValueError("project_id required")
+
+    if req.get("observation") is True:
+        # A routine Host observation must neither wait for a remote transaction
+        # nor close one. Only the store's unexpired, confirmed immutable commit
+        # is usable here; it does not establish fresh transaction admission.
+        base_sha = store.peek_git_snapshot()
+        view = {
+            "ok": True,
+            "lanes": None,
+            "control_request": None,
+            "finalize": None,
+            "observation": True,
+        }
+        if base_sha is None:
+            return {**view, "idle": "git_snapshot_unavailable"}
+        try:
+            lanes = json.loads(store._git("show", f"{base_sha}:state/lanes.json").stdout)
+            state = json.loads(store._git("show", f"{base_sha}:state/chatgpt.json").stdout)
+        except Exception:
+            return {**view, "ok": False, "error": "GIT_TOPOLOGY_OBSERVATION_READ_FAILED"}
+        return {
+            **view,
+            "lanes": lanes,
+            "control_request": state.get("control_request") if isinstance(state, dict) else None,
+            "source_commit": base_sha,
+        }
 
     finalize = finalize_topology_request(store, req)
 

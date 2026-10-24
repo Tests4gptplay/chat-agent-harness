@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Mapping, Sequence
 
-_MUTATING_COMMANDS = {"add", "commit", "config", "push", "reset", "worktree"}
+_MUTATING_COMMANDS = {"add", "commit", "config", "push", "rebase", "reset", "worktree"}
 
 
 class GitProcessTimeout(subprocess.TimeoutExpired):

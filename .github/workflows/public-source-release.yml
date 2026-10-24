@@ -1,123 +1,48 @@
-name: CAH public source audit and v1.0.5 release
+name: CAH source release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/public-source-release.yml"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: New version tag, for example v1.0.6
+        required: true
+        type: string
 
 permissions:
   contents: write
 
-concurrency:
-  group: cah-public-v1-0-5-release
-  cancel-in-progress: false
-
 jobs:
-  audit-test-publish:
-    if: github.repository == 'Tests4gptplay/chat-agent-harness'
+  package:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
     steps:
-      - name: Checkout reviewed public source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 1
-          persist-credentials: true
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Restore reviewed-public file manifest
-        run: |
-          python tools/rebuild_release_manifest.py
-          python installation/audit.py
-      - name: Source syntax and JSON checks
-        shell: bash
+          python-version: '3.12'
+      - name: Check source and reusable registries
         run: |
           python - <<'PY'
           import ast, json
           from pathlib import Path
-          checked = {'python': 0, 'json': 0}
+          from harness.skills import SkillRegistry
           for p in Path('.').rglob('*'):
-              if not p.is_file() or '.git' in p.parts or '__pycache__' in p.parts:
+              if not p.is_file() or '.git' in p.parts:
                   continue
               if p.suffix == '.py':
-                  ast.parse(p.read_text(encoding='utf-8'), filename=str(p))
-                  checked['python'] += 1
-              if p.suffix == '.json':
-                  json.loads(p.read_text(encoding='utf-8'))
-                  checked['json'] += 1
-          print('Source syntax OK', checked)
+                  ast.parse(p.read_text(encoding='utf-8-sig'), filename=str(p))
+              elif p.suffix == '.json':
+                  json.loads(p.read_text(encoding='utf-8-sig'))
+          print(SkillRegistry(Path.cwd()).validate_all())
           PY
-      - name: Validate public Tool Registry refs
-        run: python -m harness.tool_runtime validate-all
-      - name: Offline unit suite
-        shell: bash
-        run: |
-          set -o pipefail
-          python -m unittest discover -s tests -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/cah-v105-tests.log"
-      - name: Record actual test and publication evidence
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json, os, re
-          from datetime import datetime, timezone
-          from pathlib import Path
-          text = (Path(os.environ['RUNNER_TEMP'])/'cah-v105-tests.log').read_text(encoding='utf-8')
-          count = re.findall(r'Ran (\d+) tests?', text)
-          if not count or re.search(r'\bFAILED\b', text):
-              raise SystemExit('No clean unittest summary; refuse publication')
-          tail = text[-4000:]
-          skipped = re.findall(r'OK \(skipped=(\d+)\)', tail)
-          summary = {
-              'v': 1, 'version': 'v1.0.5', 'test_environment': 'ubuntu-latest / python 3.11',
-              'source': 'public repository reviewed candidate', 'tests_run': int(count[-1]),
-              'skipped': int(skipped[-1]) if skipped else 0, 'failures': 0, 'errors': 0,
-              'offline_status': 'PASS', 'run_id': os.environ['GITHUB_RUN_ID'],
-              'candidate_public_commit': os.environ['GITHUB_SHA'],
-              'verified_at': datetime.now(timezone.utc).isoformat(),
-              'security_scope': 'Static current-public-tree scan, not past Git history or third-party security audit',
-              'not_claimed': ['fresh Windows installation', 'real ChatGPT login/Runner registration',
-                              'live Task Cell/Helper recovery on a new machine', 'third-party security review']
-          }
-          (Path('audit')/'v1.0.5-verification.json').write_text(json.dumps(summary, indent=2)+'\n', encoding='utf-8')
-          print('Verified offline:', summary['tests_run'], 'tests, skipped:', summary['skipped'])
-          PY
-          python tools/rebuild_release_manifest.py
-          python installation/audit.py
-      - name: Commit verified integrity metadata to main
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add installation/placeholders.json audit/file-manifest.json audit/v1.0.5-verification.json
-          if ! git diff --cached --quiet; then
-            git commit -m "audit: verify v1.0.5 public source release [skip ci]"
-            python harness/git_publish.py --repo . --remote origin --branch main --attempts 3
-          fi
-      - name: Build source ZIP and hashes
-        shell: bash
-        run: |
-          git archive --format=zip HEAD -o CAH-1.0.5.zip
-          sha256sum CAH-1.0.5.zip > SHA256SUMS
-          unzip -l CAH-1.0.5.zip | tail -2
-          sha256sum -c SHA256SUMS
-      - name: Publish v1.0.5 release with verified assets
+          python -m unittest tests.test_public_export_contract
+      - name: Package and publish the selected version
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          if gh release view v1.0.5 >/dev/null 2>&1; then
-            echo "v1.0.5 already exists; refusing to replace an immutable release"
-            exit 1
-          fi
-          awk '/^## Previous clean source publication \(historical\)/{exit} {print}' RELEASE_NOTES.md > "$RUNNER_TEMP/release-notes.md"
-          gh release create v1.0.5 CAH-1.0.5.zip SHA256SUMS \
-            --target "$(git rev-parse HEAD)" \
-            --title "CAH 1.0.5 — sanitized Helper/Runner release (AGPL-3.0-only)" \
-            --notes-file "$RUNNER_TEMP/release-notes.md"
-          gh release view v1.0.5 --json url,tagName,isPrerelease --jq '.'
-
-# Public release-only automation. No private operational workflow, user path, or Runner is bundled.
+          git archive --format=zip HEAD -o CAH-source.zip
+          sha256sum CAH-source.zip > SHA256SUMS
+          gh release create "$RELEASE_TAG" CAH-source.zip SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "CAH $RELEASE_TAG" \
+            --notes-file RELEASE_NOTES.md

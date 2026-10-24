@@ -95,7 +95,7 @@ class WorkerSameGenerationRetryTests(unittest.TestCase):
             "v": 1,
             "wake_id": wake_id,
             "project_id": "git-agent-harness",
-            "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            "repo": "__CAH_REPOSITORY__",
             "state": "NEED_AGENT",
             "created_at": "2026-09-29T00:00:00Z",
             "kind": "planner_worker_child",

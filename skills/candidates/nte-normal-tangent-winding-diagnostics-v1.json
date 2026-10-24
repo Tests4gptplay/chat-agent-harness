@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "skill_id": "nte-normal-tangent-winding-diagnostics-v1",
+  "title": "NTE normal/tangent/winding shading diagnostics",
+  "status": "CANDIDATE",
+  "summary": "Diagnose localized NTE character shading failures—especially dark, grey, patchy, or seemingly inside-out skin on regions such as the abdomen or palm—by checking triangle winding and the full tangent-space basis before blaming vertex-normal XYZ. Match against an accepted/native reference independently of normals, preserve stylized custom normals, separate material/vertex-color/normal-map confounders, and require cooked runtime verification before treating a repair as proven.",
+  "tags": [
+    "nte",
+    "unreal",
+    "blender",
+    "python",
+    "skeletal-mesh",
+    "normals",
+    "tangents",
+    "winding",
+    "shading-diagnostics"
+  ],
+  "applicability": {
+    "intents": [
+      "diagnose localized dark, grey, patchy, or inside-out shading on an NTE character mesh after Blender/UE import, cook, or mesh replacement",
+      "compare an NTE mod mesh against an official or accepted reference to distinguish vertex-normal differences from tangent-handedness or triangle-winding errors",
+      "repair a suspected normal/tangent orientation problem without destroying custom stylized normals or unrelated accepted mesh data"
+    ],
+    "required_capabilities": [
+      "blender",
+      "unreal",
+      "python"
+    ],
+    "constraints": [
+      "A visual dark patch is a symptom, not proof that vertex-normal XYZ is wrong; winding, tangent handedness, materials, vertex colors, normal maps, lighting, and section differences are confounders.",
+      "Triangle-winding comparisons are valid only for unambiguous, nondegenerate triangles whose three corners can be matched within the same section; changed topology, new shoes, seams, and unmatched triangles must be excluded rather than forced into a verdict.",
+      "Do not globally recalculate normals on an NTE character as a generic fix. Official assets can contain deliberate stylized/custom normals, especially on hair, eyes, face, or other art-directed regions.",
+      "Treat normal XYZ, tangent XYZ, and tangent W/handedness as one tangent-space contract; do not rewrite tangent W in isolation.",
+      "This candidate is diagnostic guidance only until a real repaired package passes cooked in-game visual acceptance.",
+      "For topology-preserved retained regions, ordered polygon corners / loop order are source data and must be preserved explicitly; geometry that looks identical is not sufficient.",
+      "Orientation-independent face signatures (for example sorted vertex triples) are matching keys only and must never be reused as polygon reconstruction order."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "freeze-inputs-and-reference",
+      "instruction": "Record the exact mod input, accepted/native reference, game/build version, and hashes before comparison. Do not mutate the supplied packages during diagnosis. Choose a reference known to render acceptably in the same game build whenever possible.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "localize-the-runtime-symptom",
+      "instruction": "Record where the artifact appears and under what pose/light/view. Abdomen, palm, fingers, face, eye overlays, hair, and clothing should be treated as separate regions/sections rather than assuming the whole character shares one failure. A localized dark or inverted-looking skin patch is a trigger for this diagnostic, not a cause determination.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "match-geometry-independent-of-normals",
+      "instruction": "Map mod vertices to the accepted/native reference using position, UV and section/material identity without using normal or tangent data as matching keys. Prefer position+UV tolerances appropriate to the asset scale, collapse coincident reference points only when justified, and exclude changed or ambiguous topology from later statistics.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "check-triangle-winding-first",
+      "instruction": "For identical nondegenerate triangle corner sets in the same section, compare corner permutation parity/winding against the reference. Report comparable-triangle count, reversed-triangle count, and region-specific ratios. A high reversed ratio can explain inside-out or broken tangent-space shading even when vertex-normal XYZ remains close to reference.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "compare-the-full-tangent-basis",
+      "instruction": "For matched vertices, compare normal XYZ angular difference, tangent XYZ, and tangent W/handedness together. Do not conclude 'normals are correct' from a small normal-angle delta if tangent W or face orientation is inconsistent. Conversely, do not classify all tangent-W differences as defects without checking winding and the reference pipeline.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-retained-face-order-during-mesh-surgery",
+      "instruction": "During any procedural cut, splice, rebuild, merge, mirror, donor transfer, or component reconstruction, preserve the exact ordered source polygon corners for every retained face. Keep orientation-independent matching signatures separate from reconstruction data: a sorted vertex triple may identify that two triangles are the same geometric face, but the rebuilt polygon must use the source loop order. Treat newly created bridge faces separately and orient them from neighboring accepted surface orientation rather than arbitrary vertex ordering.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "enforce-pre-export-retained-winding-gate",
+      "instruction": "Before FBX export or UE import/cook, compare all unambiguously matched retained triangles against the accepted/native reference and require unexpected_reversed_retained_faces == 0, unless a specific intentional reversal is documented. Also check transforms with negative determinant (mirror, negative scale, coordinate conversion) and verify whether they require a compensating winding reversal. Do not substitute Recalculate Normals for this gate: orientation must be correct before normal/tangent regeneration or transfer.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "trace-orientation-transform-causes",
+      "instruction": "Inspect negative object scale, mirrored geometry, unapplied transforms, coordinate-system conversion, export/import settings, and any topology operation that can reverse index order. Verify determinant/orientation before repairing data so the source of a global or sectional flip is not reintroduced on the next export.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-custom-normals-and-separate-confounders",
+      "instruction": "Compare official/custom normals by region before any recalculation. Keep normal-map texture/channel convention, material bindings, vertex colors, projection flags, and eye/overlay/highlight sections as separate hypotheses. Do not use a vertex-color or material difference to justify rewriting geometry normals, and do not use geometric face normals as the universal artistic ground truth.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "repair-in-contract-order",
+      "instruction": "When evidence identifies an orientation/tangent-space defect, fix face/index orientation or mirrored-transform cause first, then regenerate or transfer normal XYZ + tangent XYZ + tangent W as a coherent set only for the proven affected scope. Preserve UVs, weights, Shape Keys/morph compatibility, materials, shoes/accessories, and unrelated accepted regions unless the task explicitly requires changing them.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-static-invariants",
+      "instruction": "Re-run the same reference-matching analysis after repair. Require unexpected reversed comparable triangles in the target scope to be eliminated or explicitly explained, tangent-basis differences to be coherent with the reference, and preserved channels/regions to remain unchanged. Keep changed/unmatched topology outside the numeric verdict.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "verify-cooked-runtime",
+      "instruction": "Cook/package the repaired asset and reproduce the original visual test in game using comparable pose, camera and lighting. Capture the previously failing abdomen/palm or other target region plus unaffected controls. Only a real runtime PASS should be recorded as evidence for promotion of this candidate to ACTIVE.",
+      "deterministic": false,
+      "implementation_refs": []
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

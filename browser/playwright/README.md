@@ -8,7 +8,7 @@ Do not launch a second browser with the same profile or copy cookies into Git.
 ## Current providers
 
 - `playwright_host`: deterministic response-end observation, role/wake bindings,
-  Worker pools/rollover, task-owned cleanup and Helper `browser.recover_input`.
+  Worker lineages/rollover, task-owned cleanup and Helper `browser.recover_input`.
 - Official `@playwright/mcp`: general browser tools through the existing CAH
   role tool transport. Discover schemas on demand with `browser.mcp.list`.
 - Official `@playwright/cli`: commands through the existing Runner, with named

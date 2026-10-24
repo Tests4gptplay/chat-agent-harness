@@ -1,11 +1,16 @@
 __pycache__/
-*.py[cod]
-.venv/
-node_modules/
-.cah/
-*.local.json
+*.pyc
+extension/dist/
 .env
 .env.*
-!.env.example
-installation/configured.local.json
-*.log
+*.secret
+
+# Derived locally from the tracked CAH launcher PNG for Windows .lnk usage.
+assets/brand/icons/gah-start-launcher.ico
+assets/brand/icons/gah-start-launcher-hq.ico
+
+assets/brand/icons/cah-start-launcher-hq.ico
+
+# Installation-local bindings
+config.local.json
+installation/config.local.json

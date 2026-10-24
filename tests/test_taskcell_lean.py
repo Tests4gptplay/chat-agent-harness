@@ -87,7 +87,9 @@ class RuntimeGitTests(unittest.TestCase):
         self.git('config', 'user.name', 'test')
         self.git('config', 'user.email', 'test@example.invalid')
         self.git('checkout', '-b', 'main')
-        self.store = WakeStore(self.root / 'spool', repo_root=self.work)
+        # Semantic actors below push real Git commits and immediately poll.
+        # This fixture advances state explicitly instead of advancing a TTL clock.
+        self.store = WakeStore(self.root / 'spool', repo_root=self.work, git_snapshot_interval=0)
         self.api = {'client_id': 'client-f097-0001', 'project_id': 'git-agent-harness'}
         self.roles = {r: {'role': r, 'conversation_id': f'{r}-old', 'request_id': f'{r}-request',
                           'challenge': f'{r}-challenge', 'response_started': True, 'semantic_ready': True,

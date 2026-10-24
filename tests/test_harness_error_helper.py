@@ -36,7 +36,7 @@ class HarnessErrorHelperTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.store = WakeStore(self.root / "spool", repo_root=self.root / "repo")
+        self.store = WakeStore(self.root / "spool", repo_root=self.root / "repo", git_snapshot_interval=0)
         self.http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.http.store = self.store
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)

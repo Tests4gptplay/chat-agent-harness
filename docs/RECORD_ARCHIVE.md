@@ -18,7 +18,7 @@ Normal agents do not read archived task content.
 
 Configured repository:
 
-`CAH_OWNER/chat-agent-harness-records`
+`__CAH_RECORD_REPOSITORY__`
 
 Archive layout:
 

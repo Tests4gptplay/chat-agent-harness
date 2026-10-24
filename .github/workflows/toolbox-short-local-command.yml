@@ -1,0 +1,17 @@
+name: CAH toolbox short local command
+run-name: 'Idle toolbox slot; replace with the next authorized bounded task'
+'on':
+  push:
+    branches: [main]
+    paths: ['.github/workflows/toolbox-short-local-command.yml']
+permissions: {contents: read}
+jobs:
+  idle:
+    if: ${{ false }}
+    runs-on: cah-shot
+    timeout-minutes: 2
+    steps:
+      - name: No pending task payload
+        shell: pwsh
+        run: |
+          Write-Host 'Idle toolbox slot. No task payload is configured.'

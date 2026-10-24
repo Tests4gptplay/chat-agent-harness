@@ -1,0 +1,50 @@
+{
+  "v": 1,
+  "skill_id": "codex-cah_nte_wearablefitandcook-v1",
+  "title": "CAH_NTE_WearableFitAndCook",
+  "status": "CANDIDATE",
+  "summary": "Evidence-backed NTE wearable replacement procedure spanning topology-first mesh identification, skin-surface fitting, Blender-to-UE scale/slot preservation, shoe-motion weight contracts, fresh Cook, Morph compatibility gating, Zen packaging, and final dump-test verification. Use when adapting shoes, straps, ankle rings, clothing accessories, or similar weighted wearables into an NTE UE5.6 character replacement. Depends on nte-shoe-foot-motion, nte-mesh-replacement-repair, and nte-mod-authoring; does not replace them.",
+  "tags": [
+    "codex-import",
+    "cah_nte_wearablefitandcook",
+    "blender",
+    "unreal"
+  ],
+  "applicability": {
+    "intents": [
+      "Evidence-backed NTE wearable replacement procedure spanning topology-first mesh identification, skin-surface fitting, Blender-to-UE scale/slot preservation, shoe-motion weight contracts, fresh Cook, Morph compatibility gating, Zen packaging, and final dump-test verification. Use when adapting shoes, straps, ankle rings, clothing accessories, or similar weighted wearables into an NTE UE5.6 character replacement. Depends on nte-shoe-foot-motion, nte-mesh-replacement-repair, and nte-mod-authoring; does not replace them."
+    ],
+    "required_capabilities": [
+      "blender",
+      "unreal"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native CAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/cah_nte_wearablefitandcook/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

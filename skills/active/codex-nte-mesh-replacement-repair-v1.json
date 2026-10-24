@@ -1,0 +1,108 @@
+{
+  "v": 1,
+  "skill_id": "codex-nte-mesh-replacement-repair-v1",
+  "title": "nte-mesh-replacement-repair",
+  "status": "ACTIVE",
+  "summary": "Replace and repair NTE cosmetic meshes while preserving accepted native parts, topology, rigging, materials, and runtime compatibility. Covers anatomical fitting, local foot/stance correction, source/backup topology correspondence, boundary-preserving local surface reconstruction, Shape Key-safe submesh restoration, and diagnosis of scale/material/cooked-asset failures.",
+  "tags": [
+    "codex-import",
+    "nte-mesh-replacement-repair",
+    "blender",
+    "unreal",
+    "python",
+    "topology-correspondence",
+    "submesh-repair",
+    "shape-keys",
+    "source-transfer"
+  ],
+  "applicability": {
+    "intents": [
+      "replace or repair an NTE cosmetic mesh while preserving accepted native appendages and unrelated geometry",
+      "reconstruct a damaged local Blender surface from an original or accepted backup when smoothing would destroy intended shape",
+      "diagnose NTE mesh scale, material, texture, cooked-package, or local fitting problems without redesigning the whole asset"
+    ],
+    "required_capabilities": [
+      "blender",
+      "unreal",
+      "python"
+    ],
+    "constraints": [
+      "Current task requirements and fresh evidence override imported instructions.",
+      "Do not use iterative Smooth/fairing as a substitute for structural reconstruction when an original or accepted topology-compatible reference exists.",
+      "Local source/backup transfer requires proven topology correspondence; if correspondence is not established, stop before copying coordinates."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "read-imported-base",
+      "instruction": "Read the sanitized imported nte-mesh-replacement-repair snapshot for established NTE mesh replacement, scale, material, and cook troubleshooting behavior. Apply the native topology/restore refinements below when the task concerns local geometry repair.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/nte-mesh-replacement-repair/source.md"
+      ]
+    },
+    {
+      "step_id": "freeze-accepted-state",
+      "instruction": "Before exploratory local repair, preserve an accepted Blender checkpoint. Treat the checkpoint as read-only evidence. Continue work in the active file so later rollback can target only the damaged submesh instead of reverting unrelated accepted edits.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "prove-local-correspondence",
+      "instruction": "Identify the target by connected component/subgraph and verify source↔current correspondence with vertex count, component-local ordering, and adjacency. Global vertex indices may shift after unrelated components are deleted; an index offset is acceptable only when component-local topology proves the mapping.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "prefer-reference-reconstruction",
+      "instruction": "When a surface has bumps, folds, or distorted flow and a topology-compatible original/backup exists, reconstruct the local patch from that reference rather than repeatedly smoothing the damaged surface. Keep patch boundary, seams, accepted connectors, and silhouette anchors fixed unless the task explicitly asks to change them.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "map-reference-to-current-frame",
+      "instruction": "For shape transfer rather than exact rollback, map the reference patch into the current fitted frame using proven corresponding boundary/anchor vertices. A local affine or other bounded mapping may preserve current placement/scale while restoring the reference grid relationship. Reject implausibly large local jumps and keep unrelated components untouched.",
+      "deterministic": false,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "restore-exact-submesh",
+      "instruction": "For exact rollback of a known damaged submesh, copy absolute coordinates only for the verified target vertices from the accepted backup. Restore the same vertex indices in every matching Shape Key. Verify exact post-copy equality to the backup on the target and verify non-target vertices are unchanged.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "preserve-shape-key-contract",
+      "instruction": "Any direct local mesh edit must preserve Shape Key identity. Apply the same delta to each corresponding key for an intentional deformation, or copy absolute key coordinates from the reference for an exact restore. Confirm key presence, names, and order before mutation.",
+      "deterministic": true,
+      "implementation_refs": []
+    },
+    {
+      "step_id": "validate-locality",
+      "instruction": "After the repair, verify the modified vertex set is exactly the intended local target. Use counts/hashes or direct coordinate comparison for preserved meshes or regions when practical. Separate static Blender geometry acceptance from later UE/Cook/runtime verification.",
+      "deterministic": false,
+      "implementation_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "codex-nte-mesh-replacement-repair-v1-acceptance-1",
+      "result_ref": "skills/evidence/codex-nte-mesh-replacement-repair-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-26T00:50:00+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

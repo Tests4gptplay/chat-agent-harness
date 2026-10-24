@@ -1,8 +1,10 @@
-# Sponsorship links for the public CAH source distribution.
-# Uncomment only after GitHub Sponsors has been enabled for this account.
+# Support the development of git-agent-harness.
+# Enable this only after GitHub Sponsors is active for Tests4gptplay:
 # github: Tests4gptplay
 
 ko_fi: kou392350
+
+# Preserve the verified Patreon creator URL, including its /cw/ path.
 custom:
   - "https://www.patreon.com/cw/Kou848"
   - "https://afdian.com/a/kkt_ifd1"

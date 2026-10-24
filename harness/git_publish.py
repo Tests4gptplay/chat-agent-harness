@@ -8,21 +8,27 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+try:
+    from .git_process import GitProcessTimeout, run_git as bounded_run_git
+except ImportError:
+    # The Windows workflows also invoke this file directly by its path.
+    from git_process import GitProcessTimeout, run_git as bounded_run_git
+
 
 class GitPublishError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, outcome_unknown: bool = False) -> None:
+        super().__init__(message)
+        self.outcome_unknown = bool(outcome_unknown)
 
 
 def run_git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    try:
+        proc = bounded_run_git(repo, *args, check=False)
+    except GitProcessTimeout as exc:
+        raise GitPublishError(
+            f"git {' '.join(args)} timed out after {exc.timeout:g} seconds",
+            outcome_unknown=exc.outcome_unknown,
+        ) from exc
     if check and proc.returncode != 0:
         raise GitPublishError(
             f"git {' '.join(args)} failed ({proc.returncode}): {(proc.stderr or proc.stdout).strip()}"
@@ -97,9 +103,25 @@ def push_rejected(proc: subprocess.CompletedProcess[str]) -> bool:
         "non-fast-forward",
         "[rejected]",
         "fetch first",
-        "failed to push some refs",
     )
     return any(n in text for n in needles)
+
+
+def remote_contains_commit(repo: Path, remote: str, branch: str, head: str) -> bool:
+    """Resolve an ambiguous push through Git before retrying its publication."""
+    try:
+        tracking_ref = f"refs/remotes/{remote}/{branch}"
+        run_git(repo, "fetch", "--quiet", "--no-tags", remote, f"+refs/heads/{branch}:{tracking_ref}")
+        remote_head = run_git(repo, "rev-parse", tracking_ref).stdout.strip()
+        present = run_git(repo, "merge-base", "--is-ancestor", head, remote_head, check=False)
+        if present.returncode not in (0, 1):
+            raise GitPublishError((present.stderr or present.stdout).strip())
+    except GitPublishError as exc:
+        raise GitPublishError(
+            f"could not confirm the outcome of the previous push: {exc}",
+            outcome_unknown=True,
+        ) from exc
+    return present.returncode == 0
 
 
 def publish(
@@ -140,7 +162,26 @@ def publish(
                 "sync_only": True,
             }
 
-        push = run_git(repo, "push", remote, f"HEAD:{branch}", check=False)
+        try:
+            push = run_git(repo, "push", remote, f"HEAD:{branch}", check=False)
+        except GitPublishError as exc:
+            if not exc.outcome_unknown:
+                raise
+            if remote_contains_commit(repo, remote, branch, head):
+                return {
+                    "ok": True,
+                    "attempt": attempt,
+                    "head": head,
+                    "recovery": recovery,
+                    "sync_only": False,
+                    "push_reconciled": True,
+                }
+            if attempt < attempts:
+                continue
+            raise GitPublishError(
+                f"git push timed out on attempt {attempt}; commit {head} was not confirmed remotely",
+                outcome_unknown=True,
+            ) from exc
         last_push = push
         if push.returncode == 0:
             return {
@@ -151,7 +192,21 @@ def publish(
                 "sync_only": False,
             }
 
-        if not push_rejected(push) or attempt >= attempts:
+        if not push_rejected(push):
+            # A broken connection can report failure after the remote accepted
+            # the commit. An explicit non-fast-forward rejection needs only the
+            # existing bounded fetch/rebase retry on the next attempt.
+            if remote_contains_commit(repo, remote, branch, head):
+                return {
+                    "ok": True,
+                    "attempt": attempt,
+                    "head": head,
+                    "recovery": recovery,
+                    "sync_only": False,
+                    "push_reconciled": True,
+                }
+            break
+        if attempt >= attempts:
             break
 
     detail = ""
@@ -180,7 +235,10 @@ def main() -> int:
             sync_only=args.sync_only,
         )
     except GitPublishError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        error: dict[str, Any] = {"ok": False, "error": str(exc)}
+        if exc.outcome_unknown:
+            error["outcome_unknown"] = True
+        print(json.dumps(error, ensure_ascii=False))
         return 1
 
     print(json.dumps(out, ensure_ascii=False))

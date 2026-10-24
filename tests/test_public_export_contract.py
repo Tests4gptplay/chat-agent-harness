@@ -7,6 +7,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicExportContractTests(unittest.TestCase):
+    def test_project_license_is_agpl_v3_only(self):
+        license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        export = (ROOT / "docs/PUBLIC_EXPORT_CONTRACT.md").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("GNU AFFERO GENERAL PUBLIC LICENSE"))
+        self.assertIn("Version 3, 19 November 2007", license_text)
+        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
+        self.assertIn("SPDX-License-Identifier: AGPL-3.0-only", notice)
+        self.assertIn("AGPL-3.0-only", readme)
+        self.assertIn("AGPL-3.0-only", export)
+
     def test_required_paths_exist(self):
         manifest = json.loads((ROOT / "harness/public_export_required.json").read_text(encoding="utf-8"))
         missing = [rel for rel in manifest["required_paths"] if not (ROOT / rel).exists()]
@@ -136,12 +148,10 @@ class PublicExportContractTests(unittest.TestCase):
         self.assertIn("Host-local authority", host_contract)
         self.assertIn("Sanitized projection", host_contract)
 
-    def test_staging_omits_personal_skill_contents(self):
-        index = json.loads((ROOT / "skills/index.json").read_text(encoding="utf-8"))
-        self.assertEqual(index["skills"], [])
-        self.assertEqual(index["skill_count"], 0)
-        self.assertFalse(list((ROOT / "skills/active").glob("*.json")))
-
+    def test_public_export_keeps_safe_skill_example(self):
+        active = ROOT / "skills/active"
+        candidates = list(active.glob("*.json")) if active.exists() else []
+        self.assertGreaterEqual(len(candidates), 1, "public-capable repository must retain at least one safe active Skill example")
 
 
 if __name__ == "__main__":

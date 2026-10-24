@@ -17,10 +17,11 @@ import threading
 import time
 import uuid
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 PY_ROOT = Path(__file__).resolve().parents[1]
 if str(PY_ROOT) not in sys.path:
@@ -28,6 +29,7 @@ if str(PY_ROOT) not in sys.path:
 from harness.git_process import run_git
 
 try:
+    from .git_snapshot import GitSnapshot
     from .control import begin_lane_clear, complete_lane_clear, complete_lane_lineage_reset, complete_task_cell_clear, complete_task_cell_project_clear, complete_task_cell_prompt, control_status
     from .task_cell_roles import complete_task_cell_role_prompt
     from .scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, reconcile_foreground_terminal, semantic_lease_expires_at, stage_action_submit
@@ -37,6 +39,7 @@ try:
     from .planner_control import PlannerControlError, insert_planner_event, make_planner_event
     from .topology import finalize_topology_request, stage_topology_request, topology_status
 except ImportError:
+    from git_snapshot import GitSnapshot
     from control import begin_lane_clear, complete_lane_clear, complete_lane_lineage_reset, complete_task_cell_clear, complete_task_cell_project_clear, complete_task_cell_prompt, control_status
     from task_cell_roles import complete_task_cell_role_prompt
     from scheduler import canonical_worker_owner, complete_worker_handoff, reconcile_dispatch_liveness, reconcile_foreground_terminal, semantic_lease_expires_at, stage_action_submit
@@ -159,6 +162,9 @@ class WakeStore:
         repo_root: Path | None = None,
         git_remote: str = GIT_REMOTE_DEFAULT,
         git_branch: str = GIT_BRANCH_DEFAULT,
+        *,
+        git_snapshot_interval: float = 1.0,
+        git_snapshot_clock: Callable[[], float] | None = None,
     ):
         self.root = root.resolve()
         self.repo_root = (repo_root or REPO_ROOT_DEFAULT).resolve()
@@ -183,6 +189,13 @@ class WakeStore:
             p.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.git_lock = threading.RLock()
+        self._git_snapshot = GitSnapshot(
+            self._fetch_git_snapshot,
+            self.git_lock,
+            interval=git_snapshot_interval,
+            clock=git_snapshot_clock,
+        )
+        self._git_read_scope = threading.local()
         self.foreground_task_snapshot: dict[str, Any] | None = None
         self.foreground_task_snapshot_at: str | None = None
 
@@ -271,6 +284,56 @@ class WakeStore:
 
     def _git_bytes(self, *args: str) -> subprocess.CompletedProcess[bytes]:
         return run_git(self.repo_root, *args, timeout=20, binary=True)
+
+    def _fetch_git_snapshot(self) -> str:
+        self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
+        return self._git("rev-parse", "FETCH_HEAD").stdout.strip()
+
+    def read_git_snapshot(self, *, force: bool = False) -> str:
+        """Read a shared immutable commit; mutations retain fresh CAS checks."""
+        scope = getattr(self._git_read_scope, "current", None)
+        if not force and scope is not None and scope.get("sha"):
+            return scope["sha"]
+        try:
+            sha = self._git_snapshot.read(force=force)
+        except Exception:
+            if scope is not None:
+                scope["sha"] = None
+            raise
+        if scope is not None:
+            scope["sha"] = sha
+        return sha
+
+    @contextmanager
+    def git_snapshot_read_scope(self, sha: str | None = None):
+        """Pin ordinary reads to one confirmed commit within an internal poll.
+
+        A real transaction still forces its fresh read and CAS. Successful
+        pushes advance this thread's view so later reads see that result.
+        The scope is never created from an arbitrary client-supplied commit.
+        """
+        previous = getattr(self._git_read_scope, "current", None)
+        current = previous if sha is None and previous is not None else {"sha": sha}
+        self._git_read_scope.current = current
+        try:
+            yield current
+        finally:
+            self._git_read_scope.current = previous
+
+    def record_git_commit(self, sha: str) -> None:
+        self._git_snapshot.record(sha)
+        scope = getattr(self._git_read_scope, "current", None)
+        if scope is not None:
+            scope["sha"] = self._git_snapshot.confirmed()
+
+    def peek_git_snapshot(self) -> str | None:
+        return self._git_snapshot.peek()
+
+    def invalidate_git_snapshot(self) -> None:
+        self._git_snapshot.invalidate()
+        scope = getattr(self._git_read_scope, "current", None)
+        if scope is not None:
+            scope["sha"] = None
 
     def _recover_expired(self) -> None:
         now = now_ms()
@@ -467,8 +530,7 @@ class WakeStore:
             return {"ok": False, "error": "HELPER_OUTPUT_REF_MISMATCH"}
         with self.git_lock:
             if base_sha is None:
-                self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
-                base_sha = self._git("rev-parse", "FETCH_HEAD").stdout.strip()
+                base_sha = self.read_git_snapshot(force=True)
             exists = self._git("ls-tree", base_sha, "--", expected_ref).stdout.strip()
             if not exists:
                 return {"ok": True, "accepted": False, "reason": "helper_output_missing"}
@@ -483,7 +545,7 @@ class WakeStore:
 
         This is intentionally not a generic local-file reader. Only repository
         case-camera image evidence may cross the localhost bridge. The bytes are
-        read from the freshly fetched canonical branch, not the possibly stale
+        read from an immutable canonical branch snapshot, not the possibly stale
         local working tree used to host the bridge process.
         """
         self._safe_client(req.get("client_id"))
@@ -505,8 +567,8 @@ class WakeStore:
 
         with self.git_lock:
             try:
-                self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
-                shown = self._git_bytes("show", f"FETCH_HEAD:{rel}")
+                base_sha = self.read_git_snapshot()
+                shown = self._git_bytes("show", f"{base_sha}:{rel}")
             except (OSError, subprocess.SubprocessError):
                 return {"ok": False, "error": "ARTIFACT_NOT_FOUND", "artifact_ref": rel}
 
@@ -530,9 +592,10 @@ class WakeStore:
             "sha256": hashlib.sha256(data).hexdigest(),
             "base64": base64.b64encode(data).decode("ascii"),
             "source": "canonical_git_fetch_head",
+            "source_commit": base_sha,
         }
 
-    def worker_takeover_status(self, req: dict[str, Any]) -> dict[str, Any]:
+    def worker_takeover_status(self, req: dict[str, Any], *, _snapshot_sha: str | None = None) -> dict[str, Any]:
         """Read the exact task-owned Worker lineage authority from canonical Git."""
         self._safe_client(req.get("client_id"))
         project_id = str(req.get("project_id") or "").strip()
@@ -555,15 +618,21 @@ class WakeStore:
         if not self.repo_root.exists():
             return {"ok": False, "error": "GIT_REPO_NOT_FOUND"}
 
-        topology_finalize = finalize_topology_request(self, req)
+        observation = req.get("observation") is True
+        topology_finalize = None if observation else finalize_topology_request(self, req)
 
-        with self.git_lock:
-            try:
-                self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
-                state = json.loads(self._git("show", "FETCH_HEAD:state/chatgpt.json").stdout)
-                lane_state = json.loads(self._git("show", "FETCH_HEAD:state/lanes.json").stdout)
-            except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-                return {"ok": False, "error": "GIT_TAKEOVER_STATE_FAILED"}
+        try:
+            if observation:
+                base_sha = _snapshot_sha or self.peek_git_snapshot()
+                if base_sha is None:
+                    return {"ok": True, "matched": None, "rollover_requested": False,
+                            "idle": "git_snapshot_unavailable"}
+            else:
+                base_sha = self.read_git_snapshot(force=True)
+            state = json.loads(self._git("show", f"{base_sha}:state/chatgpt.json").stdout)
+            lane_state = json.loads(self._git("show", f"{base_sha}:state/lanes.json").stdout)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+            return {"ok": False, "error": "GIT_TAKEOVER_STATE_FAILED"}
 
         if not isinstance(state, dict) or state.get("agent") != "chatgpt":
             return {"ok": False, "error": "GIT_TAKEOVER_STATE_INVALID"}
@@ -703,11 +772,10 @@ class WakeStore:
                 predecessor_worker_ref = pending_dispatch.get("predecessor_worker_ref")
                 replacing_predecessor = (
                     task.get("kind") == "planner_worker_child"
-                    and generation > 1
                     and pending_dispatch.get("state") in {"READY", "DISPATCHED", "ACKED"}
                     and not pending_dispatch.get("acked_by_worker_ref")
                     and bool(canonical_owner)
-                    and predecessor_worker_ref == canonical_owner
+                    and (generation == 1 or predecessor_worker_ref == canonical_owner)
                 )
                 if canonical_owner and canonical_owner != worker_ref and not replacing_predecessor:
                     return {
@@ -924,7 +992,9 @@ class WakeStore:
                         # Push timeout/failure has an unknown remote outcome. The
                         # next loop iteration re-fetches canonical state before
                         # any retry and recognizes an already-admitted dispatch.
+                        self.invalidate_git_snapshot()
                         continue
+                    self.record_git_commit(commit_sha)
                     return {
                         "ok": True,
                         "accepted": True,
@@ -944,7 +1014,7 @@ class WakeStore:
 
         return {"ok": False, "error": "DISPATCH_ACCEPT_RETRY_EXHAUSTED"}
 
-    def dispatch_status(self, req: dict[str, Any]) -> dict[str, Any]:
+    def dispatch_status(self, req: dict[str, Any], *, _snapshot_sha: str | None = None) -> dict[str, Any]:
         """Return canonical scheduler state for one exact backend dispatch.
 
         This is a read-only suppression gate used by the browser host before it injects
@@ -965,13 +1035,20 @@ class WakeStore:
             raise ValueError("invalid fence_token")
         task_id = str(req.get("task_id") or "").strip()
 
-        with self.git_lock:
-            try:
-                self._git("fetch", "--quiet", "--no-tags", self.git_remote, self.git_branch)
-                shown = self._git("show", f"FETCH_HEAD:{backend_cl}")
-                cl = json.loads(shown.stdout)
-            except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-                return {"ok": False, "error": "GIT_DISPATCH_STATE_FAILED"}
+        try:
+            if req.get("observation") is True:
+                # An already-admitted Worker's physical observation must not
+                # wait behind a remote Git refresh. This read never establishes
+                # new admission; the caller defers new effects without a hint.
+                base_sha = _snapshot_sha or self.peek_git_snapshot()
+                if base_sha is None:
+                    return {"ok": True, "matched": None, "idle": "git_snapshot_unavailable"}
+            else:
+                base_sha = self.read_git_snapshot(force=True)
+            shown = self._git("show", f"{base_sha}:{backend_cl}")
+            cl = json.loads(shown.stdout)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+            return {"ok": False, "error": "GIT_DISPATCH_STATE_FAILED"}
 
         if not isinstance(cl, dict) or cl.get("scope") != "backend_execution":
             return {"ok": False, "error": "GIT_DISPATCH_CL_INVALID"}
@@ -1031,6 +1108,125 @@ class WakeStore:
             "wait_ref": dispatch.get("wait_ref"),
             "handoff_packet_ref": cl.get("handoff_packet_ref"),
         }
+
+    def worker_observation_status(self, req: dict[str, Any]) -> dict[str, Any]:
+        """Read one immutable Git snapshot for an exact batch of observations.
+
+        This runs on the Host's background control worker. It cannot admit a new
+        dispatch or renew a lease. The internal commit keyword is supplied here,
+        never taken from the HTTP request, so a long local batch keeps one SHA
+        without giving callers control of the canonical revision.
+        """
+        self._safe_client(req.get("client_id"))
+        project_id = str(req.get("project_id") or "").strip()
+        if not project_id or len(project_id) > 256:
+            raise ValueError("project_id required")
+        workers = req.get("workers")
+        if not isinstance(workers, list) or len(workers) > 128:
+            raise ValueError("workers must be a bounded list")
+        for worker in workers:
+            if not isinstance(worker, dict) or not isinstance(worker.get("identity_key"), str):
+                raise ValueError("worker observation identity required")
+            for operation in ("dispatch", "takeover", "liveness"):
+                if operation in worker and not isinstance(worker[operation], dict):
+                    raise ValueError("worker observation must be an object")
+            liveness = worker.get("liveness")
+            if liveness is not None and (
+                liveness.get("response_running") is not True or liveness.get("response_ended")
+            ):
+                raise ValueError("batch liveness requires a running response")
+        if not workers:
+            return {"ok": True, "workers": []}
+        try:
+            base_sha = self.read_git_snapshot()
+        except (OSError, subprocess.SubprocessError):
+            return {"ok": False, "error": "GIT_WORKER_OBSERVATION_STATE_FAILED"}
+        common = {"client_id": req.get("client_id"), "project_id": project_id}
+        results = []
+        for worker in workers:
+            item: dict[str, Any] = {"identity_key": worker["identity_key"]}
+            for operation, endpoint in (
+                ("dispatch", self.dispatch_status),
+                ("takeover", self.worker_takeover_status),
+            ):
+                if operation in worker:
+                    observation = {**common, **worker[operation], "observation": True}
+                    item[operation] = endpoint(observation, _snapshot_sha=base_sha)
+            if "liveness" in worker:
+                observation = {**common, **worker["liveness"], "observation": True}
+                item["liveness"] = reconcile_dispatch_liveness(self, observation, _snapshot_sha=base_sha)
+            results.append(item)
+        return {"ok": True, "source_commit": base_sha, "workers": results}
+
+    def control_poll(self, req: dict[str, Any]) -> dict[str, Any]:
+        """Reconcile the ordinary Host reads within one immutable read scope.
+
+        Endpoints that find real work retain their fresh transaction checks.
+        The owner applies physical effects before its separate control-status
+        read, which can use the store's latest confirmed revision.
+        """
+        self._safe_client(req.get("client_id"))
+        project_id = str(req.get("project_id") or "").strip()
+        if not project_id or len(project_id) > 256:
+            raise ValueError("project_id required")
+        common = {"client_id": req.get("client_id"), "project_id": project_id}
+        result: dict[str, Any] = {"ok": True, "planner_result": None,
+                                  "deliveries": [], "observations": []}
+
+        def report(operation: str, message: Any, exception_type: str = "BridgeError") -> None:
+            # Aggregation must preserve the existing mechanical-error Helper
+            # path even though an individual component no longer has its own
+            # HTTP response for Handler to report.
+            try:
+                self.event({**common, "event": "bridge." + operation, "level": "error",
+                            "data": {"operation": operation, "exception_type": exception_type,
+                                     "message": str(message)[:1000]}})
+            except Exception:
+                pass
+
+        with self.git_snapshot_read_scope() as scope:
+            try:
+                planner = planner_runtime_tick(self, {**common, "bound_turns": req.get("bound_turns") or []})
+                result["planner_result"] = planner
+                if planner.get("ok") is False:
+                    report("planner_runtime_tick", planner.get("detail") or planner.get("error"))
+            except Exception as exc:
+                report("planner_runtime_tick", exc, type(exc).__name__)
+            for operation, endpoint, planner, event in (
+                ("planner_final_delivery_status", planner_final_delivery_status, True, "planner.final_delivery_error"),
+                ("foreground_terminal_status", reconcile_foreground_terminal, False, "foreground.monitor_error"),
+            ):
+                try:
+                    delivery = endpoint(self, {**common, "terminal_op": "status"})
+                    if delivery.get("ok") is False:
+                        message = delivery.get("detail") or delivery.get("error")
+                        report(operation, message)
+                        result["deliveries"].append({"error_event": event, "error": str(message)[:800]})
+                    else:
+                        result["deliveries"].append({"planner": planner, "result": delivery})
+                except Exception as exc:
+                    report(operation, exc, type(exc).__name__)
+                    result["deliveries"].append({"error_event": event, "error": str(exc)[:800]})
+            if req.get("workers"):
+                try:
+                    observations = self.worker_observation_status({**common, "workers": req["workers"]})
+                    if observations.get("ok") is False:
+                        report("worker_observation_status", observations.get("error"))
+                    else:
+                        result["observations"] = observations.get("workers") or []
+                except Exception as exc:
+                    report("worker_observation_status", exc, type(exc).__name__)
+            result["source_commit"] = scope.get("sha")
+        return result
+
+    def observed_control_status(self, req: dict[str, Any]) -> dict[str, Any]:
+        # A client cannot select a revision. This hint only identifies the
+        # second pure-read phase; the latest server-confirmed commit wins after
+        # owner-side writes. An unknown outcome clears it and forces a refresh.
+        if req.get("observed_source_commit"):
+            with self.git_snapshot_read_scope(self._git_snapshot.confirmed()):
+                return control_status(self, req)
+        return control_status(self, req)
 
     def foreground_task_status(self, req: dict[str, Any]) -> dict[str, Any]:
         """Return the most recent canonical foreground-task projection.
@@ -1124,12 +1320,16 @@ class Handler(BaseHTTPRequestHandler):
                 result = store.harness_error_result(req)
             elif op == "worker_takeover_status":
                 result = store.worker_takeover_status(req)
+            elif op == "worker_observation_status":
+                result = store.worker_observation_status(req)
             elif op == "topology_request":
                 result = stage_topology_request(store, req)
             elif op == "topology_status":
                 result = topology_status(store, req)
             elif op == "control_status":
-                result = control_status(store, req)
+                result = store.observed_control_status(req)
+            elif op == "control_poll":
+                result = store.control_poll(req)
             elif op == "lane_clear_begin":
                 result = begin_lane_clear(store, req)
             elif op == "lane_clear_complete":

@@ -1,5 +1,4 @@
 import base64
-import os
 import shutil
 import subprocess
 import unittest
@@ -9,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHELL = shutil.which('powershell.exe') or shutil.which('pwsh')
 
 
-@unittest.skipUnless(os.name == 'nt' and SHELL, 'Windows launcher behavior requires a Windows host')
+@unittest.skipUnless(SHELL, 'PowerShell is needed for the Windows launcher contract')
 class NativeStartupTests(unittest.TestCase):
     def run_case(self, body):
         # Load only the real launcher functions through its AST; never run Git,
@@ -22,7 +21,7 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile('SOURCE',[ref]$to
 if ($errors.Count) { throw ($errors | Out-String) }
 $ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]},$false) | ForEach-Object { Invoke-Expression $_.Extent.Text }
 $Repo=Split-Path -Parent 'SOURCE'
-$BrowserRoot='X:\CAH_TEST\playwright-host'
+$BrowserRoot='__CAH_BROWSER_ROOT__'
 $NoBrowser=$false; $script:starts=0
 function Assert-CahCdpOwner {}
 function Get-CahBrowser {}
@@ -131,8 +130,8 @@ try { Stop-StaleCahBrowserRuntime; throw 'missed failure' } catch { if($_.Except
 function Get-CimInstance {
  param($ClassName,$Filter)
  @(
- [pscustomobject]@{ProcessId=1;CommandLine='python.exe -m playwright_host --runtime-root X:\CAH_TEST\playwright-host'},
- [pscustomobject]@{ProcessId=2;CommandLine='python.exe -m playwright_host --runtime-root X:\CAH_TEST\Other'},
+ [pscustomobject]@{ProcessId=1;CommandLine='python.exe -m playwright_host --runtime-root __CAH_BROWSER_ROOT__'},
+ [pscustomobject]@{ProcessId=2;CommandLine='python.exe -m playwright_host --runtime-root E:\Other'},
  [pscustomobject]@{ProcessId=3;CommandLine='python.exe unrelated.py'}
  )
 }

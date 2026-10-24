@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "skill_id": "codex-nte-ui-mod-authoring-v1",
+  "title": "nte-ui-mod-authoring",
+  "status": "CANDIDATE",
+  "summary": "Analyze, design, implement, cook, package, verify, and troubleshoot project-authored Neverness to Everness (NTE/异环) UE5.6 in-game UI mods and tool menus. Use for runtime menu injection, controller/component module frameworks, UMG design systems, SaveGame-backed settings, localization, configurable hotkeys, HUD controls, cooldown displays, color pickers, vehicle recoloring controls, and matching .pak/.ucas/.utoc output. Do not use for character/outfit mesh authoring or raw IoStore appearance/package transplants.",
+  "tags": [
+    "codex-import",
+    "nte-ui-mod-authoring",
+    "unreal",
+    "python",
+    "powershell"
+  ],
+  "applicability": {
+    "intents": [
+      "Analyze, design, implement, cook, package, verify, and troubleshoot project-authored Neverness to Everness (NTE/异环) UE5.6 in-game UI mods and tool menus. Use for runtime menu injection, controller/component module frameworks, UMG design systems, SaveGame-backed settings, localization, configurable hotkeys, HUD controls, cooldown displays, color pickers, vehicle recoloring controls, and matching .pak/.ucas/.utoc output. Do not use for character/outfit mesh authoring or raw IoStore appearance/package transplants."
+    ],
+    "required_capabilities": [
+      "unreal",
+      "python",
+      "powershell"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native GAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/nte-ui-mod-authoring/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

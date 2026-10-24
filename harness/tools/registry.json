@@ -304,7 +304,7 @@
       "tool_id": "browser.cli",
       "title": "Run official Playwright CLI on the existing Runner",
       "status": "ACTIVE",
-      "summary": "Runner capability: invoke host/playwright_cli.ps1 with Session and CliArgs through the existing host command workflow. Not a CAH_TOOL_CALL chat provider. Use Attach for the existing CDP browser and detach afterward; no second profile or scheduler. The public source omits its host Action transport; install the required workflow in a new private operational repository before calling this Tool.",
+      "summary": "Runner capability: invoke host/playwright_cli.ps1 with Session and CliArgs through the existing host command workflow. Not a CAH_TOOL_CALL chat provider. Use Attach for the existing CDP browser and detach afterward; no second profile or scheduler.",
       "provider": "host_runner",
       "mutating": true,
       "result_scope": "ephemeral",
@@ -334,7 +334,8 @@
         "additionalProperties": false
       },
       "implementation_refs": [
-        "host/playwright_cli.ps1"
+        "host/playwright_cli.ps1",
+        ".github/workflows/toolbox-short-local-command.yml"
       ]
     }
   ]

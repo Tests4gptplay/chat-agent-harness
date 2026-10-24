@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO_NAME = "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY"
+REPO_NAME = "__CAH_REPOSITORY__"
 TERMINAL = {"PASS", "BLOCKED", "ERROR"}
 AGGREGATE_SOURCE = "parallel_branch_finalize"
 

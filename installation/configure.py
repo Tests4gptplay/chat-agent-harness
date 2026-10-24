@@ -1,90 +1,161 @@
 #!/usr/bin/env python3
-"""Render a new private operational copy; never push, register or start services."""
+"""Create a configured CAH checkout from the public source."""
 from __future__ import annotations
-import argparse, ast, hashlib, json, re, shutil, tempfile
-from pathlib import Path, PureWindowsPath
-ROOT=Path(__file__).resolve().parents[1]
+
+import argparse
+import ast
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import tokenize
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def project(url: str, name: str) -> dict:
+    match = re.search(r"/g/(g-p-[A-Za-z0-9]+)", url)
+    if not match:
+        raise ValueError(f"{name}: enter the Project root URL opened in Chrome")
+    return {"display_name": name, "project_key": match.group(1),
+            "project_root_url": url.rstrip("/")}
+
+
+def replace_text(text: str, values: dict[str, str]) -> str:
+    for marker, value in values.items():
+        text = text.replace(marker, value)
+    return text
+
+
+def render_python(text: str, values: dict[str, str]) -> str:
+    """Replace configuration inside Python string literals with proper escaping."""
+    result = []
+    for item in tokenize.generate_tokens(io.StringIO(text).readline):
+        if item.type == tokenize.STRING and any(k in item.string for k in values):
+            literal = ast.literal_eval(item.string)
+            if isinstance(literal, str):
+                item = item._replace(string=repr(replace_text(literal, values)))
+        elif any(k in item.string for k in values):
+            # Formatted prompt strings contain repository/name markers.
+            escaped = {k: v.replace("\\", "/").replace("'", "\\'").replace('"', '\\"')
+                       for k, v in values.items()}
+            item = item._replace(string=replace_text(item.string, escaped))
+        result.append(item)
+    return tokenize.untokenize(result)
+
+
+def configure(config_path: Path, output: Path) -> Path:
+    cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    output = output.resolve()
+    # copytree creates a new directory and preserves existing installations.
+    if output == ROOT or ROOT in output.parents:
+        raise ValueError("Choose an output directory beside the public source")
+    base = Path(cfg["base_directory"])
+    cell = project(cfg["task_cell_url"], "CAH Task Cell")
+    lanes = []
+    for n, url in enumerate(cfg["lane_urls"]):
+        lanes.append({"lane_id": f"lane-{n:02d}", **project(url, f"CAH Sandbox{n}"),
+                      "enabled": True, "status": "IDLE", "task_pools": {}})
+    if not lanes:
+        raise ValueError("Add at least one Sandbox Project URL to lane_urls")
+    paths = {
+        "REPO_ROOT": output, "BRIDGE_ROOT": base/"runtime"/"bridge",
+        "MANAGED_RUNNER_ROOT": base/"runners"/"managed-01",
+        "SECOND_RUNNER_ROOT": base/"runners"/"managed-02",
+        "SHOT_RUNNER_ROOT": base/"runners"/"shot",
+        "BROWSER_ROOT": base/"runtime"/"browser", "TOOLS_ROOT": base/"tools"/"playwright",
+        "WORK_ROOT": base/"work", "DELIVERABLES_ROOT": base/"deliverables",
+        "RUNNER_BASE": base/"runners", "BROWSER_BASE": base/"runtime",
+        "TEMP_ROOT": base/"temp",
+    }
+    paths.update({k: Path(v) for k, v in cfg.get("paths", {}).items()})
+    values = {f"__CAH_{key}__": str(value) for key, value in paths.items()}
+    values.update({
+        "__CAH_REPOSITORY__": cfg["repository"],
+        "__CAH_SECOND_RUNNER_NAME__": cfg.get("second_runner_name", "CAH-Managed-02"),
+        "__CAH_RECORD_REPOSITORY__": cfg.get("record_repository") or cfg["repository"],
+        "__CAH_TRANSFER_REPOSITORY__": cfg.get("transfer_repository") or cfg["repository"],
+        "g-p-CAHTASKCELL": cell["project_key"],
+        "g-p-CAHLANE00": lanes[0]["project_key"],
+    })
+    if len(lanes) > 1:
+        values["g-p-CAHLANE01"] = lanes[1]["project_key"]
+    shutil.copytree(ROOT, output, ignore=shutil.ignore_patterns(
+        ".git", "__pycache__", "*.pyc", "config.local.json"))
+    for path in output.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {
+            ".py", ".ps1", ".bat", ".md", ".json", ".js", ".yml", ".yaml"
+        }:
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        if not any(k in text for k in values):
+            continue
+        if path.suffix == ".py":
+            text = render_python(text, values)
+        elif path.suffix == ".json":
+            text = replace_text(text, {k: json.dumps(v, ensure_ascii=False)[1:-1]
+                                       for k, v in values.items()})
+        elif path.suffix == ".ps1":
+            text = replace_text(text, {k: v.replace("'", "''") for k, v in values.items()})
+        else:
+            text = replace_text(text, values)
+        path.write_text(text, encoding="utf-8", newline="\n")
+    config_py = output/"playwright_host/config.py"
+    text = config_py.read_text(encoding="utf-8")
+    a, b = text.index("TASK_CELL ="), text.index("@dataclass")
+    bootstrap = [{k: v for k, v in lane.items() if k not in {"status", "task_pools"}}
+                 for lane in lanes]
+    text = text[:a] + f"TASK_CELL = {cell!r}\nBOOTSTRAP_LANES = {bootstrap!r}\n\n\n" + text[b:]
+    config_py.write_text(text, encoding="utf-8")
+    topology = {"v": 1, "topology_version": 1, "updated_at": None,
+                "registered_count": len(lanes), "enabled_count": len(lanes), "lanes": lanes}
+    (output/"state/lanes.json").write_text(
+        json.dumps(topology, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+    enabled = ",".join(lane["lane_id"] for lane in lanes)
+    for rel in ("Start_CAH.ps1", "host/bridge_supervisor.ps1"):
+        path = output/rel
+        text = path.read_text(encoding="utf-8").replace(
+            "[string]$LocalWorkerLanes = 'lane-00,lane-01'",
+            f"[string]$LocalWorkerLanes = '{enabled}'", 1)
+        path.write_text(text, encoding="utf-8")
+    def ps_quote(value): return "'" + str(value).replace("'", "''") + "'"
+    profile = cfg.get("profile_directory") or str(
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home())))/"CAH"/"PlaywrightChrome")
+    chrome = cfg.get("chrome_path", r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+    path = output/"host/start_playwright_host.ps1"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace('[string]$ChromePath = \'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\'',
+                        "[string]$ChromePath = " + ps_quote(chrome))
+    text = text.replace('[string]$ProfileDir = "$env:LOCALAPPDATA\\CAH\\PlaywrightChrome"',
+                        "[string]$ProfileDir = " + ps_quote(profile))
+    text = text.replace("[string]$ForegroundUrl = ''",
+                        "[string]$ForegroundUrl = " + ps_quote(cfg["foreground_url"]))
+    path.write_text(text, encoding="utf-8")
+    path = output/"Start_CAH.ps1"
+    text = path.read_text(encoding="utf-8").replace(
+        "$profile = Join-Path $env:LOCALAPPDATA 'CAH\\PlaywrightChrome'",
+        "$profile = " + ps_quote(profile))
+    path.write_text(text, encoding="utf-8")
+    # The exact Task Cell URL is shared by startup and explicit semantic reset.
+    path = output/"host/reset_cah_semantics_cli.ps1"
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r"project_root_url='https://chatgpt.com/g/[^']+'",
+                  lambda _: "project_root_url=" + ps_quote(cell["project_root_url"]), text, count=1)
+    path.write_text(text, encoding="utf-8")
+    print(f"Configured CAH: {output}")
+    print(f"Repository: {cfg['repository']}; enabled lanes: {enabled}")
+    return output
+
 
 def main():
- parser=argparse.ArgumentParser(description=__doc__)
- parser.add_argument('--config',type=Path,required=True)
- parser.add_argument('--output',type=Path,required=True)
- a=parser.parse_args()
- spec=json.loads((ROOT/'installation/placeholders.json').read_text(encoding='utf-8'))
- data=json.loads(a.config.read_text(encoding='utf-8-sig'))
- values=dict(data.get('values',{}));needed=set(spec['tokens'])
- if set(values)!=needed: raise SystemExit('Configuration keys do not match placeholders.json')
- enabled=data.get('enabled_lanes',['lane-00'])
- if not isinstance(enabled,list) or not enabled or len(enabled)!=len(set(enabled)) or any(x not in ('lane-00','lane-01') for x in enabled): raise SystemExit('Invalid enabled_lanes')
- absent_lane1=not values['LANE01_KEY']
- if absent_lane1 and 'lane-01' in enabled: raise SystemExit('Enabled lane-01 needs its own verified Project')
- if absent_lane1: values['LANE01_KEY']='g-p-UNREGISTEREDLANE01'
- for key in ('RECORD_REPOSITORY','TRANSFER_REPOSITORY'):
-  if not values[key]:values[key]='UNCONFIGURED/OPTIONAL'
- for key,value in values.items():
-  if not isinstance(value,str) or not value or any(c in value for c in '\r\n\x00\x22\x27`$%&|<>{}'):
-   raise SystemExit('Unsafe/empty value: '+key)
-  if any(token in value for token in spec['tokens'].values()) or 'REPLACE' in value or 'PLACEHOLDER' in value:
-   raise SystemExit('Unresolved placeholder: '+key)
-  if key.endswith('_ROOT') or key.endswith('_BASE') or key=='CHROME_PATH':
-   if not (PureWindowsPath(value).is_absolute() or Path(value).is_absolute()): raise SystemExit('Absolute path required: '+key)
-  if key.endswith('REPOSITORY') and not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',value): raise SystemExit('owner/repository required: '+key)
- if not re.fullmatch(r'[A-Za-z0-9_.-]+',values['COLD_RUNNER_NAME']):raise SystemExit('Invalid Cold/Burst runner name')
- for key in ('TASK_CELL_KEY','LANE00_KEY','LANE01_KEY'):
-  if not re.fullmatch(r'g-p-[A-Za-z0-9]+',values[key]):raise SystemExit('Invalid Project key: '+key)
- real=[values['TASK_CELL_KEY'],values['LANE00_KEY']]+([] if absent_lane1 else [values['LANE01_KEY']])
- if len(real)!=len(set(real)):raise SystemExit('Project bindings must be unique')
- if not re.fullmatch(r'https://chatgpt\.com/(?:g/g-p-[A-Za-z0-9-]+/)?c/[A-Za-z0-9-]+',values['FOREGROUND_URL']):raise SystemExit('Foreground must be an exact conversation URL')
- if data.get('operational_repository_is_private') is not True or data.get('projects_verified_in_authenticated_browser') is not True:
-  raise SystemExit('Installer must verify private repository and authenticated Project ownership first')
- out=a.output.resolve()
- if out==ROOT or ROOT in out.parents or out in ROOT.parents:raise SystemExit('Output must be separate from source')
- if Path(values['REPO_ROOT']).resolve()!=out:raise SystemExit('REPO_ROOT must match --output on this host')
- if out.exists():raise SystemExit('Refusing to overwrite an existing destination')
- for key in ('BRIDGE_ROOT','BROWSER_ROOT','TOOLS_ROOT','PROFILE_ROOT','MANAGED_RUNNER_ROOT','SHOT_RUNNER_ROOT','COLD_RUNNER_ROOT','WORK_ROOT','TEMP_ROOT'):
-  target=Path(values[key]).resolve()
-  if target==out or out in target.parents:raise SystemExit('Private runtime/data must remain outside the source checkout: '+key)
- if len({str(Path(values[k]).resolve()).lower() for k in ('MANAGED_RUNNER_ROOT','SHOT_RUNNER_ROOT','COLD_RUNNER_ROOT')})!=3:raise SystemExit('Runner roots must all be distinct')
- if any(p.is_symlink() for p in ROOT.rglob('*')):raise SystemExit('Symlink in template is not allowed')
- index=json.loads((ROOT/'audit/file-manifest.json').read_text(encoding='utf-8'))
- actual={x.relative_to(ROOT).as_posix() for x in ROOT.rglob('*') if x.is_file() and '__pycache__' not in x.parts and '.git' not in x.parts}
- if actual!=set(index['files'])|{'audit/file-manifest.json'}:raise SystemExit('Source tree differs from integrity manifest')
- for rel,sha in index['files'].items():
-  if (ROOT/rel).is_symlink() or hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()!=sha:raise SystemExit('Source integrity mismatch: '+rel)
- out.parent.mkdir(parents=True,exist_ok=True)
- temp=Path(tempfile.mkdtemp(prefix='cah-configure-',dir=out.parent))
- try:
-  for rel in sorted(actual):
-   src=ROOT/rel;dst=temp/rel;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst)
-  for rel in spec['files']:
-   target=temp/rel;text=target.read_text(encoding='utf-8')
-   for key,marker in spec['tokens'].items():
-    val=values[key]
-    if key.endswith('_ROOT') or key.endswith('_BASE') or key=='CHROME_PATH':
-     val=val.replace('/','\\') if target.suffix in ('.ps1','.bat') and PureWindowsPath(val).is_absolute() else val.replace('\\','/')
-    if target.suffix=='.json':val=json.dumps(val,ensure_ascii=False)[1:-1]
-    text=text.replace(marker,val)
-   if target.suffix=='.py':ast.parse(text)
-   if any(marker in text for marker in spec['tokens'].values()):raise ValueError('Unresolved substitution in '+rel)
-   target.write_text(text,encoding='utf-8',newline='\n')
-  topology=json.loads((temp/'state/lanes.json').read_text(encoding='utf-8'))
-  if absent_lane1:topology['lanes']=[x for x in topology['lanes'] if x['lane_id']!='lane-01']
-  for row in topology['lanes']:
-   row['enabled']=row['lane_id'] in enabled;row['status']='IDLE' if row['enabled'] else 'DISABLED'
-   row['project_root_url']='https://chatgpt.com/g/'+row['project_key']+'/project'
-  topology['registered_count']=len(topology['lanes']);topology['enabled_count']=len(enabled)
-  for rel in ('Start_CAH.ps1','host/bridge_supervisor.ps1'):
-   script=temp/rel; body=script.read_text(encoding='utf-8'); body=body.replace("[string]$LocalWorkerLanes = 'lane-00,lane-01'", "[string]$LocalWorkerLanes = '"+','.join(enabled)+"'",1);script.write_text(body,encoding='utf-8')
-  (temp/'state/lanes.json').write_text(json.dumps(topology,indent=2)+'\n',encoding='utf-8')
-  # Drop old account-specific display slugs: the stable Project key owns identity.
-  for rel in ('playwright_host/config.py','host/reset_cah_semantics_cli.ps1'):
-   path=temp/rel;text=path.read_text(encoding='utf-8')
-   text=text.replace(values['TASK_CELL_KEY']+'-cah-task-cell/project',values['TASK_CELL_KEY']+'/project')
-   path.write_text(text,encoding='utf-8')
-  receipt={'v':1,'template_source_sha':index['source_commit'],'configured':True,'live_acceptance':'NOT_RUN','privacy':'Owner settings exist in this operational copy; keep it private.'}
-  (temp/'installation/configured.local.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
-  temp.rename(out)
-  print('CONFIGURED_COPY_CREATED; no Git push, registration, process start or live acceptance performed')
- except BaseException:
-  shutil.rmtree(temp,ignore_errors=True);raise
-if __name__=='__main__':main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    configure(args.config, args.output)
+
+
+if __name__ == "__main__":
+    main()

@@ -19,6 +19,20 @@ from harness.worker_lineage_compat import (
 )
 
 
+def _publish_commit(store: Any, worktree: Path, commit_sha: str | None = None) -> str:
+    """Publish a canonical mutation and update the shared immutable read view."""
+    commit_sha = commit_sha or _run(worktree, "rev-parse", "HEAD").stdout.strip()
+    try:
+        _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+    except subprocess.SubprocessError:
+        # A lost reply may hide a successful remote write. Never reuse an
+        # unconfirmed snapshot after this transaction.
+        store.invalidate_git_snapshot()
+        raise
+    store.record_git_commit(commit_sha)
+    return commit_sha
+
+
 def control_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
     store._safe_client(req.get("client_id"))
     project_id = str(req.get("project_id") or "").strip()
@@ -27,8 +41,8 @@ def control_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
 
     with store.git_lock:
         try:
-            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-            state = json.loads(store._git("show", "FETCH_HEAD:state/chatgpt.json").stdout)
+            base_sha = store.read_git_snapshot()
+            state = json.loads(store._git("show", f"{base_sha}:state/chatgpt.json").stdout)
         except Exception:
             return {"ok": False, "error": "GIT_CONTROL_STATE_FAILED"}
 
@@ -37,6 +51,7 @@ def control_status(store: Any, req: dict[str, Any]) -> dict[str, Any]:
         "ok": True,
         "control_request": control if isinstance(control, dict) else None,
         "state_updated": str(state.get("updated") or "") if isinstance(state, dict) else None,
+        "source_commit": base_sha,
     }
 
 
@@ -89,7 +104,7 @@ def begin_lane_clear(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 _run(worktree, "add", "state/chatgpt.json")
                 _run(worktree, "commit", "-m", f"Begin lane clear {request_id} [skip ci]")
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree)
                 except subprocess.SubprocessError:
                     if attempt == 0:
                         continue
@@ -183,7 +198,7 @@ def complete_lane_clear(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 _run(worktree, "commit", "-m", f"Complete lane clear {request_id} [skip ci]")
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt == 0:
                         continue
@@ -272,7 +287,7 @@ def complete_task_cell_prompt(store: Any, req: dict[str, Any]) -> dict[str, Any]
                 _run(worktree, "commit", "-m", f"Complete Task Cell prompt {request_id} [skip ci]")
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt == 0:
                         continue
@@ -350,7 +365,7 @@ def _complete_simple_control(
                 _run(worktree, "commit", "-m", f"Complete control {request_id} [skip ci]")
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt == 0:
                         continue

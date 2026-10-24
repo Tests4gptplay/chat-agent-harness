@@ -22,7 +22,7 @@ from harness.worker_lineage_compat import (
 
 class WakeTests(unittest.TestCase):
     def test_make_validate_marker(self):
-        wake = make_wake("3d-agent-lab", repo="CAH_OWNER/3d-agent-lab", run_id=123)
+        wake = make_wake("3d-agent-lab", repo="example-owner/example-project", run_id=123)
         validate_wake(wake)
         self.assertEqual(wake["v"], 1)
         self.assertEqual(wake["state"], "NEED_AGENT")
@@ -31,7 +31,7 @@ class WakeTests(unittest.TestCase):
     def test_deterministic_wake_id(self):
         kwargs = {
             "state": "NEED_AGENT",
-            "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            "repo": "__CAH_REPOSITORY__",
             "run_id": "123",
             "result_ref": "github://example/result",
         }
@@ -49,7 +49,7 @@ class WakeTests(unittest.TestCase):
         wake = {
             "wake_id": "wake-budget-0001",
             "project_id": "git-agent-harness",
-            "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            "repo": "__CAH_REPOSITORY__",
             "git_branch": "main",
             "task_id": "child-budget-001",
             "owner_task_id": "parent-budget-001",
@@ -75,9 +75,9 @@ class WakeTests(unittest.TestCase):
         wake = make_wake(
             "git-agent-harness",
             wake_id="wake-scheduler-0001",
-            repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+            repo="__CAH_REPOSITORY__",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHTESTB86CD70AB2",
+            worker_project_key="g-p-CAHLANE00",
             kind="task_continue",
             task_id="task-001",
             backend_cl="cl/task-001.backend.json",
@@ -257,7 +257,7 @@ class WakeTests(unittest.TestCase):
             "git-agent-harness",
             wake_id="wake-attachment-0001",
             lane_id="lane-00",
-            worker_project_key="g-p-CAHTESTB86CD70AB2",
+            worker_project_key="g-p-CAHLANE00",
             attachment_ref=ref,
         )
         validate_wake(wake)
@@ -427,8 +427,8 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                     "enabled": True,
                     "status": "IDLE",
                     WORKER_LINEAGES_KEY: {
@@ -456,7 +456,7 @@ class WakeTests(unittest.TestCase):
                 "v": 1,
                 "lanes": [{
                     "lane_id": "lane-00",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
+                    "project_key": "g-p-CAHLANE00",
                     WORKER_LINEAGES_KEY: {
                         f"{owner_task_id}::{owner_epoch}": {
                             "owner_task_id": owner_task_id,
@@ -474,7 +474,7 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": exact,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "owner_task_id": owner_task_id,
                 "owner_control_epoch": owner_epoch,
             }
@@ -528,8 +528,8 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                     "enabled": True,
                     "status": "RUNNING",
                     WORKER_LINEAGES_KEY: {
@@ -563,7 +563,7 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": lineage_b,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 1,
             })
@@ -577,7 +577,7 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": lineage_b,
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "owner_task_id": "task-B",
                 "owner_control_epoch": 1,
             })
@@ -608,8 +608,8 @@ class WakeTests(unittest.TestCase):
                 "lanes": [{
                     "lane_id": "lane-00",
                     "display_name": "CAH Sandbox0",
-                    "project_key": "g-p-CAHTESTB86CD70AB2",
-                    "project_root_url": "https://chatgpt.com/g/g-p-CAHTESTB86CD70AB2-cah-sandbox0/project",
+                    "project_key": "g-p-CAHLANE00",
+                    "project_root_url": "https://chatgpt.com/g/g-p-CAHLANE00-cah-sandbox0/project",
                     "enabled": True,
                     "status": "RUNNING",
                     WORKER_LINEAGES_KEY: {
@@ -639,7 +639,7 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": "pool-epoch-two",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 1,
             })
@@ -651,7 +651,7 @@ class WakeTests(unittest.TestCase):
                 "project_id": "git-agent-harness",
                 "handoff_id": "pool-epoch-two",
                 "lane_id": "lane-00",
-                "worker_project_key": "g-p-CAHTESTB86CD70AB2",
+                "worker_project_key": "g-p-CAHLANE00",
                 "owner_task_id": "task-A",
                 "owner_control_epoch": 2,
             })

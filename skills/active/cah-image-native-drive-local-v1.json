@@ -1,0 +1,62 @@
+{
+  "v": 1,
+  "skill_id": "cah-image-native-drive-local-v1",
+  "title": "CAH native image to local project",
+  "status": "ACTIVE",
+  "summary": "Generate an image in the owning Worker, upload the original through a user-selected Drive relay, download it with the current Managed request, and verify the local file.",
+  "tags": [
+    "cah",
+    "image",
+    "native-image",
+    "google-drive",
+    "local-original",
+    "sha256"
+  ],
+  "applicability": {
+    "intents": [
+      "将 CAH Worker 原生生成的图片原件保存到本地工程",
+      "reuse verified native image to Drive to normal Managed Runner transfer"
+    ],
+    "required_capabilities": [
+      "native-image-generation",
+      "google-drive-upload",
+      "github",
+      "managed-windows-runner",
+      "python"
+    ],
+    "constraints": [
+      "Use the current task authorization, available native-image and Drive tools, and a user-selected destination.",
+      "Keep the original file and apply the current task cleanup policy."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "transfer-original",
+      "instruction": "Follow the reusable guide using the current task inputs and output directory.",
+      "implementation_refs": [
+        "skills/guides/cah-image-native-drive-local-v1.md"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "cah-image-native-drive-local-v1-acceptance-1",
+      "result_ref": "skills/evidence/cah-image-native-drive-local-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-10-20T00:32:14Z"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

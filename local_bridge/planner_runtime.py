@@ -13,6 +13,7 @@ from typing import Any
 
 try:
     from .topology import _run, utc_now
+    from .local_dispatch import reconcile_local_dispatch
     from .planner_control import (
         PlannerControlError,
         bind_planner_successor,
@@ -59,6 +60,7 @@ try:
     )
 except ImportError:
     from topology import _run, utc_now
+    from local_dispatch import reconcile_local_dispatch
     from planner_control import (
         PlannerControlError,
         bind_planner_successor,
@@ -236,7 +238,12 @@ def _commit_push(store: Any, worktree: Path, paths: list[str], message: str) -> 
     _run(worktree, "add", *paths)
     _run(worktree, "commit", "-m", message)
     commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
-    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+    try:
+        _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+    except subprocess.SubprocessError:
+        store.invalidate_git_snapshot()
+        raise
+    store.record_git_commit(commit_sha)
     return commit_sha
 
 
@@ -830,9 +837,9 @@ def _helper_operational_core(
     git_branch: str = "main",
 ) -> str:
     return (
-        f"Act as HELPER. Use GitHub connector CAH_OWNER/CAH_OPERATIONAL_REPOSITORY branch {git_branch} for ALL reads/writes. "
+        f"Act as HELPER. Use GitHub connector __CAH_REPOSITORY__ branch {git_branch} for ALL reads/writes. "
         "ACTIVE RECOVERY REQUIRED: you are the bounded operational recovery owner, not an observer or advisor. "
-        "FIRST CHECK RUNNERS BEFORE ANY RECOVERY MUTATION: inspect compatible Runner health/availability, queue/occupancy, exact owned run/job or external operation, and durable Child Reply occupancy records. cah-shot is the normal bounded rescue/control channel. CAH also has __CAH_COLD_RUNNER_NAME__ at __CAH_COLD_RUNNER_ROOT__ with backup label, normally READY_OFF. Planner may require 02 open/keep/release or cleanup of an obsolete recorded run; after exact ownership/safety checks, execute that bounded request without re-litigating Planner strategy. If 02 is not occupied by business work, you may also use it as an alternate emergency/control channel; if READY_OFF, activate the exact configured Runner through an available authorized host path and verify identity before use. There is no required backup-runner wrapper protocol. Never commandeer ACTIVE_BUSY 02, never move Managed workload onto cah-shot, and never broad-kill Runner processes. "
+        "CHECK REQUIRED RUNNER CAPACITY ONCE WHEN RECOVERY NEEDS IT: inspect the compatible Runner health/availability, queue/occupancy, exact owned run/job or external operation, and durable Child Reply occupancy records for that action. Local control-state repair must not wait for unrelated Runner capacity. cah-shot is the bounded rescue/control channel. CAH normally keeps CAH-Managed-01 and __CAH_SECOND_RUNNER_NAME__ online; 02 remains at __CAH_SECOND_RUNNER_ROOT__ with its backup label and independent cold recovery path. Planner may coordinate 02 capacity or exact cleanup of an obsolete recorded run; after exact ownership/safety checks, execute the bounded request without a new activation approval for every use. If 02 is unoccupied, you may use it as an alternate emergency/control channel. Never commandeer busy 02, never move Managed workload onto cah-shot, and never broad-kill Runner processes. "
         "This wake assigns executable incident work. Diagnosis is preparation for action, not completion. "
         "TWO MANDATORY MISSIONS: (1) restore the affected Harness/Task Cell/Runner lifecycle to its normal autonomous self-running state, with no stale waits/events/control/output/continuation pointers that would require later manual pushes; and (2) move the current task past this operational fault boundary to the next valid lifecycle point so the next semantic role is mechanically runnable/wakeable from the preserved frontier. "
         "If manual canonical repair is needed, make it closure-complete: update every materially coupled wait, event, control request, pending role output/request, Child continuation/ownership, dispatch/result/wait reference and resource ownership affected by the transition, while preserving task/epoch authority and machine-owned identities. Verify that the next Harness reconciliation can proceed without another manual correction. "
@@ -949,10 +956,10 @@ def _planner_turn_prompt(
     ]
     return (
         f"Act as PLANNER for managed task {task_id}. Use connected GitHub/CAH access to "
-        f"CAH_OWNER/CAH_OPERATIONAL_REPOSITORY branch {git_branch} for ALL reads/writes; never default to another ref. Read AGENTS.md and docs/task-cell/PLANNER.md. "
+        f"__CAH_REPOSITORY__ branch {git_branch} for ALL reads/writes; never default to another ref. Read AGENTS.md and docs/task-cell/PLANNER.md. "
         f"Foreground requirements: tasks/{task_id}.json (also open any original requirements/material refs it names). Read these first, then {plan_ref}, {memory_ref}, and {plan_note_ref}; Memory and Plan Note do not replace the goal. "
         f"Use {plan_note_ref} freely as Planner's mutable decomposition/backlog workspace and load-shedding surface. A substantial parent task must not force you to fully decompose or reason through too much future work in one response: over-concentrating planning into one turn can cause an excessively long response, semantic/context collapse, response timeout, or a stalled Task Cell. When you judge that continuing decomposition in the current turn creates a meaningful risk of those failure modes, proactively use Plan Note instead of trying to finish the whole decomposition in that response. Stop at a useful frontier, preserve the remaining backlog in Plan Note, dispatch already-bounded work, and resume the remaining decomposition on later review turns. Treat this as an active recommendation: use Plan Note early enough to avoid an oversized risky turn, not merely as recovery after the turn has already become unwieldy. You may stage a coarse whole-task outline or partially decompose it. Do not impose a fixed syntax, tree depth, batch size, Child count, elapsed-time threshold, or token threshold. Inspect its remaining frontier on planning/review turns so deferred work is not forgotten, and distinguish remaining work from work already dispatched, accepted, superseded, or no longer needed. "
-        "CAPACITY COORDINATION: CAH has primary CAH-MANAGED-01 plus normally-off Cold/Burst __CAH_COLD_RUNNER_NAME__. You may proactively request through helper_prompt that 02 be opened, kept available, released to READY_OFF, or that an obsolete recorded run be exactly cleaned. Do not micromanage every experiment duration: Worker owns concrete execution-level judgment and may choose 02 for a specific long/heavy external operation, with a mandatory durable Child Reply record. If Worker reports 02 needed but offline/occupied, coordinate that capacity dependency. Planner and Worker never use cah-shot as normal workload capacity. "
+        "CAPACITY COORDINATION: CAH normally keeps CAH-Managed-01 and __CAH_SECOND_RUNNER_NAME__ online for Managed work; 02 retains its backup label and independent cold recovery path. Coordinate capacity by the resources actually required, including exact cleanup of an obsolete recorded run through helper_prompt when needed. Worker owns concrete execution-level judgment and may choose 02 for a specific long/heavy external operation, with a mandatory exact Runner identity and occupancy record in its durable Child Reply. If the required Runner is offline or occupied, coordinate that capacity dependency without a new activation approval for each use. Planner and Worker reserve cah-shot for Short work and bounded rescue/control. "
         f"If this turn actually consults Plan Note for planning/review or changes it, then in the same turn record that use in {memory_entry_ref}: capture the meaningful note delta or decision and the remaining frontier for successor continuity. If changing Plan Note, write {plan_note_ref} before the Memory entry. Do not copy the whole note into Memory. Plan Note never overrides Task Contract, formal Plan, Child Reply/Result evidence, or accepted artifacts. "
         f"Current events={json.dumps(event_view, ensure_ascii=False)}. "
         f"Read relevant new refs={json.dumps(list(dict.fromkeys(refs)))}. "
@@ -966,7 +973,7 @@ def _planner_turn_prompt(
         "harness/tools/registry.json, or existing workflow/toolbox lists; those hints are suggestions, not restrictions. "
         f"Write {outcome_ref} LAST, preserving its pre-bound machine fields. Put any needed semantic payload there "
         "(final_result_ref for final acceptance, wait for an external dependency, question for user input, or error details) "
-        "and set turn_signal to exactly one of done, rework, complete, handoff, wait, need_user, or error. "
+        "and set turn_signal to exactly one of done, rework, complete, handoff, wait, need_helper, need_user, or error. "
         "Do not fill the Harness-owned internal outcome field. After that durable write succeeds, stop. "
         "Harness reads turn_signal from the bound Git file and reduces the turn in its normal cycle, "
         "without a chat ending, syscall block or response-end. Do not repeat work summaries, file lists or metadata in chat. "
@@ -1045,6 +1052,13 @@ def _consume_planner_turn(
                 "error": "PLANNER_WAIT_CONDITION_REQUIRED",
                 "task_id": task_id,
             }
+
+    if outcome_kind == "NEED_HELPER" and not str(semantic.get("helper_prompt") or "").strip():
+        return {
+            "ok": False,
+            "error": "PLANNER_NEED_HELPER_PROMPT_REQUIRED",
+            "task_id": task_id,
+        }
 
     if outcome_kind == "NEED_USER" and not str(semantic.get("question") or "").strip():
         return {
@@ -1295,7 +1309,7 @@ def _consume_planner_turn(
             new_control["activity"] = "PARKED_WAIT_EVENT"
             new_control["wait"] = None
             new_control["runtime"] = rt
-    elif outcome_kind == "WAIT":
+    elif outcome_kind in {"WAIT", "NEED_HELPER"}:
         helper_prompt = str(semantic.get("helper_prompt") or "").strip()
         if helper_prompt:
             helper_request_id, helper_output_ref = _planner_helper_identity(task_id, outcome_ref)
@@ -1490,6 +1504,11 @@ def _consume_planner_turn(
     finally:
         _drop_worktree(store, worktree)
 
+    local_deliveries = [
+        _emit_local_worker_wake(store, value, commit_sha=commit_sha)
+        for path, value in write_objects.items()
+        if path.startswith("requests/worker-wake/")
+    ]
     return {
         "ok": True,
         "action": "planner_turn_reduced",
@@ -1498,6 +1517,7 @@ def _consume_planner_turn(
         "dispatched_workers": dispatched_count,
         "settled_slots": settled_count,
         "commit_sha": commit_sha,
+        "local_deliveries": local_deliveries,
     }
 
 
@@ -1688,7 +1708,8 @@ def observe_semantic_turn(store: Any, req: dict[str, Any], *, base_sha: str | No
             result = request_planner_rotation(store, {"task_id": task_id, "reason": "context_compacted", "caller_role": "harness"})
             return {**result, "accepted": bool(result.get("staged")), "role": "planner"}
         kind = {"done": "CONTINUE", "rework": "CONTINUE", "complete": "COMPLETE",
-                "wait": "WAIT", "need_user": "NEED_USER", "error": "ERROR"}.get(signal)
+                "wait": "NEED_USER", "need_helper": "NEED_HELPER",
+                "need_user": "NEED_USER", "error": "ERROR"}.get(signal)
         if kind is None:
             return {
                 "ok": True,
@@ -1698,6 +1719,10 @@ def observe_semantic_turn(store: Any, req: dict[str, Any], *, base_sha: str | No
             }
         if not isinstance(output, dict):
             return {"ok": True, "accepted": False, "reason": "planner_output_missing", "role": "planner"}
+        if signal == "wait":
+            semantic = output.get("semantic") if isinstance(output.get("semantic"), dict) else {}
+            semantic["question"] = str(semantic.get("question") or semantic.get("wait_condition") or "Please provide the input needed to continue.")
+            output["semantic"] = semantic
         if output.get("outcome") != kind:
             output["outcome"] = kind
             worktree = _prepare_worktree(store, base_sha, f"planner-signal-{task_id}")
@@ -1709,7 +1734,7 @@ def observe_semantic_turn(store: Any, req: dict[str, Any], *, base_sha: str | No
         state = _read_json(store, base_sha, "state/chatgpt.json")
         result = _consume_planner_turn(store, base_sha=base_sha, cell_ref=cell_ref, cell=cell,
                                        state=state, project_id=str(req.get("project_id") or ""),
-                                       repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY")
+                                       repo="__CAH_REPOSITORY__")
         return {"ok": True, "accepted": bool(result and result.get("action") == "planner_turn_reduced"),
                 "role": "planner", "result": result}
 
@@ -1994,8 +2019,8 @@ def _configured_local_worker_lanes() -> set[str]:
     """Return lanes physically hosted by this bridge process.
 
     This is transport configuration only. Canonical lane/task authority remains
-    in Git; the list merely decides whether an already-pushed rollover wake may
-    take the local delivery fast path.
+    in Git; the list merely decides whether an already-pushed Worker wake may
+    take the local delivery path.
     """
     raw = str(os.environ.get(LOCAL_WORKER_LANES_ENV) or "")
     lanes: set[str] = set()
@@ -2006,28 +2031,22 @@ def _configured_local_worker_lanes() -> set[str]:
     return lanes
 
 
-def _emit_local_worker_rollover(
+def _emit_local_worker_wake(
     store: Any,
-    continuation: dict[str, Any],
+    wake: dict[str, Any],
     *,
     commit_sha: str,
+    lane_id: str | None = None,
 ) -> dict[str, Any]:
-    """Best-effort local delivery after the rollover is canonical in Git.
+    """Deliver an already-committed exact wake to this host's existing queue.
 
-    The durable requests/worker-wake entry is intentionally retained. If this
-    fast path is unavailable or fails, the existing Actions/reconcile path still
-    delivers the same exact wake. WakeStore.emit is idempotent by wake_id, so a
-    later durable delivery safely collapses to the same doorbell.
+    The canonical request remains available to local Git reconciliation after
+    an interrupted delivery. Queue persistence and wake_id deduplication are
+    unchanged; delivery does not claim semantic or physical completion.
     """
-    lane_id = str(continuation.get("lane_id") or "").strip()
-    dispatch = continuation.get("dispatch") if isinstance(continuation.get("dispatch"), dict) else {}
-    wake = continuation.get("wake") if isinstance(continuation.get("wake"), dict) else {}
-    generation = int(dispatch.get("generation") or 0)
-
+    lane_id = str(lane_id or wake.get("lane_id") or "").strip()
     if not commit_sha:
         return {"attempted": False, "ok": False, "reason": "canonical_commit_missing"}
-    if generation < 2 or wake.get("replace_conversation") is not True:
-        return {"attempted": False, "ok": False, "reason": "not_worker_rollover"}
     if lane_id not in _configured_local_worker_lanes():
         return {
             "attempted": False,
@@ -2036,7 +2055,6 @@ def _emit_local_worker_rollover(
             "lane_id": lane_id or None,
             "fallback": "canonical_worker_wake",
         }
-
     try:
         emitted = store.emit(wake)
     except Exception as exc:
@@ -2049,7 +2067,6 @@ def _emit_local_worker_rollover(
             "error": str(exc)[:300],
             "fallback": "canonical_worker_wake",
         }
-
     exact = (
         isinstance(emitted, dict)
         and emitted.get("ok") is True
@@ -2065,6 +2082,30 @@ def _emit_local_worker_rollover(
         "canonical_commit_sha": commit_sha,
         "fallback": None if exact else "canonical_worker_wake",
     }
+
+
+def _emit_local_worker_rollover(
+    store: Any,
+    continuation: dict[str, Any],
+    *,
+    commit_sha: str,
+) -> dict[str, Any]:
+    """Best-effort local delivery after the rollover is canonical in Git.
+
+    The durable requests/worker-wake entry is intentionally retained. If local
+    delivery is interrupted, the same Harness reconciles the exact request
+    from Git and WakeStore.emit collapses repeats by wake_id.
+    """
+    lane_id = str(continuation.get("lane_id") or "").strip()
+    dispatch = continuation.get("dispatch") if isinstance(continuation.get("dispatch"), dict) else {}
+    wake = continuation.get("wake") if isinstance(continuation.get("wake"), dict) else {}
+    generation = int(dispatch.get("generation") or 0)
+
+    if not commit_sha:
+        return {"attempted": False, "ok": False, "reason": "canonical_commit_missing"}
+    if generation < 2 or wake.get("replace_conversation") is not True:
+        return {"attempted": False, "ok": False, "reason": "not_worker_rollover"}
+    return _emit_local_worker_wake(store, wake, commit_sha=commit_sha, lane_id=lane_id)
 
 def _continue_worker_child(
     store: Any,
@@ -2477,8 +2518,7 @@ def planner_final_delivery_status(store: Any, req: dict[str, Any]) -> dict[str, 
         raise ValueError("project_id required")
     for attempt in range(2):
         with store.git_lock:
-            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+            base_sha = store.read_git_snapshot(force=attempt > 0)
             cells = [(ref, _try_read_json(store, base_sha, ref)) for ref in _list_task_cells(store, base_sha)]
             # A previous task may still await Foreground delivery. It must not
             # block another task's physical cleanup and reset.
@@ -2505,13 +2545,20 @@ def planner_final_delivery_status(store: Any, req: dict[str, Any]) -> dict[str, 
                 if state == "CONSUMED":
                     continue
                 if state == "DELIVERED":
-                    return {"ok": True, "event": None, "delivered_wait_response_end": _public_final_delivery(cell_ref, event)}
+                    return {"ok": True, "event": None, "delivered_wait_response_end": _public_final_delivery(cell_ref, event),
+                            "source_commit": base_sha}
                 if state not in {"PENDING", "CLAIMED"}:
                     return {"ok": False, "error": "PLANNER_FINAL_DELIVERY_STATE_INVALID"}
 
                 if state == "CLAIMED":
-                    return {"ok": True, "event": _public_final_delivery(cell_ref, event), "duplicate_claim": True}
+                    return {"ok": True, "event": _public_final_delivery(cell_ref, event), "duplicate_claim": True,
+                            "source_commit": base_sha}
 
+                # This status endpoint also claims delivery. A cached read can
+                # find the candidate, but its write still starts from fresh Git.
+                fresh_sha = store.read_git_snapshot(force=True)
+                if fresh_sha != base_sha:
+                    break
                 claim_id = _stable_token("claim", {
                     "event_id": event.get("event_id"),
                     "canonical_sha": base_sha,
@@ -2548,7 +2595,7 @@ def planner_final_delivery_status(store: Any, req: dict[str, Any]) -> dict[str, 
                 finally:
                     _drop_worktree(store, worktree)
             else:
-                return {"ok": True, "event": None}
+                return {"ok": True, "event": None, "source_commit": base_sha}
     return {"ok": False, "error": "PLANNER_FINAL_DELIVERY_CLAIM_RETRY_EXHAUSTED"}
 
 
@@ -3789,8 +3836,9 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": "project_id required"}
     results = []
     with store.git_lock:
-        store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-        base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+        base_sha = store.read_git_snapshot()
+        local_dispatch = reconcile_local_dispatch(store, base_sha)
+        base_sha = str(local_dispatch.get("canonical_commit") or base_sha)
         turns = list(req.get("bound_turns") or []) + _canonical_semantic_turns(store, base_sha)
         seen = set()
         for turn in turns:
@@ -3822,12 +3870,14 @@ def planner_runtime_tick(store: Any, req: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:
                 results.append({"binding": turn, "result": {"ok": False,
                                 "error": type(exc).__name__, "detail": str(exc)[:1000]}})
-            # A ready reducer may have committed even if its response failed.
-            # Refresh only after an attempted ready result, not per idle role.
-            store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-            base_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+                # The remote may have accepted a push whose reply was lost.
+                store.invalidate_git_snapshot()
+            # Successful reducers publish their confirmed commit locally. Only
+            # unknown outcomes invalidate the cache and need a remote reread.
+            base_sha = store.read_git_snapshot()
         scheduled = _planner_runtime_tick(store, req, base_sha)
-    return {**scheduled, "semantic_turns": results}
+    return {**scheduled, "semantic_turns": results, "local_dispatch": local_dispatch,
+            "source_commit": str(scheduled.get("commit_sha") or base_sha)}
 
 
 def _planner_runtime_tick(store: Any, req: dict[str, Any], base_sha: str) -> dict[str, Any]:
@@ -3874,7 +3924,7 @@ def _planner_runtime_tick(store: Any, req: dict[str, Any], base_sha: str) -> dic
                         cell=cell,
                         state=state,
                         project_id=project_id,
-                        repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+                        repo="__CAH_REPOSITORY__",
                     )
                 except PlannerRuntimeError as exc:
                     return {"ok": False, "error": exc.code, "task_id": task_id}
@@ -3973,7 +4023,7 @@ def _planner_runtime_tick(store: Any, req: dict[str, Any], base_sha: str) -> dic
                         store, base_sha, parent_task_id=task_id,
                         parent_control_epoch=int(cell["control_epoch"]), child=child,
                         direction_id=str(dispatch["dispatch_id"]), project_id=project_id,
-                        repo="CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+                        repo="__CAH_REPOSITORY__",
                     )
                     new_cell = copy.deepcopy(cell)
                     rt = _runtime(new_cell["planner_control"])

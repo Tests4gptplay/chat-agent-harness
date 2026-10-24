@@ -1,0 +1,116 @@
+{
+  "v": 1,
+  "skill_id": "mv-timeline-evidence-self-review-v1",
+  "title": "MV Timeline Evidence Self-Review",
+  "status": "CANDIDATE",
+  "summary": "Cross-reference verified frame times, lyric display intervals, actual audio measurements and observed visual action for bounded MV self-review when hearing is unsupported. Distinguish technical alignment from artistic judgment; keep unaffected work moving.",
+  "tags": [
+    "mv",
+    "video-editing",
+    "timeline",
+    "audio-analysis",
+    "self-review",
+    "lyrics"
+  ],
+  "applicability": {
+    "intents": [
+      "Review MV image and music timing from existing assets",
+      "Diagnose editing decisions using lyric cues, waveform and actual frames",
+      "Continue bounded self-review when audio listening is unsupported"
+    ],
+    "required_capabilities": [],
+    "constraints": [
+      "Use existing authorized media and tools; do not assume hearing or fabricate perceptual approval.",
+      "Requires verified timebase and source identity; cue timestamps are display ranges until independently verified.",
+      "Needs readable video/audio, timed text, a shot map or frame timestamps, and a permitted media analysis environment."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "freeze_inputs",
+      "instruction": "Freeze edit, audio and cue versions/hashes; record verified CFR or actual PTS, stream offsets, trim and frame numbering. Preserve original assets.",
+      "deterministic": true,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "classify_sources",
+      "instruction": "Identify cue provenance. Subtitle display ranges are not precise sung-word timing or new ASR. Mark feature type/settings and whether any actual hearing exists.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "map_intervals",
+      "instruction": "Convert zero-based half-open frame ranges to a common clock; use PTS for VFR. Compute all cue overlaps and signed event deltas, not just nearest labels.",
+      "deterministic": true,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "measure_audio",
+      "instruction": "Decode the real audio with fixed channel/sample settings. Measure waveform/RMS and structural candidates; reject negligible-signal normalized peaks. Flux is not a verified beat; subtitle gaps are not silence.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "inspect_visual_events",
+      "instruction": "Inspect actual imagery and dense boundary frames. Record source version and observed setup, contact, result, reaction and release. Earlier contact sheets or sparse frames cannot certify current continuous motion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "judge_expression",
+      "instruction": "Compare action phases and lyric meaning with intended expression, including deliberate counterpoint. Do not force every word/peak to a cut or remove meaningful held shots solely for stillness.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "separate_gates",
+      "instruction": "Report technical timing, visual structure, motion, dramatic intent and perceptual listening separately. Numerical alignment does not prove artistic success. Treat user feedback as evidence, not mandatory direction or final approval.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "act_without_silent_stop",
+      "instruction": "Choose retain, retime, visual repair or targeted listening check. If hearing is unsupported continue supported review; notify exact remaining question and only pause its dependent work, never silently the whole project.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    },
+    {
+      "step_id": "preserve_case",
+      "instruction": "Save sources, mapping, measurements, visual evidence versions, decisions, failed assumptions and limitations. After changes verify preserved audio/timing. Do not promote ACTIVE without actual repository-required terminal PASS evidence.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/mv-timeline-evidence-self-review-v1.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

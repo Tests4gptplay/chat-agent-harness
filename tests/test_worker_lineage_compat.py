@@ -120,7 +120,7 @@ class WorkerLineageCompatibilityTests(unittest.TestCase):
     def test_queued_wake_and_claim_survive_bridge_recreation_with_same_identity(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            wake = make_wake('git-agent-harness', repo='CAH_OWNER/CAH_OPERATIONAL_REPOSITORY',
+            wake = make_wake('git-agent-harness', repo='__CAH_REPOSITORY__',
                              wake_id='wake-existing-queue', lane_id='lane-00',
                              worker_project_key='g-p-existing')
             store = WakeStore(root / 'bridge', repo_root=root)

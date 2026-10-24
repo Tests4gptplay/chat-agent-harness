@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,20 @@ from harness.worker_lineage_compat import (
     TASK_LINEAGE_OWNER,
     WORKER_LINEAGES_KEY,
 )
+
+
+def _publish_commit(store: Any, worktree: Path, commit_sha: str | None = None) -> str:
+    """Publish a canonical mutation and update the shared immutable read view."""
+    commit_sha = commit_sha or _run(worktree, "rev-parse", "HEAD").stdout.strip()
+    try:
+        _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+    except subprocess.SubprocessError:
+        # A lost reply may hide a successful remote write. Never reuse an
+        # unconfirmed snapshot after this transaction.
+        store.invalidate_git_snapshot()
+        raise
+    store.record_git_commit(commit_sha)
+    return commit_sha
 
 
 def _safe_rel(value: Any, name: str) -> str:
@@ -298,7 +313,7 @@ def stage_action_submit(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 _run(worktree, "commit", "-m", f"Schedule {action_id} and enter WAIT_RESULT")
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt < 2:
                         continue
@@ -424,7 +439,7 @@ def _handoff_wake_payload(
         "project_id": project_id,
         "state": "NEED_AGENT",
         "created_at": dispatch["requested_at"],
-        "repo": "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY",
+        "repo": "__CAH_REPOSITORY__",
         "run_id": f"{task_id}-handoff-g{dispatch['generation']}",
         "lane_id": lane_id,
         "worker_project_key": worker_project_key,
@@ -645,7 +660,7 @@ def complete_worker_handoff(store: Any, req: dict[str, Any]) -> dict[str, Any]:
                 _run(worktree, "commit", "-m", f"Resume {task_id} after Worker handoff")
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt < 2:
                         continue
@@ -859,7 +874,7 @@ def _try_finalize_parallel_branch(
         _run(worktree, "commit", "-m", f"Finalize {label} semantic branch {task_id}")
         commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
         try:
-            _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+            _publish_commit(store, worktree, commit_sha)
         except subprocess.SubprocessError:
             return {"finalized": False, "reason": "push_race", "retry": True}
         return {
@@ -972,7 +987,7 @@ def _try_finalize_planner_worker_child(
         _run(worktree, "commit", "-m", f"Finalize Planner Worker child {task_id}")
         commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
         try:
-            _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+            _publish_commit(store, worktree, commit_sha)
         except subprocess.SubprocessError:
             return {"finalized": False, "reason": "push_race", "retry": True}
         return {
@@ -1064,7 +1079,7 @@ def _try_finalize_nonparallel_semantic(
         _run(worktree, "commit", "-m", f"Finalize semantic result {task_id}")
         commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
         try:
-            _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+            _publish_commit(store, worktree, commit_sha)
         except subprocess.SubprocessError:
             # Remote outcome may be unknown; caller re-fetches canonical state
             # and recomputes before retrying.
@@ -1215,8 +1230,7 @@ def _mutate_foreground_terminal(
     for attempt in range(3):
         with store.git_lock:
             try:
-                store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-                canonical_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+                canonical_sha = store.read_git_snapshot(force=True)
                 foreground = json.loads(store._git("show", f"{canonical_sha}:{foreground_cl_rel}").stdout)
             except Exception:
                 return {"ok": False, "error": "GIT_FOREGROUND_TERMINAL_STATE_FAILED"}
@@ -1264,7 +1278,7 @@ def _mutate_foreground_terminal(
                 _run(worktree, "commit", "-m", commit_message)
                 commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                 try:
-                    _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                    _publish_commit(store, worktree, commit_sha)
                 except subprocess.SubprocessError:
                     if attempt < 2:
                         continue
@@ -1296,8 +1310,7 @@ def reconcile_foreground_terminal(store: Any, req: dict[str, Any], *, now_fn: An
     if op == "status":
         with store.git_lock:
             try:
-                store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-                canonical_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+                canonical_sha = store.read_git_snapshot()
             except Exception:
                 return {"ok": False, "error": "GIT_FOREGROUND_TERMINAL_FETCH_FAILED"}
             pending: list[tuple[str, dict[str, Any]]] = []
@@ -1342,7 +1355,8 @@ def reconcile_foreground_terminal(store: Any, req: dict[str, Any], *, now_fn: An
                 commit_message=f"Claim foreground terminal {event_id}",
             )
 
-        return {"ok": True, "event": None, "lease_seconds": FOREGROUND_TERMINAL_LEASE_SECONDS}
+        return {"ok": True, "event": None, "lease_seconds": FOREGROUND_TERMINAL_LEASE_SECONDS,
+                "source_commit": canonical_sha}
 
     foreground_cl_rel = _safe_rel(req.get("foreground_cl"), "foreground_cl")
     event_id = _safe_id(req.get("event_id"), "event_id")
@@ -1384,7 +1398,9 @@ def reconcile_foreground_terminal(store: Any, req: dict[str, Any], *, now_fn: An
 
 
 
-def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, Any]:
+def reconcile_dispatch_liveness(
+    store: Any, req: dict[str, Any], *, _snapshot_sha: str | None = None,
+) -> dict[str, Any]:
     """Observe/renew one exact dispatch; Worker watchdog escalation is handled separately."""
     store._safe_client(req.get("client_id"))
     project_id = str(req.get("project_id") or "").strip()
@@ -1398,16 +1414,24 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
     worker_project_key = str(req.get("worker_project_key") or "").strip()
     response_running = bool(req.get("response_running"))
     explicit_response_end = bool(req.get("response_ended"))
+    observation = req.get("observation") is True and response_running and not explicit_response_end
     if not project_id or generation < 1 or not 8 <= len(fence_token) <= 256:
         raise ValueError("invalid dispatch liveness request")
     if not lane_id.startswith("lane-") or not worker_project_key.startswith("g-p-"):
         raise ValueError("lane identity required")
 
     for attempt in range(3):
-        with store.git_lock:
+        # A physically running, already admitted response only needs a local
+        # projection. It must not queue behind an unrelated Git transaction.
+        with (nullcontext() if observation else store.git_lock):
             try:
-                store._git("fetch", "--quiet", "--no-tags", store.git_remote, store.git_branch)
-                canonical_sha = store._git("rev-parse", "FETCH_HEAD").stdout.strip()
+                if observation:
+                    canonical_sha = _snapshot_sha or store.peek_git_snapshot()
+                    if not canonical_sha:
+                        return {"ok": True, "matched": False, "recovered": False,
+                                "reason": "git_snapshot_pending", "observation": True}
+                else:
+                    canonical_sha = store.read_git_snapshot(force=True)
                 bg = json.loads(store._git("show", f"{canonical_sha}:{backend_cl_rel}").stdout)
                 try:
                     task_value = json.loads(
@@ -1542,6 +1566,13 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                     )
                 renew_before = now_dt + timedelta(seconds=SEMANTIC_LEASE_RENEW_MARGIN_SECONDS)
                 if lease <= renew_before:
+                    if observation:
+                        # Legacy workers still own a real lease renewal. Ask
+                        # the slow controller to run the unchanged fresh/CAS
+                        # transaction instead of doing it on physical observe.
+                        return {"ok": True, "matched": True, "recovered": False,
+                                "reason": "legacy_liveness_renewal_required",
+                                "requires_fresh_liveness": True, "state": state}
                     worktree = store.runtime / f"liveness-renew-{task_id}-{generation}-{attempt}"
                     if worktree.exists():
                         shutil.rmtree(worktree, ignore_errors=True)
@@ -1578,7 +1609,7 @@ def reconcile_dispatch_liveness(store: Any, req: dict[str, Any]) -> dict[str, An
                         )
                         commit_sha = _run(worktree, "rev-parse", "HEAD").stdout.strip()
                         try:
-                            _run(worktree, "push", store.git_remote, f"HEAD:{store.git_branch}")
+                            _publish_commit(store, worktree, commit_sha)
                         except subprocess.SubprocessError:
                             if attempt < 2:
                                 continue

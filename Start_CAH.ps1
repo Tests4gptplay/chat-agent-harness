@@ -6,15 +6,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path -LiteralPath $RepoRoot).Path
-& py (Join-Path $Repo 'installation\preflight.py')
-if ($LASTEXITCODE -ne 0) { throw 'CAH deployment is not configured' }
 $BridgeRoot = '__CAH_BRIDGE_ROOT__'
 $RunnerRoots = @(
     @{ Name = 'Managed'; Root = '__CAH_MANAGED_RUNNER_ROOT__' },
     @{ Name = 'Shot'; Root = '__CAH_SHOT_RUNNER_ROOT__' }
 )
-$ColdBurstRoot = '__CAH_COLD_RUNNER_ROOT__'
-$ColdBurstName = '__CAH_COLD_RUNNER_NAME__'
+$ColdBurstRoot = '__CAH_SECOND_RUNNER_ROOT__'
+$ColdBurstName = '__CAH_SECOND_RUNNER_NAME__'
 $Port = 8765
 $BrowserRoot = '__CAH_BROWSER_ROOT__'
 
@@ -34,7 +32,17 @@ function Ensure-Runner {
     if ($listeners.Count -eq 0) {
         $runCmd = Join-Path $Root 'run.cmd'
         if (-not (Test-Path $runCmd)) { throw "$Name Runner missing: $Root" }
-        Start-Process cmd.exe -ArgumentList '/d /c run.cmd' -WorkingDirectory $Root -WindowStyle Minimized | Out-Null
+        # Listeners outlive an Actions recovery/startup job. Do not let its
+        # orphan-process cleanup claim the new host infrastructure process.
+        $hadTracking = Test-Path Env:RUNNER_TRACKING_ID
+        $tracking = $env:RUNNER_TRACKING_ID
+        $env:RUNNER_TRACKING_ID = ''
+        try {
+            Start-Process cmd.exe -ArgumentList '/d /c run.cmd' -WorkingDirectory $Root -WindowStyle Minimized | Out-Null
+        } finally {
+            if ($hadTracking) { $env:RUNNER_TRACKING_ID = $tracking }
+            else { Remove-Item Env:RUNNER_TRACKING_ID -ErrorAction SilentlyContinue }
+        }
         $deadline = (Get-Date).AddSeconds(20)
         do {
             Start-Sleep -Milliseconds 500
@@ -47,7 +55,7 @@ function Ensure-Runner {
     Write-Host ('      ' + $Name + ' Runner: ' + $expectedListener)
 }
 
-function Report-ColdBurstRunner {
+function Get-ColdBurstRunnerState {
     $runCmd = Join-Path $ColdBurstRoot 'run.cmd'
     $configPath = Join-Path $ColdBurstRoot '.runner'
     $listenerPath = Join-Path $ColdBurstRoot 'bin\Runner.Listener.exe'
@@ -86,10 +94,39 @@ function Report-ColdBurstRunner {
         }
     }
 
+    return [pscustomobject]@{
+        State = $state
+        Name = $name
+        Root = $ColdBurstRoot
+        ListenerCount = $listeners.Count
+        WorkerCount = $workers.Count
+    }
+}
+
+function Report-ColdBurstRunner {
+    param($RunnerState)
+    if ($null -eq $RunnerState) { $RunnerState = Get-ColdBurstRunnerState }
     Write-Host (
         '      Cold/Burst Runner: state={0}; name={1}; root={2}; listener_count={3}; worker_count={4}' -f
-        $state,$name,$ColdBurstRoot,$listeners.Count,$workers.Count
+        $RunnerState.State,$RunnerState.Name,$RunnerState.Root,$RunnerState.ListenerCount,$RunnerState.WorkerCount
     )
+}
+
+function Ensure-ColdBurstRunner {
+    $runner = Get-ColdBurstRunnerState
+    if ($runner.State -in @('MISSING', 'DIRTY')) {
+        throw "Second Managed Runner is not the configured $ColdBurstName instance: state=$($runner.State); root=$ColdBurstRoot"
+    }
+    if ($runner.State -eq 'READY_OFF') {
+        Ensure-Runner -Name 'Managed-02' -Root $ColdBurstRoot
+        $runner = Get-ColdBurstRunnerState
+    }
+    if ($runner.State -notin @('ACTIVE_IDLE', 'ACTIVE_BUSY')) {
+        throw "Second Managed Runner did not become available: state=$($runner.State); root=$ColdBurstRoot"
+    }
+    # An existing ACTIVE_BUSY instance is already useful Managed capacity.
+    # Startup neither preempts its job nor replaces its Listener.
+    Report-ColdBurstRunner -RunnerState $runner
 }
 
 function Read-Cdp {
@@ -398,15 +435,12 @@ try {
     foreach ($runner in $RunnerRoots) {
         Ensure-Runner -Name $runner.Name -Root $runner.Root
     }
-    # Cold/Burst is intentionally not part of $RunnerRoots: startup knows and
-    # reports its state but never starts or stops it. Semantic roles decide when
-    # the extra capacity is useful; exact operational changes remain incident work.
-    Report-ColdBurstRunner
+    Ensure-ColdBurstRunner
 
     Write-Host '[4/4] Checking the native Playwright host and CAH CDP browser...'
     Ensure-NativeHost
     # Startup is not a workload acceptance test and must not wait for an old demo.
-    Write-Host 'CAH startup complete. Bridge, active runners, Cold/Burst status, native Playwright host and CDP are available.' -ForegroundColor Green
+    Write-Host 'CAH startup complete. Bridge, both Managed runners, Shot, native Playwright host and CDP are available.' -ForegroundColor Green
     exit 0
 } catch {
     Write-Host ('CAH startup failed: ' + $_.Exception.Message) -ForegroundColor Red

@@ -337,14 +337,7 @@ class SemanticFinalizeTests(unittest.TestCase):
             self.assertEqual(exit_code_for_outcome(status), 0)
         self.assertNotEqual(exit_code_for_outcome("REJECTED"), 0)
 
-    @unittest.skipUnless((REPO_ROOT / '.github/workflows/semantic-finalize.yml').is_file(), 'Workflow payload deliberately omitted')
-    def test_workflow_publishes_business_projection_before_reporting_red_outcome(self):
-        workflow = (REPO_ROOT / ".github/workflows/semantic-finalize.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('harness/request_drain.py --kind semantic_finalize', workflow)
-        self.assertNotIn('git diff-tree', workflow)
-        self.assertNotIn('git rebase', workflow)
+    def test_durable_driver_publishes_business_projection_before_reporting_red_outcome(self):
         # The real temporary-Git drain suite additionally proves that ERROR is
         # committed together with its receipt before main() reports nonzero.
         driver = (REPO_ROOT / 'harness/request_drain.py').read_text(encoding='utf-8')

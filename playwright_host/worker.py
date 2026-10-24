@@ -42,7 +42,7 @@ def worker_owner(wake: dict[str, Any]) -> tuple[str, int]:
 
 
 def wake_text(wake: dict[str, Any], project_id: str) -> str:
-    repo = str(wake.get("repo") or "CAH_OWNER/CAH_OPERATIONAL_REPOSITORY")
+    repo = str(wake.get("repo") or "__CAH_REPOSITORY__")
     lines = [
         wake_marker(wake, project_id),
         "WORKER_BUDGET",
@@ -106,7 +106,8 @@ def wake_text(wake: dict[str, Any], project_id: str) -> str:
 
 
 class WorkerManager:
-    def __init__(self, bridge: BridgeClient, state: HostState, ui: ChatGPTUI, project_id: str):
+    def __init__(self, bridge: BridgeClient, state: HostState, ui: ChatGPTUI, project_id: str,
+                 *, asynchronous_observation: bool = False):
         self.bridge = bridge
         self.state = state
         self.ui = ui
@@ -116,6 +117,76 @@ class WorkerManager:
         self._seen_tool_calls: set[str] = set()
         self._seen_syscalls: set[str] = set()
         self._response_end_seen: set[str] = set()
+        self._asynchronous_observation = asynchronous_observation
+        self._worker_observations: dict[str, dict[str, Any]] = {}
+        self._known_dispatches: dict[str, dict[str, Any]] = {}
+        self._running_dispatches: set[str] = set()
+
+    @staticmethod
+    def _observation_key(lane: dict[str, Any], lineage: dict[str, Any],
+                         current: dict[str, Any], ctx: dict[str, Any] | None = None) -> str:
+        # Bind the read to both canonical dispatch authority and the exact
+        # physical conversation. Replaced generations cannot consume old reads.
+        return json.dumps([
+            lane.get("lane_id"), lane.get("project_key"), lineage.get("owner_task_id"),
+            lineage.get("owner_control_epoch"), current.get("conversation_id"),
+            current.get("handoff_id"), current.get("wake_id"),
+            *[str((ctx or {}).get(key) or "") for key in
+              ("task_id", "backend_cl", "dispatch_id", "dispatch_generation", "fence_token")],
+        ], separators=(",", ":"))
+
+    def observation_requests(self) -> list[dict[str, Any]]:
+        """Capture owner-thread bindings for the single Git polling worker."""
+        rows = []
+        live_keys = set()
+        for lane_id, lane in list((self.state.data.get("lanes") or {}).items()):
+            if not isinstance(lane, dict) or not lane.get("enabled", True) or lane.get("pending_remove"):
+                continue
+            for lineage in (lane.get(WORKER_LINEAGES_KEY) or {}).values():
+                current = lineage.get("current") or {}
+                if not current.get("handoff_verified") or current.get("final_signal"):
+                    continue
+                base_key = self._observation_key(lane, lineage, current)
+                live_keys.add(base_key)
+                wd = current.get("worker_watchdog") or {}
+                ctx = self._known_dispatches.get(base_key)
+                # A retained conversation can advance dispatches while its
+                # creation-time watchdog still describes the first dispatch.
+                if ctx is None and wd.get("child_task_id"):
+                    ctx = {"task_id": wd["child_task_id"], **{key: wd.get(key) for key in
+                        ("backend_cl", "dispatch_id", "dispatch_generation", "fence_token")}}
+                identity = self._observation_key(lane, lineage, current, ctx)
+                row = {"identity_key": identity, "takeover": {
+                    "handoff_id": current.get("handoff_id"), "lane_id": lane_id,
+                    "worker_project_key": lane["project_key"],
+                    "owner_task_id": lineage.get("owner_task_id"),
+                    "owner_control_epoch": lineage.get("owner_control_epoch"),
+                }}
+                if ctx:
+                    request = {**ctx, "worker_ref": current.get("handoff_id"),
+                               "lane_id": lane_id, "worker_project_key": lane["project_key"]}
+                    row["dispatch"] = request
+                    if base_key in self._running_dispatches:
+                        row["liveness"] = {**request, "response_running": True, "response_ended": False}
+                rows.append(row)
+        self._known_dispatches = {key: value for key, value in self._known_dispatches.items() if key in live_keys}
+        self._running_dispatches.intersection_update(live_keys)
+        return rows
+
+    def replace_observations(self, rows: list[dict[str, Any]]) -> None:
+        # A completed batch is usable in this owner tick only. Pending/failing
+        # polling never keeps an old authority gate alive indefinitely.
+        self._worker_observations = {row["identity_key"]: row for row in rows}
+
+    def _observation(self, lane: dict[str, Any], lineage: dict[str, Any],
+                     current: dict[str, Any], ctx: dict[str, Any] | None = None) -> dict[str, Any]:
+        if ctx is None:
+            wd = current.get("worker_watchdog") or {}
+            ctx = self._known_dispatches.get(self._observation_key(lane, lineage, current))
+            if ctx is None and wd.get("child_task_id"):
+                ctx = {"task_id": wd["child_task_id"], **{key: wd.get(key) for key in
+                    ("backend_cl", "dispatch_id", "dispatch_generation", "fence_token")}}
+        return self._worker_observations.get(self._observation_key(lane, lineage, current, ctx), {})
 
     @staticmethod
     def _handoff_id() -> str:
@@ -399,6 +470,8 @@ class WorkerManager:
         lane_id: str,
         owner_task_id: str,
         owner_control_epoch: int,
+        *,
+        fresh: bool = False,
     ) -> dict[str, Any]:
         lane = self._lane(lane_id)
         lineage = self.state.get_lineage(lane_id, owner_task_id, owner_control_epoch, create=False)
@@ -414,14 +487,14 @@ class WorkerManager:
             return {"ok": True, "idle": "no_verified_current_worker"}
 
         current_ref = str(current.get("handoff_id") or "")
-        lifecycle = self.bridge.call(
-            "worker_takeover_status",
-            handoff_id=current_ref,
-            lane_id=lane_id,
-            worker_project_key=lane["project_key"],
-            owner_task_id=owner_task_id,
-            owner_control_epoch=owner_control_epoch,
-        )
+        if getattr(self, "_asynchronous_observation", False) and not fresh:
+            lifecycle = self._observation(lane, lineage, current).get("takeover") or {}
+        else:
+            lifecycle = self.bridge.call(
+                "worker_takeover_status", handoff_id=current_ref, lane_id=lane_id,
+                worker_project_key=lane["project_key"], owner_task_id=owner_task_id,
+                owner_control_epoch=owner_control_epoch,
+            )
         requested = (
             lifecycle.get("rollover_requested") is True
             and str(lifecycle.get("rollover_request_handoff_id") or "") == current_ref
@@ -493,6 +566,7 @@ class WorkerManager:
             lane["lane_id"],
             str(lineage.get("owner_task_id") or ""),
             int(lineage.get("owner_control_epoch") or 0),
+            fresh=True,
         )
         self.bridge.call("release", message_id=message_id)
         return {
@@ -525,15 +599,21 @@ class WorkerManager:
         ctx: dict[str, Any],
         lane: dict[str, Any],
         current: dict[str, Any],
+        *,
+        lineage: dict[str, Any] | None = None,
+        observation: bool = False,
     ) -> dict[str, Any]:
-        status = self.bridge.call(
-            "dispatch_status",
-            task_id=str(ctx.get("task_id") or ""),
-            backend_cl=str(ctx.get("backend_cl") or ""),
-            dispatch_id=str(ctx.get("dispatch_id") or ""),
-            dispatch_generation=int(ctx.get("dispatch_generation") or 0),
-            fence_token=str(ctx.get("fence_token") or ""),
-        )
+        if observation and getattr(self, "_asynchronous_observation", False):
+            status = self._observation(lane, lineage or {}, current, ctx).get("dispatch") or {}
+            if status.get("matched") is None:
+                return {"ok": True, "matched": None, "idle": "git_snapshot_unavailable"}
+        else:
+            status = self.bridge.call(
+                "dispatch_status", task_id=str(ctx.get("task_id") or ""),
+                backend_cl=str(ctx.get("backend_cl") or ""), dispatch_id=str(ctx.get("dispatch_id") or ""),
+                dispatch_generation=int(ctx.get("dispatch_generation") or 0),
+                fence_token=str(ctx.get("fence_token") or ""),
+            )
         if not status.get("matched"):
             return {"ok": True, "matched": False, "idle": "stale_dispatch"}
         if str(status.get("state") or "") in {"READY", "DISPATCHED", "ACKED"}:
@@ -1004,12 +1084,64 @@ class WorkerManager:
 
         turn = self.ui.dispatch_turn_state(page)
         if not turn:
+            # ChatGPT virtualizes older messages. When the original GAH_DISPATCH
+            # user message falls out of the loaded DOM, the latest in-band
+            # CAH_TOOL_RESULT is still a trustworthy continuation delimiter
+            # ONLY for this already-admitted, exactly bound Worker conversation.
+            watchdog = current.get("worker_watchdog") or {}
+            if (
+                isinstance(watchdog, dict)
+                and watchdog.get("state") in {"ARMED", "WORKER_HELPER_REQUESTED"}
+                and str(watchdog.get("wake_id") or "") == str(current.get("wake_id") or "")
+                and str(watchdog.get("child_task_id") or "")
+                and str(watchdog.get("backend_cl") or "")
+                and str(watchdog.get("dispatch_id") or "")
+                and int(watchdog.get("dispatch_generation") or 0) > 0
+                and str(watchdog.get("fence_token") or "")
+            ):
+                continuation_ctx = None
+                if getattr(self, "_asynchronous_observation", False):
+                    continuation_ctx = self._known_dispatches.get(self._observation_key(lane, lineage, current))
+                if continuation_ctx is None:
+                    continuation_ctx = {
+                        "task_id": str(watchdog["child_task_id"]),
+                        "backend_cl": str(watchdog["backend_cl"]),
+                        "dispatch_id": str(watchdog["dispatch_id"]),
+                        "dispatch_generation": int(watchdog["dispatch_generation"]),
+                        "fence_token": str(watchdog["fence_token"]),
+                    }
+                nodes = self.ui.message_nodes(page)
+                for index in range(nodes.count() - 1, -1, -1):
+                    node = nodes.nth(index)
+                    if self.ui.message_role(node) != "user":
+                        continue
+                    message = self.ui.message_text(node, "user").lstrip()
+                    if message.startswith("CAH_TOOL_RESULT v=1 "):
+                        continuation = self.ui._turn_after(page, nodes, index)
+                        if continuation.get("response_started") and not continuation.get("superseded"):
+                            turn = {
+                                "dispatch_context": continuation_ctx,
+                                **continuation,
+                            }
+                    # A different latest user message is not an authorized
+                    # continuation of the known dispatch.
+                    break
+        if not turn:
             return {"ok": True, "idle": "no_dispatch_context"}
         if not turn.get("response_started"):
             return {"ok": True, "idle": "response_not_started"}
 
         ctx = turn["dispatch_context"]
-        admission = self._ensure_admitted(ctx, lane, current)
+        if getattr(self, "_asynchronous_observation", False):
+            base_key = self._observation_key(lane, lineage, current)
+            self._known_dispatches[base_key] = dict(ctx)
+            if turn.get("response_ended"):
+                self._running_dispatches.discard(base_key)
+            else:
+                self._running_dispatches.add(base_key)
+        admission = self._ensure_admitted(ctx, lane, current, lineage=lineage, observation=True)
+        if admission.get("matched") is None:
+            return {"ok": True, "idle": "git_snapshot_unavailable"}
         if admission.get("matched") is False or turn.get("superseded"):
             return {"ok": True, "idle": "stale_dispatch"}
 
@@ -1291,7 +1423,14 @@ class WorkerManager:
                 if not turn or not turn.get("response_started"):
                     continue
                 ctx = turn["dispatch_context"]
-                self._ensure_admitted(ctx, lane, current)
+                admission = self._ensure_admitted(ctx, lane, current, lineage=lineage, observation=True)
+                if getattr(self, "_asynchronous_observation", False):
+                    if admission.get("matched") is not True:
+                        continue
+                    result = self._observation(lane, lineage, current, ctx).get("liveness")
+                    if result is not None:
+                        out.append(result)
+                    continue
                 result = self.bridge.call(
                     "dispatch_liveness",
                     task_id=str(ctx["task_id"]),

@@ -1,0 +1,80 @@
+name: CAH managed cold host script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/managed-host-script-cold/*.json"
+
+permissions:
+  contents: read
+
+# Separate from the primary managed-host-script concurrency group so an
+# authorized long-running experiment on __CAH_SECOND_RUNNER_NAME__ cannot serialize unrelated
+# primary Managed work on CAH-Managed-01.
+concurrency:
+  group: gah-managed-host-script-cold
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  run:
+    runs-on: [self-hosted, Windows, X64, backup]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Execute cold managed host script
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(git diff-tree --no-commit-id --name-only -r $env:GITHUB_SHA |
+            Where-Object { $_ -like 'requests/managed-host-script-cold/*.json' })
+          if ($changed.Count -ne 1) { throw "Expected exactly one managed host script request, found $($changed.Count)" }
+
+          $req = Get-Content -LiteralPath $changed[0] -Raw | ConvertFrom-Json
+          if ([int]$req.v -ne 1) { throw 'Unsupported request version' }
+          if ([string]::IsNullOrWhiteSpace([string]$req.request_id)) { throw 'request_id required' }
+          if ([string]::IsNullOrWhiteSpace([string]$req.script_b64)) { throw 'script_b64 required' }
+
+          $scriptBytes = [Convert]::FromBase64String([string]$req.script_b64)
+          $utf8 = [Text.UTF8Encoding]::new($false, $true)
+          $null = $utf8.GetString($scriptBytes)
+          $scriptPath = Join-Path $env:RUNNER_TEMP ("gah-managed-cold-" + [string]$req.request_id + ".ps1")
+          $createdHere = $false
+          try {
+            if (Test-Path -LiteralPath $scriptPath) {
+              if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { throw "Existing script path is not a file" }
+            } else {
+              $createdHere = $true
+              [IO.File]::WriteAllBytes($scriptPath, $scriptBytes)
+            }
+
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { $expectedHash = [BitConverter]::ToString($sha.ComputeHash($scriptBytes)).Replace('-','').ToLowerInvariant() }
+            finally { $sha.Dispose() }
+            $actualLength = (Get-Item -LiteralPath $scriptPath).Length
+            $actualHash = (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host ("GAH_PREINVOKE|stage=physical|request={0}|expected_bytes={1}|actual_bytes={2}|expected_sha256={3}|actual_sha256={4}" -f $req.request_id,$scriptBytes.Length,$actualLength,$expectedHash,$actualHash)
+            if ($actualLength -ne $scriptBytes.Length -or $actualHash -ne $expectedHash) { throw "Physical materialization mismatch before invocation; refusing overwrite or execution" }
+
+            $parseTokens=$null
+            $parseErrors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$parseTokens,[ref]$parseErrors)
+            $parseErrorCount = if ($null -eq $parseErrors) { 0 } else { $parseErrors.Count }
+            Write-Host ("GAH_PREINVOKE|stage=parser|request={0}|errors={1}" -f $req.request_id,$parseErrorCount)
+            if ($parseErrorCount -ne 0) { throw "Materialized script parse failed before invocation" }
+
+            Write-Host ("GAH_MANAGED_COLD_REQUEST|{0}|task={1}" -f [string]$req.request_id,[string]$req.task_id)
+            Write-Host ("GAH_RUNNER|name={0}|os={1}|arch={2}|machine={3}" -f $env:RUNNER_NAME,$env:RUNNER_OS,$env:RUNNER_ARCH,$env:COMPUTERNAME)
+            Write-Host ("GAH_COMMIT|{0}" -f $env:GITHUB_SHA)
+            & pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $scriptPath
+            $code = $LASTEXITCODE
+            if ($code -ne 0) { throw "Managed script exited with code $code" }
+          } finally {
+            if ($createdHere) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue }
+          }
+          Write-Host ("GAH_MANAGED_COLD_COMPLETE|{0}" -f [string]$req.request_id)

@@ -112,6 +112,22 @@ Use short retention for disposable CI evidence. Current smoke workflows use 3 da
 
 GitHub-hosted artifacts and local-runner artifacts are separate stores; both need retention rules.
 
+## Self-hosted Runner execution copies
+
+Workflow YAML size and local Runner storage are separate measurements. Reused `_work` checkouts, Git objects, tool/action caches, update staging and `_diag` logs can outlive the workflow that created them. Removing a workflow or reducing fetch depth does not remove these existing files.
+
+Framework checkouts use `fetch-depth: 2`: the trigger and its parent support the existing request diff. A task that needs older commits or another branch fetches its exact required refs explicitly. Do not restore a full-history checkout for all jobs to satisfy one task's history requirement. Keep the existing run-owned Managed script cleanup; do not create a persistent directory or cleanup Job for each tiny command.
+
+During an explicit, bounded maintenance window, inventory the exact Runner roots and distinguish cache from unique output before cleanup. Keep shared tool versions in use, current update/rollback material, active logs and unresolved-incident evidence. Preserve the current Shot workspace, Runner registration/runtime, linked worktrees, all task source and paused-task materials. Apply the existing log/scratch retention rules to verified inactive disposable files and record actual before/after bytes.
+
+For an idle checkout with accumulated duplicate/loose Git objects, object-preserving compaction may use:
+
+```text
+git -C <verified-idle-checkout> -c gc.reflogExpire=never -c gc.reflogExpireUnreachable=never -c gc.worktreePruneExpire=never gc --prune=never
+```
+
+Keep refs, reflogs, worktree metadata and reachable/unreachable objects. Verify these and the worktree status before and after; do not delete a checkout containing unknown local output or branches. Run this maintenance outside business execution with a bounded time budget, rather than adding GC to every job or re-enabling background GC after Actions checkout disables it.
+
 ## Safe deletion requirements
 
 A janitor implementation must:

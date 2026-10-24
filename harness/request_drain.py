@@ -102,25 +102,32 @@ def transaction(repo: Path, operation: Callable[[Path, str], tuple[dict[str, Any
     raise RuntimeError('canonical request transaction could not be reconciled after bounded retries')
 
 
-def task_bundle(root: Path, payload: dict[str, Any]) -> tuple[dict, dict, str]:
+def task_bundle(root: Path, payload: dict[str, Any], *,
+                reader: Callable[[str], dict[str, Any]] | None = None) -> tuple[dict, dict, str]:
+    read = reader or (lambda ref: load(root, ref))
     task_id = payload.get('task_id')
     if not isinstance(task_id, str) or not IDENT.fullmatch(task_id):
         raise ValueError('valid task_id required')
-    task = load(root, f'tasks/{task_id}.json')
+    task = read(f'tasks/{task_id}.json')
     if task.get('task_id') != task_id:
         raise ValueError('task identity mismatch')
     contract = task.get('execution_contract') or {}
     bg_ref = task.get('backend_cl') or contract.get('backend_cl')
     if not isinstance(bg_ref, str) or not bg_ref.startswith('cl/'):
         raise ValueError('declared backend CL required')
-    bg = load(root, bg_ref)
+    bg = read(bg_ref)
     if bg.get('task_id') != task_id:
         raise ValueError('backend task identity mismatch')
     return task, bg, bg_ref
 
 
-def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None]:
-    task, bg, bg_ref = task_bundle(root, payload)
+def wake_decision(root: Path, payload: dict[str, Any], *,
+                  reader: Callable[[str], dict[str, Any]] | None = None,
+                  task_cell_refs: list[str] | None = None,
+                  check_owner_cell: bool = False) -> tuple[str, dict | None]:
+    """Use the same identity rules for a worktree or immutable Git snapshot."""
+    read = reader or (lambda ref: load(root, ref))
+    task, bg, bg_ref = task_bundle(root, payload, reader=read)
     contract = task.get('execution_contract') or {}
     dispatch = bg.get('dispatch') or {}
     scheduling = bg.get('scheduling') if isinstance(bg.get('scheduling'), dict) else {}
@@ -162,14 +169,35 @@ def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None
     project = task.get('worker_project_key') or contract.get('worker_project_key')
     if not lane or not project or payload.get('lane_id') != lane or payload.get('worker_project_key') != project:
         raise ValueError('wake/task lane and project mismatch')
-    topology = load(root, 'state/lanes.json')
+    topology = read('state/lanes.json')
     matches = [v for v in topology.get('lanes', []) if v.get('lane_id') == lane]
     if len(matches) != 1 or not matches[0].get('enabled') or matches[0].get('project_key') != project:
         raise ValueError('lane is not currently enabled for this project')
-    for path in (root / 'state/task_cells').glob('*.json'):
-        cell = load(root, path.relative_to(root).as_posix())
+    refs = task_cell_refs if task_cell_refs is not None else [
+        path.relative_to(root).as_posix() for path in (root / 'state/task_cells').glob('*.json')
+    ]
+    owners = []
+    for ref in refs:
+        cell = read(ref)
         if project in [cell.get('project_key'), *cell.get('protected_projects', [])]:
             raise ValueError('ordinary Worker wake cannot target a protected control project')
+        if cell.get('task_id') == owner_task_id or ref == f'state/task_cells/{owner_task_id}.json':
+            owners.append(cell)
+    if check_owner_cell and len(owners) > 1:
+        raise ValueError('ambiguous canonical Worker owner Task Cell')
+    if check_owner_cell and owners:
+        cell = owners[0]
+        if cell.get('task_id') != owner_task_id or cell.get('control_epoch') != owner_control_epoch:
+            return 'SUPERSEDED', None
+        control = cell.get('planner_control') or {}
+        if (control.get('task_id', owner_task_id) != owner_task_id
+                or control.get('control_epoch', owner_control_epoch) != owner_control_epoch):
+            return 'SUPERSEDED', None
+        # The existing Planner admission gate uses these stopped/wait states.
+        # Legacy standalone Tasks without an owner Task Cell remain supported.
+        if (control.get('activity') in {'WAIT_USER', 'NEED_USER', 'DONE', 'ERROR', 'CLEANING', 'PAUSED', 'STOPPED'}
+                or cell.get('status') in {'DONE', 'ERROR', 'CANCELLED', 'CLEANING', 'STOPPED', 'PAUSED', 'WAIT_USER', 'NEED_USER'}):
+            return 'DEFERRED', None
     if payload.get('wake_id') != dispatch.get('wake_id') or not payload.get('wake_id'):
         raise ValueError('wake key does not match canonical dispatch')
     kwargs = {key: payload.get(key) for key in ('state', 'wake_id', 'repo', 'result_ref', 'lane_id',
@@ -180,7 +208,7 @@ def wake_decision(root: Path, payload: dict[str, Any]) -> tuple[str, dict | None
     if task.get('kind') == 'planner_worker_child':
         wake.update(kind='planner_worker_child', child_reply_ref=task['child_reply_ref'],
                     worker_reply_entry_ref=task['worker_reply_entry_ref'],
-                    replace_conversation=generation > 1)
+                    replace_conversation=True)
     return 'CLAIMED', wake
 
 
@@ -194,7 +222,7 @@ def process(repo: Path, record: dict[str, Any], *, remote: str = 'origin', branc
             old = load(root, receipt_ref)
         except FileNotFoundError:
             old = {}
-        if receipt_matches(record, old) and old.get('phase') in FINAL:
+        if receipt_matches(record, old) and old.get('phase') in FINAL | HOLD:
             return old, []
         if old.get('retry_after', 0) > time.time():
             return old, []
@@ -293,7 +321,7 @@ def process_worker_wake_batch(repo: Path, records: list[dict[str, Any]], *,
                 old = load(root, receipt_ref)
             except FileNotFoundError:
                 old = {}
-            if receipt_matches(record, old) and old.get('phase') in FINAL:
+            if receipt_matches(record, old) and old.get('phase') in FINAL | HOLD:
                 items.append({'record': record, 'receipt': old})
                 continue
             if old.get('retry_after', 0) > time.time():

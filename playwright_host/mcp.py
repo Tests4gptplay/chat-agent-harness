@@ -16,7 +16,7 @@ from typing import Any
 TOOLS_ROOT = Path(os.environ.get("CAH_PLAYWRIGHT_TOOLS_ROOT", r"__CAH_TOOLS_ROOT__"))
 BOUND_ENDPOINT_FILE = Path(os.environ.get(
     "CAH_PLAYWRIGHT_BOUND_ENDPOINT_FILE",
-    r"__CAH_BROWSER_ROOT__/browser-endpoint.json",
+    r"__CAH_BROWSER_ROOT__\browser-endpoint.json",
 ))
 ALIASES = {
     "browser.tabs": "browser_tabs",

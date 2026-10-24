@@ -1,8 +1,8 @@
 # Public export feature contract
 
-A future public/clean-room edition of CAH must preserve **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
+A public edition of CAH preserves **capabilities**, even when private data, user-specific state, local paths, private case artifacts, or personal Skill contents are removed.
 
-The public export is therefore not a trimmed demo fork. It is a sanitized distribution of the same architecture.
+The public export distributes the same architecture with installation-specific configuration.
 
 ## Required capability invariants
 
@@ -33,8 +33,8 @@ A public edition must preserve at least:
 
 Sanitization may remove or replace:
 
-- the maintainer's private/personal Skills;
-- imported Codex Skill source snapshots;
+- personal preferences and task-specific case records within Skills;
+- personal content in imported Skill snapshots;
 - local filesystem identities;
 - private task evidence;
 - proprietary cases or artifacts.
@@ -50,7 +50,7 @@ Sanitization must **not** remove:
 - Skill Registry tests;
 - the external Skill import interface/docs where the adapter itself is publishable.
 
-If private Skills are stripped, replace them with sanitized examples so public users receive a functional Skill subsystem rather than an empty architectural reference.
+Retain reusable procedures and required guides/scripts. For mixed Skills and imported snapshots, extract the generic methods, remove private case data and repair their references. Review content at field and paragraph level across all locations.
 
 ## Why Skill is core
 

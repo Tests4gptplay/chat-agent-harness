@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "skill_id": "codex-nte-mesh-replacement-repair-v1",
+  "title": "nte-mesh-replacement-repair",
+  "status": "CANDIDATE",
+  "summary": "Replace an existing NTE cosmetic mod mesh from a supplied Blender model, preserve joined native appendages, fit existing shoes/sleeves/clothing to a character with anatomical anchors and clearance checks, correct local foot stance/proportions (内八、FootStance) without disturbing accepted channels, and diagnose animation scale explosions or cooked texture/material loading crashes, wrong body atlases, private material dependency bindings, curve-constrained neck/leg/patch seam reflow, UV-driven shading blotches, and lossless IoStore compression with dependency pruning. Use nte-mod-authoring for new outfit-system items and ue5-iostore-appearance-porting for raw appearance-graph transfers.",
+  "tags": [
+    "codex-import",
+    "nte-mesh-replacement-repair",
+    "blender",
+    "unreal",
+    "python"
+  ],
+  "applicability": {
+    "intents": [
+      "Replace an existing NTE cosmetic mod mesh from a supplied Blender model, preserve joined native appendages, fit existing shoes/sleeves/clothing to a character with anatomical anchors and clearance checks, correct local foot stance/proportions (内八、FootStance) without disturbing accepted channels, and diagnose animation scale explosions or cooked texture/material loading crashes, wrong body atlases, private material dependency bindings, curve-constrained neck/leg/patch seam reflow, UV-driven shading blotches, and lossless IoStore compression with dependency pruning. Use nte-mod-authoring for new outfit-system items and ue5-iostore-appearance-porting for raw appearance-graph transfers."
+    ],
+    "required_capabilities": [
+      "blender",
+      "unreal",
+      "python"
+    ],
+    "constraints": [
+      "Imported from a local Codex user Skill; source semantics must be reviewed before promotion.",
+      "Current task requirements and fresh evidence override imported instructions."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "imported-procedure",
+      "instruction": "Read the sanitized imported Codex Skill snapshot and follow its reusable procedure while preserving its stated constraints. Refine this candidate into native CAH steps before promotion.",
+      "deterministic": false,
+      "implementation_refs": [
+        "imports/codex-skills/sources/nte-mesh-replacement-repair/source.md"
+      ]
+    }
+  ],
+  "evidence": [],
+  "stats": {
+    "success_count": 0,
+    "failure_count": 0,
+    "use_count": 0
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

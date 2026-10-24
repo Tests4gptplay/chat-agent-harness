@@ -58,7 +58,7 @@ Keep one-off task code task-local. Register a Tool when the capability has a sta
 
 ## Runtime protocol
 
-A semantic role emits one fenced Tool-call block and ends that assistant turn:
+A semantic role emits one **complete** fenced Tool-call block, then ends **that assistant message only** so Harness can execute the Tool and return its result:
 
 ```text
 CAH_TOOL_CALL_BEGIN
@@ -68,6 +68,8 @@ CAH_TOOL_CALL_END
 
 Harness/Playwright binds the call to the exact conversation that emitted it, verifies the Tool is ACTIVE for that role, executes the provider, then injects `CAH_TOOL_RESULT` back into the same conversation. The semantic role continues from that ephemeral result.
 
+**Tool-message boundary is not managed semantic completion.** Ending a Tool-call assistant message only requests an intermediate operation; it does not finish or hand off the Worker, commit its result, or change its task status. After receiving the actual matching `CAH_TOOL_RESULT` (including an `ERROR`), a managed Worker continues its bound Child work or records the specific blocker. It must persist real artifacts/evidence, write the pre-bound `GAH_REPLY_ENTRY`, and make the final durable Git write to the pre-bound `GAH_RESULT` with the appropriate `turn_signal` (`continue`, `complete`, `blocked`, or `error`). Harness determines semantic progression from that bound Git Result, **not** from chat/message end or a Tool-call block. If a matching `CAH_TOOL_RESULT` has not actually arrived, the Tool's execution or success is **not verified**; do not claim PASS, and preserve the precise pending/failure frontier in the normal bound Git outputs when unable to proceed. See `AGENTS.md` and `docs/task-cell/WORKER.md`.
+
 Machine-owned identity stays machine-owned:
 
 - managed Worker Tool calls retain the existing dispatch/task/generation/fence fields because Worker admission is already bound to that dispatch;
@@ -75,7 +77,7 @@ Machine-owned identity stays machine-owned:
 
 Tool payloads are not written to Git merely to perform the call.
 
-A Tool call and a separate execution syscall remain separate assistant turns so the runtime has one unambiguous next action.
+A Tool call and a separate execution syscall remain separate **message-level** turns so the runtime has one unambiguous next action. Neither message end nor syscall completion replaces the managed Worker's final bound Git `turn_signal`.
 
 ## Result privacy
 
@@ -197,7 +199,7 @@ Conversational Browser Tools are available only to roles listed in the registry.
 
 - Worker calls are bound to the current admitted Worker dispatch.
 - Planner calls are bound to the current Planner conversation authority.
-- Helper calls are bound to the current Helper conversation/recovery request.
+- Helper does **not** use conversational `CAH_TOOL_CALL` / `CAH_TOOL_RESULT`. For authorized bounded browser recovery, Helper uses the existing `browser.cli` Tool through its `host_runner` execution path, scoped to the exact Helper incident and target.
 - Foreground calls are bound to the current Foreground conversation, including direct-bounded / short work.
 
 Worker, Planner, and Foreground receive Tool results in the same conversation and continue the same semantic work.

@@ -1,0 +1,119 @@
+{
+  "v": 1,
+  "skill_id": "iterative-blender-visual-refinement-v1",
+  "title": "Iterative Blender procedural asset generation with visual review",
+  "status": "ACTIVE",
+  "summary": "Build a Blender asset through bounded bpy iterations and standardized visual review, reject local improvements that fail whole-form or geometric checks, and promote only a verified render/script/blend set.",
+  "tags": [
+    "blender",
+    "bpy",
+    "procedural-asset",
+    "visual-review",
+    "iterative-refinement"
+  ],
+  "applicability": {
+    "intents": [
+      "create a Blender asset procedurally",
+      "refine a Blender model through rendered visual review",
+      "run a bounded AI-authored bpy generation loop"
+    ],
+    "required_capabilities": [
+      "blender",
+      "python"
+    ],
+    "constraints": [
+      "The asset can be generated or materially edited through bpy or an equivalent deterministic Blender executor.",
+      "Each iteration can emit durable render evidence that a semantic Worker can inspect.",
+      "The loop must have an explicit iteration bound or acceptance gate; do not refine indefinitely.",
+      "Visual improvement, manifold topology, Euler characteristic and nondegenerate faces do not establish freedom from spatial self-intersection; use geometry checks appropriate to the edited volume before promotion."
+    ]
+  },
+  "procedure": [
+    {
+      "step_id": "acceptance",
+      "instruction": "Translate the task into explicit visual/structural acceptance criteria and a bounded maximum number of quality iterations.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/iterative-blender-visual-refinement-v1.md"
+      ]
+    },
+    {
+      "step_id": "diagnose-representation-and-coverage",
+      "instruction": "For local or branching-surface repairs, distinguish whole-volume defects from faceting/display-normal symptoms. Inspect the full affected width/path, guide extrapolation and endpoint rules, and separate source requirements from algorithm-convenience constraints. Preserving old vertices does not preserve triangle interiors. After equivalent changes only move a defect or add compensating lobes, stop that repair class and revisit the representation rather than repeatedly densifying or tuning normals.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/blender-branch-volume-diagnostics.md"
+      ]
+    },
+    {
+      "step_id": "author",
+      "instruction": "Author the next bpy iteration as a durable script/checkpoint rather than relying on ephemeral Blender UI state.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/iterative-blender-visual-refinement-v1.md"
+      ]
+    },
+    {
+      "step_id": "execute",
+      "instruction": "Run the script through the bounded Blender executor and persist render/manifests/hashes before asking the Worker to judge quality.",
+      "deterministic": true,
+      "implementation_refs": [
+        "executors/blender_case.py"
+      ]
+    },
+    {
+      "step_id": "review",
+      "instruction": "Inspect the compact review packet/contact sheet plus canonical render evidence, identify the highest-value visual delta, and avoid rewriting unrelated geometry/materials.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/iterative-blender-visual-refinement-v1.md"
+      ]
+    },
+    {
+      "step_id": "iterate",
+      "instruction": "Repeat author -> execute -> review only while the acceptance gate materially improves and the iteration budget remains.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/iterative-blender-visual-refinement-v1.md"
+      ]
+    },
+    {
+      "step_id": "separate-visual-and-geometric-gates",
+      "instruction": "For intersecting or branching volumes, check actual spatial self-intersection and inner-wall ordering/separation early on a visually improved trial, before costly detailing. Review comparable whole-form views and complete paths. Manifoldness, Euler characteristic, no degenerate faces, preserved endpoints and selected samples are separate checks, not substitutes for contact tests. Reject new intersections even when the visible shelf disappears; retain the visual observation without promoting the failed recipe.",
+      "deterministic": false,
+      "implementation_refs": [
+        "skills/guides/blender-branch-volume-diagnostics.md"
+      ]
+    },
+    {
+      "step_id": "promote",
+      "instruction": "Select one executed iteration, deterministically promote its render/script/blend/manifest, and preserve the evidence chain proving which iteration became final.",
+      "deterministic": true,
+      "implementation_refs": [
+        "skills/guides/iterative-blender-visual-refinement-v1.md",
+        "executors/blender_case.py"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "task_id": "iterative-blender-visual-refinement-v1-acceptance-1",
+      "result_ref": "skills/evidence/iterative-blender-visual-refinement-v1-acceptance-1.json",
+      "outcome": "PASS",
+      "verified_at": "2026-09-18T17:34:17+00:00"
+    }
+  ],
+  "stats": {
+    "success_count": 1,
+    "failure_count": 0,
+    "use_count": 1
+  },
+  "provenance": {
+    "created_at": "2026-10-25T00:00:00+09:00",
+    "updated_at": "2026-10-25T00:00:00+09:00",
+    "source_kind": "public_procedure",
+    "source_refs": [
+      "docs/SKILL_SYSTEM.md"
+    ]
+  }
+}

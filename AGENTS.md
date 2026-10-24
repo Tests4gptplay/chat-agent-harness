@@ -1,15 +1,5 @@
 # Agent contract
 
-## Public distribution / private operation boundary
-
-This repository distributes source and supports maintenance, review and synthetic/offline tests. It is not a live CAH state store.
-
-Before real task execution, Agent write-back, scheduling, Runner registration, or binding real ChatGPT Projects, independently verify that the operational repository is **PRIVATE** using an authoritative repository property or authenticated UI. A name, local path, copied source, or a configuration checkbox does not prove privacy. Keep real tasks, memory, evidence, account bindings, profiles, credentials and local configuration out of the public distribution.
-
-A request to maintain the public source may be performed here. A request to use CAH for real work normally targets the user's already-configured private instance: resolve its exact installation binding, verify visibility and route there. Do not select a similarly named repository, silently fall back to this public repository, or weaken launch/reset checks. If the binding or visibility is uncertain, stop before operational writes.
-
-Start with `installation/README.md`. Public source changes and offline tests are allowed without activating a live instance. These boundaries do not prevent this explicitly authorized public-source publication.
-
 Git is canonical. Conversations are replaceable reasoning contexts.
 
 ## Primary Git execution path
@@ -20,19 +10,15 @@ When the current Task Contract requires an execution effect and no existing Tool
 
 `cah-shot`（Short Task）是独立的短任务/救援控制通道。Foreground 可用它完成独立短任务；Helper 可在 `docs/task-cell/HELPER.md` 授权的 bounded operational recovery 中使用它执行诊断、解阻、精确清理和恢复控制。Planner 与 Worker 不得把 `cah-shot` 当作正常语义执行或 Managed workload 通道，也不得把原 Managed 业务迁移到该入口。
 
-### Runner topology and Cold/Burst capacity
+### Runner topology and Managed capacity
 
-CAH exposes three distinct Runner roles:
+CAH uses two normally online Managed Runners, `CAH-Managed-01` and `__CAH_SECOND_RUNNER_NAME__`, plus the independent `cah-shot` Short Task / bounded rescue channel. Both Managed Runners retain normal `self-hosted, Windows, X64` eligibility; 02 also retains the `backup` label for the dedicated `managed-host-script-cold` surface. `Start_CAH` idempotently starts the configured 02 instance and reuses an active Listener, including `ACTIVE_BUSY`; it does not replace or preempt a business job.
 
-- `CAH-MANAGED-01`: primary Managed Runner for normal `[self-hosted, Windows, X64]` work.
-- `cah-shot`: always-available bounded short-task / rescue-control channel; it is not normal Managed workload capacity.
-- `__CAH_COLD_RUNNER_NAME__`: Cold/Burst Managed Runner, normally `READY_OFF`. When activated it retains normal `self-hosted, Windows, X64` eligibility and carries dedicated identity label `backup`.
+Planner coordinates independent Child work and actual shared CPU/GPU/memory/workspace constraints. Worker chooses the concrete execution placement unless current Planner direction reserves or forbids it, and records the exact Runner/request/run/job, output frontier and release condition in Child Reply (`## COLD_BURST RUNNER` for 02). Two online Listeners do not provide two independent GPUs or remove workflow concurrency limits. `cah-shot` never becomes normal Managed workload capacity.
 
-`__CAH_COLD_RUNNER_NAME__` is shared Cold/Burst Managed capacity, not only a crash fallback. Planner has task-level authority to request that it be opened, kept available, released back to `READY_OFF`, or used to preserve useful parallel progress. Planner may also decide that an in-flight experiment has become semantically obsolete and request exact cleanup.
+For one Child outcome, put consecutive deterministic steps that need no intervening AI decision into one bounded request/script on the existing execution surface. Managed/Stage0 trigger commits still contain exactly one request; command batching does not mean publishing multiple requests in one commit. Preserve real failure exit codes and evidence, stop at the next semantic decision or recovery boundary, and do not create a separate Job/Workflow for each tiny command.
 
-Worker has the **execution-level placement judgment** for a concrete experiment. When Worker can see that a useful build, Cook, render, runtime probe, compile, or similar detached operation will occupy a Managed Runner for a long period and isolating it on 02 preserves useful capacity, Worker may choose the dedicated cold managed workflow/request surface targeting the `backup` label unless current Planner direction forbids that placement. Worker must leave a durable Child Reply record of the 02 use/need, exact request/run/job refs, reason, expected output/frontier, current occupancy state, and release/cleanup condition. Worker does not independently start/stop Runner infrastructure and never substitutes `cah-shot` for the workload.
-
-Helper performs exact operational Runner changes requested by Planner and may also use `__CAH_COLD_RUNNER_NAME__` as an **alternate bounded emergency/control channel** when 02 is not occupied by business work. `cah-shot` remains the normal dedicated rescue channel, but it is not the only possible recovery execution surface. Helper must not commandeer an `ACTIVE_BUSY` 02 or preempt a recorded long-running business experiment without Planner authority or an independently valid safety/recovery reason. Harness/Start_CAH report and validate Runner state but do not make business placement or capacity decisions automatically.
+Helper performs exact operational Runner recovery and Planner-requested cancellation. It does not take over an `ACTIVE_BUSY` Runner or recorded business experiment as free capacity; cancellation targets the exact authorized owned run. Routine use of healthy 02 requires no activation ceremony. A genuinely `READY_OFF`, dirty or unavailable 02 is a concrete capacity fault/dependency handled through the existing bounded recovery path; it is not permission to move the workload to Shot.
 
 ## Immediate Harness error recovery
 
@@ -161,4 +147,3 @@ Cold-path references:
 - reusable execution tools: `harness/tools/registry.json`, `docs/TOOL_SYSTEM.md`
 - public/export: `docs/PUBLIC_EXPORT_CONTRACT.md`, `harness/public_export_required.json`
 
-#50 publication remains blocked until explicit user authorization.
