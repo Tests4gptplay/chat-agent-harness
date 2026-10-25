@@ -20,9 +20,9 @@ CAH builds the lifecycle, scheduling, recovery, and execution machinery around t
 
 ---
 
-## Current source update
+## Latest release: v1.1.0 — 2026-10-25
 
-The October 2026 source update brings current lifecycle, recovery, scheduling and reusable execution capabilities into the public edition.
+CAH v1.1.0 brings updated lifecycle, recovery, scheduling and reusable execution capabilities into the public edition.
 
 | Area | Current behavior |
 |---|---|
@@ -34,7 +34,7 @@ The October 2026 source update brings current lifecycle, recovery, scheduling an
 | Skills | Reusable procedures and guides covering asset work, diagnosis, transfer and execution, with personal case material separated. |
 | Installation | AI-led deployment, browser-read Project URLs and a configuration tool for each user's installation. |
 
-[Install CAH](installation/README.md) · [Update notes](RELEASE_NOTES.md)
+[Download v1.1.0](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.1.0) · [Install CAH](installation/README.md) · [Update notes](RELEASE_NOTES.md)
 
 ---
 
@@ -293,7 +293,7 @@ The stability numbers are the headline:
 
 The first intervention improved recovery infrastructure enough that when G12 later blocked primary execution, G13–G15 still continued on backup capacity. The second intervention upgraded Helper after the post-G15 recovery path failed to close. After that, the same Parent Task continued automatically through G31. G32 later exposed a different physical-page failure class: response-start occurred, but the web conversation stayed busy for more than two hours without producing semantic output.
 
-So Part 2 is evidence of both **substantial practical stability** and the next reliability frontier. Physical watchdog/retry behavior and the semantic Helper recovery role are being strengthened around that remaining gap.
+Part 2 documents **substantial practical stability** under a real engineering workload. CAH v1.1.0 includes [30-minute physical Planner recovery](docs/task-cell/PLANNER.md#physical-planner-watchdog), [same-generation Worker recovery and immediate Helper handling of Harness errors](docs/task-cell/HELPER.md).
 
 More sanitized showcases can be added here as complete end-to-end records become suitable for public release.
 
@@ -301,7 +301,11 @@ More sanitized showcases can be added here as complete end-to-end records become
 
 ## Source and downloads
 
-Use public `main` for the current source and [Releases](https://github.com/Tests4gptplay/chat-agent-harness/releases) for versioned downloads. [Update notes](RELEASE_NOTES.md) describe the current changes.
+**Current release: [CAH v1.1.0](https://github.com/Tests4gptplay/chat-agent-harness/releases/tag/v1.1.0)** — 2026-10-25.
+
+[Download CAH-1.1.0.zip](https://github.com/Tests4gptplay/chat-agent-harness/releases/download/v1.1.0/CAH-1.1.0.zip) · [SHA-256 checksums](https://github.com/Tests4gptplay/chat-agent-harness/releases/download/v1.1.0/SHA256SUMS) · [Installation guide](installation/README.md)
+
+The versioned source bundle includes the runtime, workflows, reusable Skills and AI-led installation tools. Public `main` carries ongoing source updates. See the [v1.1.0 update notes](RELEASE_NOTES.md).
 
 ---
 
@@ -376,7 +380,7 @@ Choose and install professional applications such as Blender or Unreal Engine ac
 
 ## License
 
-The current v1.0.5 source edition is licensed under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Earlier MIT-licensed copies keep the rights originally granted under their earlier terms.
+Original CAH code and documentation are licensed under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Earlier MIT-licensed copies keep the rights originally granted under their earlier terms.
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 

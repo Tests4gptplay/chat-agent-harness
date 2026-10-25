@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: New version tag, for example v1.0.6
+        description: New version tag, for example v1.1.0
         required: true
         type: string
 
@@ -40,9 +40,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          git archive --format=zip HEAD -o CAH-source.zip
-          sha256sum CAH-source.zip > SHA256SUMS
-          gh release create "$RELEASE_TAG" CAH-source.zip SHA256SUMS \
+          ARCHIVE="CAH-${RELEASE_TAG#v}.zip"
+          git archive --format=zip HEAD -o "$ARCHIVE"
+          unzip -t "$ARCHIVE"
+          for path in README.md RELEASE_NOTES.md installation/README.md LICENSE NOTICE; do
+            cmp <(git show "HEAD:$path") <(unzip -p "$ARCHIVE" "$path")
+          done
+          sha256sum "$ARCHIVE" > SHA256SUMS
+          gh release create "$RELEASE_TAG" "$ARCHIVE" SHA256SUMS \
             --target "$GITHUB_SHA" \
             --title "CAH $RELEASE_TAG" \
             --notes-file RELEASE_NOTES.md
