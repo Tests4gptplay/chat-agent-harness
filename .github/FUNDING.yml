@@ -1,10 +1,8 @@
-# Support the development of git-agent-harness.
-# Enable this only after GitHub Sponsors is active for Tests4gptplay:
+# Support the development of Chat Agent Harness (CAH).
+# Enable GitHub Sponsors when active for Tests4gptplay:
 # github: Tests4gptplay
 
 ko_fi: kou392350
-
-# Preserve the verified Patreon creator URL, including its /cw/ path.
 custom:
   - "https://www.patreon.com/cw/Kou848"
   - "https://afdian.com/a/kkt_ifd1"
