@@ -16,8 +16,6 @@ ChatGPT handles semantic reasoning. Git holds durable state and coordinates work
 
 CAH builds the lifecycle, scheduling, recovery, and execution machinery around that connection.
 
-**Support / 赞助：** [GitHub Sponsors](https://github.com/sponsors/Tests4gptplay) · [Ko-fi](https://ko-fi.com/kou392350) · [Patreon](https://www.patreon.com/cw/Kou848) · [爱发电 / Afdian](https://afdian.com/a/kkt_ifd1) · [支付宝 / Alipay](SPONSOR.md)
-
 ---
 
 ## Latest release: v1.1.0 — 2026-10-25
@@ -391,3 +389,7 @@ Third-party applications, services, models, and platforms remain subject to thei
 ## Project stage
 
 CAH is a working engineering project with persistent multi-role coordination, local task execution, lifecycle management, recovery and reusable capability infrastructure. Development continues on installation ergonomics, portability and public examples.
+
+## 支持项目 / Support
+
+[GitHub Sponsors](https://github.com/sponsors/Tests4gptplay) · [Ko-fi](https://ko-fi.com/kou392350) · [Patreon](https://www.patreon.com/cw/Kou848) · [爱发电 / Afdian](https://afdian.com/a/kkt_ifd1) · [支付宝 / Alipay](SPONSOR.md)
