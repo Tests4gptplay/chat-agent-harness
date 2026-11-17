@@ -382,6 +382,8 @@ Original CAH code and documentation are licensed under the **GNU Affero General 
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
+商业许可另行商议。
+
 Third-party applications, services, models, and platforms remain subject to their own terms and licenses.
 
 ---
